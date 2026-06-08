@@ -1,0 +1,402 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import {
+  CalendarDays,
+  CheckCircle2,
+  ChevronRight,
+  FileText,
+  ReceiptText,
+  RefreshCcw,
+  ShoppingCart,
+  TrendingUp,
+  Wallet,
+} from "lucide-react";
+import { AppShell } from "@/components/layout/app-shell";
+import { SalesRowActions } from "@/components/sales/sales-row-actions";
+import {
+  SalesTablePagination,
+  SalesTableToolbar,
+} from "@/components/sales/sales-table-controls";
+import { getAuthToken, verifyToken } from "@/lib/auth";
+import { endOfMonth, startOfMonth } from "@/lib/dashboard-metrics";
+import { db } from "@/lib/prisma";
+import { formatShortDateTime, getSalesPageData } from "@/lib/sales-page-data";
+import {
+  normalizeDateRange,
+  parseDateParam,
+  parsePage,
+  parseSalesTab,
+  toSalesRowActionData,
+} from "@/lib/sales-page-utils";
+import { formatMoney } from "@/lib/format-utils";
+
+type AuthPayload = {
+  userId: string;
+  companyId: string | null;
+};
+
+type SalesPageProps = {
+  searchParams: Promise<{
+    tab?: string;
+    page?: string;
+    from?: string;
+    to?: string;
+  }>;
+};
+
+function getPaymentBadge(status: string) {
+  if (status === "PAID") return "bg-emerald-100 text-emerald-700";
+  if (status === "PARTIAL") return "bg-orange-100 text-orange-700";
+  return "bg-rose-100 text-rose-700";
+}
+
+function getPaymentText(status: string) {
+  if (status === "PAID") return "Tahsil Edildi";
+  if (status === "PARTIAL") return "Kısmi Tahsilat";
+  return "Tahsil Edilmedi";
+}
+
+function getStatusBadge(status?: string | null) {
+  if (status === "CANCELLED" || status === "ERROR") {
+    return "bg-rose-100 text-rose-700";
+  }
+
+  if (status === "DRAFT") return "bg-amber-100 text-amber-700";
+
+  return "bg-emerald-100 text-emerald-700";
+}
+
+function getStatusText(status?: string | null) {
+  if (status === "CANCELLED") return "İptal";
+  if (status === "ERROR") return "Hata";
+  if (status === "DRAFT") return "Taslak Teklif";
+  if (status === "SENT" || status === "APPROVED" || status === "COMPLETED") {
+    return "Onaylandı";
+  }
+
+  return "Onaylandı";
+}
+
+const actionCards = [
+  {
+    title: "Yeni Satış",
+    description: "Hemen satış oluştur",
+    href: "/sales/new",
+    icon: ShoppingCart,
+    gradient: "from-emerald-500 to-green-600",
+  },
+  {
+    title: "Fatura Kes",
+    description: "Yeni fatura oluştur",
+    href: "/invoices/e-invoice",
+    icon: FileText,
+    gradient: "from-violet-500 to-purple-600",
+  },
+  {
+    title: "Tahsilat Al",
+    description: "Müşteriden ödeme al",
+    href: "/cash-bank",
+    icon: Wallet,
+    gradient: "from-sky-400 to-blue-600",
+  },
+  {
+    title: "İade / İptal",
+    description: "İade veya iptal işlemi",
+    href: "/sales?tab=returns",
+    icon: RefreshCcw,
+    gradient: "from-orange-400 to-orange-600",
+  },
+  {
+    title: "Teklif Oluştur",
+    description: "Müşteriye teklif ver",
+    href: "/sales/quotes/new",
+    icon: ReceiptText,
+    gradient: "from-rose-400 to-pink-600",
+  },
+];
+
+const statIconMap = {
+  trending: TrendingUp,
+  check: CheckCircle2,
+  wallet: Wallet,
+  file: FileText,
+  calendar: CalendarDays,
+};
+
+const colorClassMap = {
+  emerald: "bg-emerald-50 text-emerald-600",
+  blue: "bg-blue-50 text-blue-600",
+  orange: "bg-orange-50 text-orange-500",
+  violet: "bg-violet-50 text-violet-600",
+  sky: "bg-sky-50 text-sky-500",
+};
+
+export default async function SalesPage({ searchParams }: SalesPageProps) {
+  const params = await searchParams;
+  const token = await getAuthToken();
+
+  if (!token) redirect("/login");
+
+  const payload = verifyToken<AuthPayload>(token);
+
+  if (!payload?.userId || !payload.companyId) redirect("/login");
+
+  const user = await db.user.findUnique({
+    where: { id: payload.userId },
+    include: {
+      companyUsers: {
+        include: {
+          company: true,
+        },
+      },
+    },
+  });
+
+  if (!user) redirect("/login");
+
+  const company =
+    user.companyUsers.find((item) => item.companyId === payload.companyId)
+      ?.company ?? user.companyUsers[0]?.company;
+
+  if (!company) redirect("/login");
+
+  const now = new Date();
+  const activeTab = parseSalesTab(params.tab);
+  const currentPage = parsePage(params.page);
+  const defaultFrom = startOfMonth(now);
+  const defaultTo = endOfMonth(now);
+  const { from, to } = normalizeDateRange(
+    parseDateParam(params.from) ?? defaultFrom,
+    parseDateParam(params.to) ?? defaultTo
+  );
+
+  const { statCards, rows, totalRecords, totalPages, currentPage: page, exportHref } =
+    await getSalesPageData(company.id, {
+      tab: activeTab,
+      page: currentPage,
+      from,
+      to,
+    });
+
+  return (
+    <AppShell>
+      <div className="space-y-5">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          {actionCards.map((card) => {
+            const Icon = card.icon;
+
+            return (
+              <Link
+                key={card.title}
+                href={card.href}
+                className={[
+                  "group flex h-[86px] items-center justify-between rounded-2xl bg-linear-to-br p-4 text-white shadow-[0_14px_30px_rgba(15,23,42,0.12)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgba(15,23,42,0.16)]",
+                  card.gradient,
+                ].join(" ")}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/15 shadow-inner">
+                    <Icon size={22} strokeWidth={2.2} />
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="truncate text-[15px] font-black leading-tight">
+                      {card.title}
+                    </p>
+                    <p className="mt-1 truncate text-[11px] font-medium text-white/85">
+                      {card.description}
+                    </p>
+                  </div>
+                </div>
+
+                <ChevronRight
+                  size={18}
+                  strokeWidth={3}
+                  className="shrink-0 opacity-90 transition group-hover:translate-x-1 group-hover:opacity-100"
+                />
+              </Link>
+            );
+          })}
+        </section>
+
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          {statCards.map((stat) => {
+            const Icon = statIconMap[stat.iconKey];
+
+            return (
+              <div
+                key={stat.title}
+                className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div
+                    className={[
+                      "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl",
+                      colorClassMap[stat.color],
+                    ].join(" ")}
+                  >
+                    <Icon size={21} strokeWidth={2.3} />
+                  </div>
+                </div>
+
+                <p className="mt-4 text-[12px] font-bold text-[#24345f]/80">
+                  {stat.title}
+                </p>
+
+                <p className="mt-1 text-[20px] font-black tracking-[-0.03em] text-[#0f1f4d]">
+                  {stat.value}
+                </p>
+
+                <div className="mt-3 flex items-center gap-2">
+                  <span className="text-[11px] font-medium text-slate-500">
+                    {stat.subtitle}
+                  </span>
+
+                  <span
+                    className={[
+                      "inline-flex rounded-full px-2 py-1 text-[10px] font-black leading-none",
+                      stat.positive
+                        ? "bg-emerald-50 text-emerald-600"
+                        : "bg-rose-50 text-rose-600",
+                    ].join(" ")}
+                  >
+                    {stat.positive ? "↑" : "↓"} {stat.change}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </section>
+
+        <section className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+          <SalesTableToolbar
+            activeTab={activeTab}
+            from={from}
+            to={to}
+            exportHref={exportHref}
+          />
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1040px] text-left">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-black text-[#24345f]/80">
+                  <th className="px-4 py-3">Tarih</th>
+                  <th className="px-4 py-3">Belge No</th>
+                  <th className="px-4 py-3">Müşteri</th>
+                  <th className="px-4 py-3">Tür</th>
+                  <th className="px-4 py-3 text-right">Tutar</th>
+                  <th className="px-4 py-3">Tahsilat Durumu</th>
+                  <th className="px-4 py-3">Durum</th>
+                  <th className="px-4 py-3 text-center">İşlemler</th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-slate-100">
+                {rows.map((row) => (
+                  <tr
+                    key={row.id}
+                    className="text-[12px] font-semibold text-[#24345f] transition hover:bg-slate-50/80"
+                  >
+                    <td className="px-4 py-3 text-slate-500">
+                      {formatShortDateTime(row.createdAt)}
+                    </td>
+
+                    <td className="px-4 py-3 font-bold text-[#24345f]">
+                      {row.documentNo}
+                    </td>
+
+                    <td className="px-4 py-3">{row.customerName}</td>
+
+                    <td className="px-4 py-3">
+                      <span
+                        className={[
+                          "rounded-md px-2 py-1 text-[10px] font-black",
+                          row.typeBadgeClass,
+                        ].join(" ")}
+                      >
+                        {row.typeLabel}
+                      </span>
+                    </td>
+
+                    <td
+                      className={[
+                        "px-4 py-3 text-right font-black",
+                        row.amount < 0 ? "text-rose-600" : "text-[#0f1f4d]",
+                      ].join(" ")}
+                    >
+                      {formatMoney(row.amount)}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <span
+                        className={[
+                          "rounded-md px-2 py-1 text-[10px] font-black",
+                          getPaymentBadge(row.paymentStatus),
+                        ].join(" ")}
+                      >
+                        {getPaymentText(row.paymentStatus)}
+                      </span>
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <span
+                        className={[
+                          "rounded-md px-2 py-1 text-[10px] font-black",
+                          getStatusBadge(row.saleStatus),
+                        ].join(" ")}
+                      >
+                        {getStatusText(row.saleStatus)}
+                      </span>
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <SalesRowActions row={toSalesRowActionData(row)} />
+                    </td>
+                  </tr>
+                ))}
+
+                {rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-5 py-16 text-center">
+                      <div className="mx-auto max-w-sm">
+                        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-emerald-50 text-emerald-600">
+                          <ShoppingCart size={28} />
+                        </div>
+
+                        <p className="mt-4 text-lg font-black text-[#0f1f4d]">
+                          Bu filtrede kayıt bulunamadı
+                        </p>
+
+                        <p className="mt-2 text-sm leading-6 text-slate-500">
+                          Seçili sekme veya tarih aralığında gösterilecek kayıt
+                          yok. Filtreyi genişletebilir veya yeni satış
+                          oluşturabilirsiniz.
+                        </p>
+
+                        <Link
+                          href="/sales/new"
+                          className="mt-5 inline-flex h-11 items-center justify-center rounded-2xl bg-emerald-600 px-5 text-sm font-black text-white transition hover:bg-emerald-700"
+                        >
+                          Yeni Satış Oluştur
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+
+          <SalesTablePagination
+            activeTab={activeTab}
+            from={from}
+            to={to}
+            totalPages={totalPages}
+            currentPage={page}
+            totalRecords={totalRecords}
+          />
+        </section>
+      </div>
+    </AppShell>
+  );
+}

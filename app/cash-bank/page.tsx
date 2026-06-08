@@ -1,0 +1,536 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import {
+  ArrowDownLeft,
+  Banknote,
+  Building2,
+  Clock3,
+  Download,
+  Edit3,
+  Eye,
+  MoreVertical,
+  PieChart,
+  Plus,
+  RefreshCcw,
+  Wallet,
+} from "lucide-react";
+import { AppShell } from "@/components/layout/app-shell";
+import { BankLogo } from "@/components/shared/bank-logo";
+import {
+  CashBankAccountRowActions,
+  CashBankActionCards,
+} from "@/components/cash-bank/cash-bank-list-actions";
+import {
+  CashBankTablePagination,
+  CashBankTableToolbar,
+} from "@/components/cash-bank/cash-bank-table-controls";
+import { CashBankSidebarWidgets } from "@/components/cash-bank/cash-bank-sidebar-widgets";
+import { getAuthToken, verifyToken } from "@/lib/auth";
+import { getCashBankPageData } from "@/lib/cash-bank-page-data";
+import {
+  buildCashBankQuery,
+  formatCashDate,
+  formatCashMoney,
+  getAccountStatusBadge,
+  getAccountTypeText,
+  getTransactionColor,
+  getTransactionText,
+  parseCashBankTab,
+  parsePage,
+  parseSearchQuery,
+} from "@/lib/cash-bank-page-utils";
+import { db } from "@/lib/prisma";
+
+type AuthPayload = {
+  userId: string;
+  companyId: string | null;
+};
+
+type CashBankPageProps = {
+  searchParams: Promise<{
+    tab?: string;
+    page?: string;
+    q?: string;
+  }>;
+};
+
+const statIconMap = {
+  wallet: Wallet,
+  building: Building2,
+  pie: PieChart,
+  clock: Clock3,
+  refresh: RefreshCcw,
+};
+
+const colorClassMap = {
+  emerald: "bg-emerald-50 text-emerald-600",
+  blue: "bg-blue-50 text-blue-600",
+  violet: "bg-violet-50 text-violet-600",
+  orange: "bg-orange-50 text-orange-500",
+};
+
+const cashIconColors = ["bg-emerald-500", "bg-yellow-400", "bg-teal-500"];
+
+export default async function CashBankPage({ searchParams }: CashBankPageProps) {
+  const params = await searchParams;
+  const token = await getAuthToken();
+
+  if (!token) redirect("/login");
+
+  const payload = verifyToken<AuthPayload>(token);
+
+  if (!payload?.userId || !payload.companyId) redirect("/login");
+
+  const user = await db.user.findUnique({
+    where: { id: payload.userId },
+    include: {
+      companyUsers: {
+        include: {
+          company: true,
+        },
+      },
+    },
+  });
+
+  if (!user) redirect("/login");
+
+  const company =
+    user.companyUsers.find((item) => item.companyId === payload.companyId)
+      ?.company ?? user.companyUsers[0]?.company;
+
+  if (!company) redirect("/login");
+
+  const activeTab = parseCashBankTab(params.tab);
+  const currentPage = parsePage(params.page);
+  const searchQuery = parseSearchQuery(params.q);
+
+  const {
+    statCards,
+    cashAccounts,
+    bankAccounts,
+    transactionRows,
+    balanceBreakdown,
+    recentTransactions,
+    totalBalance,
+    totalRecords,
+    totalPages,
+    currentPage: page,
+  } = await getCashBankPageData(company.id, {
+    tab: activeTab,
+    page: currentPage,
+    q: searchQuery,
+  });
+
+  const actionAccountOptions = [
+    ...cashAccounts.map((account) => ({
+      id: account.id,
+      name: account.name,
+      type: account.type,
+      balance: account.balance,
+    })),
+    ...bankAccounts.map((account) => ({
+      id: account.id,
+      name: account.name,
+      type: "BANK",
+      balance: account.balance,
+    })),
+  ];
+
+  const hasFilters = Boolean(searchQuery) || activeTab !== "accounts";
+  const isAccountsTab = activeTab === "accounts";
+
+  return (
+    <AppShell>
+      <div className="space-y-5">
+        <CashBankActionCards accounts={actionAccountOptions} />
+
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          {statCards.map((stat) => {
+            const Icon = statIconMap[stat.iconKey];
+
+            return (
+              <div
+                key={stat.title}
+                className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[12px] font-extrabold text-[#24345f]/80">
+                      {stat.title}
+                    </p>
+
+                    <p className="mt-3 text-[20px] font-black tracking-[-0.03em] text-[#0f1f4d]">
+                      {stat.value}
+                    </p>
+                  </div>
+
+                  <div
+                    className={[
+                      "flex h-12 w-12 shrink-0 items-center justify-center rounded-full",
+                      colorClassMap[stat.color],
+                    ].join(" ")}
+                  >
+                    <Icon size={22} strokeWidth={2.4} />
+                  </div>
+                </div>
+
+                <div className="mt-3 flex items-center gap-2 text-[11px] font-semibold text-slate-500">
+                  <span>{stat.subtitle}</span>
+                </div>
+              </div>
+            );
+          })}
+        </section>
+
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+          <section className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+            <CashBankTableToolbar
+              activeTab={activeTab}
+              searchQuery={searchQuery}
+            />
+
+            {isAccountsTab ? (
+              <div className="space-y-5 p-4">
+                <div>
+                  <h3 className="mb-3 text-[14px] font-extrabold text-[#0f1f4d]">
+                    Kasa Hesapları
+                  </h3>
+
+                  <div className="overflow-x-auto rounded-xl border border-slate-100">
+                    <table className="w-full min-w-[680px] text-left">
+                      <thead>
+                        <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-black text-[#24345f]/80">
+                          <th className="px-2 py-2.5">Hesap Adı</th>
+                          <th className="px-2 py-2.5">Tür</th>
+                          <th className="px-2 py-2.5 text-right">Bakiye</th>
+                          <th className="px-2 py-2.5">Durum</th>
+                          <th className="min-w-[220px] px-2 py-2.5 text-center">İşlem</th>
+                        </tr>
+                      </thead>
+
+                      <tbody className="divide-y divide-slate-100">
+                        {cashAccounts.map((account, index) => {
+                          const statusBadge = getAccountStatusBadge(account.status);
+
+                          return (
+                            <tr
+                              key={account.id}
+                              className="text-[12px] font-semibold text-[#24345f] transition hover:bg-slate-50/80"
+                            >
+                              <td className="max-w-[180px] px-2 py-2.5">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <div
+                                    className={[
+                                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white",
+                                      cashIconColors[index % cashIconColors.length],
+                                    ].join(" ")}
+                                  >
+                                    <Wallet size={14} strokeWidth={2.5} />
+                                  </div>
+                                  <p className="truncate text-[12px] font-extrabold text-[#0f1f4d]">
+                                    {account.name}
+                                  </p>
+                                </div>
+                              </td>
+
+                              <td className="px-2 py-2.5">
+                                <span className="inline-block whitespace-nowrap rounded-md bg-violet-50 px-2 py-1 text-[10px] font-black text-violet-600">
+                                  {getAccountTypeText(account.type)}
+                                </span>
+                              </td>
+
+                              <td className="whitespace-nowrap px-2 py-2.5 text-right text-[12px] font-black text-emerald-600">
+                                {formatCashMoney(account.balance)}
+                              </td>
+
+                              <td className="px-2 py-2.5">
+                                <span
+                                  className={[
+                                    "inline-block whitespace-nowrap rounded-md px-2 py-1 text-[10px] font-black",
+                                    statusBadge.className,
+                                  ].join(" ")}
+                                >
+                                  {statusBadge.label}
+                                </span>
+                              </td>
+
+                              <td className="px-2 py-2.5">
+                                <CashBankAccountRowActions
+                                  accountId={account.id}
+                                  accounts={actionAccountOptions}
+                                />
+                              </td>
+                            </tr>
+                          );
+                        })}
+
+                        {cashAccounts.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={5}
+                              className="px-4 py-8 text-center text-[13px] font-medium text-slate-500"
+                            >
+                              {hasFilters
+                                ? "Bu filtrede kasa hesabı bulunamadı"
+                                : "Henüz kasa hesabı yok"}
+                            </td>
+                          </tr>
+                        ) : null}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="mb-3 text-[14px] font-extrabold text-[#0f1f4d]">
+                    Banka Hesapları
+                  </h3>
+
+                  <div className="overflow-x-auto rounded-xl border border-slate-100">
+                    <table className="w-full min-w-[680px] text-left">
+                      <thead>
+                        <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-black text-[#24345f]/80">
+                          <th className="px-2 py-2.5">Hesap Adı</th>
+                          <th className="px-2 py-2.5">Banka</th>
+                          <th className="px-2 py-2.5 text-right">Bakiye</th>
+                          <th className="px-2 py-2.5">Durum</th>
+                          <th className="min-w-[220px] px-2 py-2.5 text-center">İşlem</th>
+                        </tr>
+                      </thead>
+
+                      <tbody className="divide-y divide-slate-100">
+                        {bankAccounts.map((account) => {
+                          const statusBadge = getAccountStatusBadge(account.status);
+                          const bankLabel = account.bankName || account.name;
+
+                          return (
+                            <tr
+                              key={account.id}
+                              className="text-[12px] font-semibold text-[#24345f] transition hover:bg-slate-50/80"
+                            >
+                              <td className="max-w-[200px] px-2 py-2.5">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <BankLogo
+                                    name={bankLabel}
+                                    className="h-8 w-8"
+                                    iconSize={14}
+                                  />
+
+                                  <div className="min-w-0">
+                                    <p className="truncate text-[12px] font-extrabold text-[#0f1f4d]">
+                                      {account.name}
+                                    </p>
+                                    {account.iban ? (
+                                      <p className="mt-0.5 truncate text-[10px] font-medium text-slate-500">
+                                        {account.iban}
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </td>
+
+                              <td className="max-w-[120px] truncate px-2 py-2.5 text-slate-600">
+                                {account.bankName || "-"}
+                              </td>
+
+                              <td className="whitespace-nowrap px-2 py-2.5 text-right text-[12px] font-black text-emerald-600">
+                                {formatCashMoney(account.balance)}
+                              </td>
+
+                              <td className="px-2 py-2.5">
+                                <span
+                                  className={[
+                                    "inline-block whitespace-nowrap rounded-md px-2 py-1 text-[10px] font-black",
+                                    statusBadge.className,
+                                  ].join(" ")}
+                                >
+                                  {statusBadge.label}
+                                </span>
+                              </td>
+
+                              <td className="px-2 py-2.5">
+                                <CashBankAccountRowActions
+                                  accountId={account.id}
+                                  accounts={actionAccountOptions}
+                                />
+                              </td>
+                            </tr>
+                          );
+                        })}
+
+                        {bankAccounts.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={5}
+                              className="px-4 py-8 text-center text-[13px] font-medium text-slate-500"
+                            >
+                              {hasFilters
+                                ? "Bu filtrede banka hesabı bulunamadı"
+                                : "Henüz banka hesabı yok"}
+                            </td>
+                          </tr>
+                        ) : null}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[760px] text-left">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-black text-[#24345f]/80">
+                      <th className="whitespace-nowrap px-2 py-2.5">Tarih</th>
+                      <th className="px-2 py-2.5">Açıklama</th>
+                      <th className="px-2 py-2.5">Tür</th>
+                      <th className="px-2 py-2.5">Hesap</th>
+                      <th className="px-2 py-2.5 text-right">Tutar</th>
+                      <th className="w-[72px] px-2 py-2.5 text-center">İşlem</th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-slate-100">
+                    {transactionRows.map((transaction) => (
+                      <tr
+                        key={transaction.id}
+                        className="text-[12px] font-semibold text-[#24345f] transition hover:bg-slate-50/80"
+                      >
+                        <td className="whitespace-nowrap px-2 py-2.5 text-[11px] text-slate-500">
+                          {formatCashDate(transaction.date)}
+                        </td>
+
+                        <td className="max-w-[180px] px-2 py-2.5">
+                          <p className="truncate text-[12px] font-extrabold text-[#0f1f4d]">
+                            {transaction.title}
+                          </p>
+                        </td>
+
+                        <td className="px-2 py-2.5">
+                          <span
+                            className={[
+                              "inline-block whitespace-nowrap rounded-md px-2 py-1 text-[10px] font-black",
+                              getTransactionColor(transaction.type),
+                            ].join(" ")}
+                          >
+                            {getTransactionText(transaction.type)}
+                          </span>
+                        </td>
+
+                        <td className="max-w-[160px] px-2 py-2.5">
+                          <div className="flex min-w-0 items-center gap-2">
+                            {transaction.accountType === "BANK" ? (
+                              <BankLogo
+                                name={transaction.bankName || transaction.accountName}
+                                className="h-7 w-7"
+                                iconSize={12}
+                              />
+                            ) : (
+                              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                                <Wallet size={12} strokeWidth={2.4} />
+                              </div>
+                            )}
+                            <p className="truncate text-[11px] text-slate-600">
+                              {transaction.accountName}
+                            </p>
+                          </div>
+                        </td>
+
+                        <td className="whitespace-nowrap px-2 py-2.5 text-right text-[12px] font-black text-[#0f1f4d]">
+                          {formatCashMoney(transaction.amount)}
+                        </td>
+
+                        <td className="px-2 py-2.5">
+                          <div className="mx-auto grid w-[62px] grid-cols-2 gap-1">
+                            <Link
+                              href={`/cash-bank/transactions/${transaction.id}`}
+                              className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-[#24345f] transition hover:border-blue-100 hover:bg-blue-50 hover:text-blue-600"
+                              title="Detay"
+                            >
+                              <Eye size={13} />
+                            </Link>
+                            <Link
+                              href={`/cash-bank/transactions/${transaction.id}/edit`}
+                              className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-[#24345f] transition hover:border-blue-100 hover:bg-blue-50 hover:text-blue-600"
+                              title="Düzenle"
+                            >
+                              <Edit3 size={13} />
+                            </Link>
+                            <Link
+                              href={`/cash-bank/transactions/${transaction.id}`}
+                              className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-[#24345f] transition hover:bg-slate-50"
+                              title="Belge"
+                            >
+                              <Download size={13} />
+                            </Link>
+                            <Link
+                              href={`/cash-bank/transactions/${transaction.id}`}
+                              className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-[#24345f] transition hover:bg-slate-50"
+                              title="Diğer"
+                            >
+                              <MoreVertical size={13} />
+                            </Link>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+
+                    {transactionRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-5 py-16 text-center">
+                          <div className="mx-auto max-w-sm">
+                            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-50 text-blue-600">
+                              <RefreshCcw size={28} />
+                            </div>
+
+                            <p className="mt-4 text-lg font-black text-[#0f1f4d]">
+                              {hasFilters
+                                ? "Bu filtrede hareket bulunamadı"
+                                : "Henüz hareket yok"}
+                            </p>
+
+                            <p className="mt-2 text-sm leading-6 text-slate-500">
+                              {hasFilters
+                                ? "Arama veya sekme filtrenizi değiştirerek tekrar deneyebilirsiniz."
+                                : "İlk hareketi ekleyerek kasa ve banka takibine başlayabilirsiniz."}
+                            </p>
+
+                            <Link
+                              href={
+                                hasFilters
+                                  ? buildCashBankQuery({ tab: activeTab })
+                                  : "/cash-bank?tab=movements"
+                              }
+                              className="mt-5 inline-flex h-11 items-center justify-center rounded-2xl bg-blue-600 px-5 text-sm font-black text-white"
+                            >
+                              {hasFilters ? "Filtreyi Temizle" : "Hareketlere Git"}
+                            </Link>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <CashBankTablePagination
+              activeTab={activeTab}
+              searchQuery={searchQuery}
+              totalPages={totalPages}
+              currentPage={page}
+              totalRecords={totalRecords}
+            />
+          </section>
+
+          <aside className="space-y-4">
+            <CashBankSidebarWidgets
+              balanceBreakdown={balanceBreakdown}
+              totalBalance={totalBalance}
+              recentTransactions={recentTransactions}
+            />
+          </aside>
+        </div>
+      </div>
+    </AppShell>
+  );
+}

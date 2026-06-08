@@ -1,0 +1,5 @@
+-- AlterEnum
+ALTER TYPE "StockMovementType" ADD VALUE 'COUNT';
+
+-- AlterTable
+ALTER TABLE "StockMovement" ADD COLUMN "movementDate" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;

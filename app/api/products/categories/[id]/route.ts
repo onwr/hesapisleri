@@ -1,0 +1,152 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { getAuthToken, verifyToken } from "@/lib/auth";
+import { db } from "@/lib/prisma";
+import {
+  deleteProductCategory,
+  updateProductCategory,
+} from "@/lib/product-category-service";
+import { PRODUCT_CATEGORY_COLORS } from "@/lib/product-category-utils";
+
+type AuthPayload = {
+  userId: string;
+  companyId: string | null;
+};
+
+type Props = {
+  params: Promise<{ id: string }>;
+};
+
+const categoryColorSchema = z.enum(PRODUCT_CATEGORY_COLORS);
+
+const updateCategorySchema = z.object({
+  name: z.string().trim().min(1).optional(),
+  color: categoryColorSchema.optional(),
+  note: z.string().nullable().optional(),
+  status: z.enum(["ACTIVE", "PASSIVE"]).optional(),
+});
+
+export async function PATCH(req: Request, { params }: Props) {
+  try {
+    const { id } = await params;
+    const token = await getAuthToken();
+
+    if (!token) {
+      return NextResponse.json(
+        { success: false, message: "Oturum bulunamadı." },
+        { status: 401 }
+      );
+    }
+
+    const payload = verifyToken<AuthPayload>(token);
+
+    if (!payload?.userId || !payload.companyId) {
+      return NextResponse.json(
+        { success: false, message: "Oturum geçersiz." },
+        { status: 401 }
+      );
+    }
+
+    const body = await req.json();
+    const parsed = updateCategorySchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Bilgileri kontrol edin.",
+          errors: parsed.error.flatten().fieldErrors,
+        },
+        { status: 400 }
+      );
+    }
+
+    const category = await updateProductCategory(
+      payload.companyId,
+      id,
+      parsed.data
+    );
+
+    await db.activityLog.create({
+      data: {
+        companyId: payload.companyId,
+        userId: payload.userId,
+        action: "UPDATE",
+        module: "products",
+        message: `${category.name} ürün kategorisi güncellendi.`,
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: "Kategori başarıyla güncellendi.",
+      data: category,
+    });
+  } catch (error) {
+    console.error("UPDATE_PRODUCT_CATEGORY_ERROR", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : "Kategori güncellenirken bir hata oluştu.",
+      },
+      { status: 400 }
+    );
+  }
+}
+
+export async function DELETE(_req: Request, { params }: Props) {
+  try {
+    const { id } = await params;
+    const token = await getAuthToken();
+
+    if (!token) {
+      return NextResponse.json(
+        { success: false, message: "Oturum bulunamadı." },
+        { status: 401 }
+      );
+    }
+
+    const payload = verifyToken<AuthPayload>(token);
+
+    if (!payload?.userId || !payload.companyId) {
+      return NextResponse.json(
+        { success: false, message: "Oturum geçersiz." },
+        { status: 401 }
+      );
+    }
+
+    await deleteProductCategory(payload.companyId, id);
+
+    await db.activityLog.create({
+      data: {
+        companyId: payload.companyId,
+        userId: payload.userId,
+        action: "DELETE",
+        module: "products",
+        message: "Ürün kategorisi silindi.",
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: "Kategori silindi.",
+    });
+  } catch (error) {
+    console.error("DELETE_PRODUCT_CATEGORY_ERROR", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : "Kategori silinirken bir hata oluştu.",
+      },
+      { status: 400 }
+    );
+  }
+}

@@ -1,0 +1,72 @@
+import { NextResponse } from "next/server";
+import { requireApiModuleAccess } from "@/lib/module-access";
+import { posCheckoutSchema } from "@/lib/pos-checkout-utils";
+import {
+  executePosCheckout,
+  SaleStockValidationError,
+} from "@/lib/pos-checkout-service";
+
+export async function POST(req: Request) {
+  try {
+    const auth = await requireApiModuleAccess("pos");
+    if ("error" in auth) return auth.error;
+
+    const { userId, companyId } = auth;
+
+    const body = await req.json();
+    const parsed = posCheckoutSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Bilgileri kontrol edin.",
+          errors: parsed.error.flatten().fieldErrors,
+        },
+        { status: 400 }
+      );
+    }
+
+    let sale;
+
+    try {
+      sale = await executePosCheckout({
+        companyId,
+        userId,
+        data: parsed.data,
+      });
+    } catch (error) {
+      if (error instanceof SaleStockValidationError) {
+        return NextResponse.json(
+          { success: false, message: error.message },
+          { status: 400 }
+        );
+      }
+
+      if (error instanceof Error) {
+        return NextResponse.json(
+          { success: false, message: error.message },
+          { status: 400 }
+        );
+      }
+
+      throw error;
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "POS satışı başarıyla tamamlandı.",
+      data: sale,
+    });
+  } catch (error) {
+    console.error("POS_CHECKOUT_ERROR", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: "POS satışı tamamlanırken bir hata oluştu.",
+      },
+      { status: 500 }
+    );
+  }
+}

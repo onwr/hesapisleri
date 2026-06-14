@@ -103,6 +103,10 @@ export function getActivityTag(module: string) {
     return { label: "Tahsilat", color: "purple" as const };
   }
 
+  if (module === "team" || module === "settings" || module === "employees") {
+    return { label: "Ekip", color: "purple" as const };
+  }
+
   return { label: "İşlem", color: "slate" as const };
 }
 

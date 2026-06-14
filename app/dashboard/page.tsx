@@ -31,7 +31,11 @@ import {
   getCompanyExpensesForFinance,
 } from "@/lib/finance-aggregation-service";
 import { shouldShowOnboardingAlert } from "@/lib/company-onboarding-utils";
+import { buildExpensesQuery } from "@/lib/expenses-page-utils";
+import { buildInvoicesQuery } from "@/lib/invoices-page-utils";
 import { getInvoiceRemainingAmount } from "@/lib/invoice-payment-utils";
+import { buildSalesQuery, formatDateInputValue } from "@/lib/sales-page-utils";
+import { resolveDashboardStatLinks } from "@/lib/dashboard-ui-utils";
 
 type AuthPayload = {
   userId: string;
@@ -217,6 +221,27 @@ export default async function DashboardPage() {
 
   const showOnboardingAlert = shouldShowOnboardingAlert(company);
 
+  const statLinks = resolveDashboardStatLinks({
+    todaySales: buildSalesQuery({
+      from: formatDateInputValue(todayStart),
+      to: formatDateInputValue(now),
+    }),
+    monthSales: buildSalesQuery({
+      from: formatDateInputValue(monthStart),
+      to: formatDateInputValue(monthEnd),
+    }),
+    pendingCollection: buildInvoicesQuery({
+      tab: dueCollection > 0 ? "overdue" : "pending",
+      from: monthStart,
+      to: monthEnd,
+    }),
+    monthExpenses: buildExpensesQuery({
+      from: monthStart,
+      to: monthEnd,
+    }),
+    cashBank: "/cash-bank",
+  });
+
   return (
     <AppShell>
       <DashboardContent
@@ -282,8 +307,10 @@ export default async function DashboardPage() {
             ),
             dueDateFormatted: new Intl.DateTimeFormat("tr-TR").format(dueDate),
             daysLeft,
+            href: `/invoices/${invoice.id}`,
           };
         })}
+        statLinks={statLinks}
         aiInsight={buildAiInsight(
           monthSales,
           lastMonthSales,

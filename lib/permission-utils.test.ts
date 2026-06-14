@@ -2,12 +2,15 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   canAccessFinance,
+  canAccessEmployees,
   canAccessModule,
   canAccessPOS,
   canManageInvoices,
   canManageProducts,
   canManageSettings,
   canManageUsers,
+  canManageEmployees,
+  canManageDirectory,
 } from "./permission-utils";
 import { getSidebarMenuItems } from "./sidebar-menu";
 
@@ -24,6 +27,11 @@ describe("permission utils", () => {
   it("STAFF kullanıcı yönetemez", () => {
     assert.equal(canManageUsers("STAFF"), false);
     assert.equal(canManageUsers("ACCOUNTANT"), false);
+    assert.equal(canManageEmployees("STAFF"), false);
+    assert.equal(canManageEmployees("ADMIN"), true);
+    assert.equal(canManageEmployees("ACCOUNTANT"), false);
+    assert.equal(canAccessEmployees("ACCOUNTANT"), true);
+    assert.equal(canAccessEmployees("STAFF"), false);
   });
 
   it("ADMIN ayarları yönetebilir", () => {
@@ -61,6 +69,13 @@ describe("permission utils", () => {
     assert.equal(canManageProducts("STAFF"), true);
     assert.equal(canManageProducts("ACCOUNTANT"), false);
   });
+
+  it("directory modülü STAFF görüntüler, yönetemez", () => {
+    assert.equal(canAccessModule("STAFF", "directory"), true);
+    assert.equal(canManageDirectory("STAFF"), false);
+    assert.equal(canManageDirectory("ADMIN"), true);
+    assert.equal(canAccessModule("ACCOUNTANT", "directory"), false);
+  });
 });
 
 describe("sidebar menu filtering", () => {
@@ -69,6 +84,7 @@ describe("sidebar menu filtering", () => {
     assert.ok(titles.includes("Kasa & Banka"));
     assert.ok(titles.includes("Giderler"));
     assert.ok(titles.includes("Raporlar"));
+    assert.ok(titles.includes("Çalışanlar"));
     assert.ok(!titles.includes("POS / Hızlı Satış"));
     assert.ok(!titles.includes("Ürünler"));
   });
@@ -78,6 +94,7 @@ describe("sidebar menu filtering", () => {
     assert.ok(titles.includes("POS / Hızlı Satış"));
     assert.ok(titles.includes("Ürünler"));
     assert.ok(titles.includes("Stoklar"));
+    assert.ok(titles.includes("Fihrist"));
     assert.ok(!titles.includes("Kasa & Banka"));
     assert.ok(!titles.includes("Giderler"));
     assert.ok(!titles.includes("Raporlar"));
@@ -87,6 +104,7 @@ describe("sidebar menu filtering", () => {
     const titles = getSidebarMenuItems("OWNER").map((item) => item.title);
     assert.ok(titles.includes("POS / Hızlı Satış"));
     assert.ok(titles.includes("Kasa & Banka"));
+    assert.ok(titles.includes("Takvim"));
     assert.ok(titles.includes("Raporlar"));
     assert.ok(titles.includes("Ürünler"));
   });

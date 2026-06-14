@@ -1,28 +1,17 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
-import {
-  Package,
-  Percent,
-  Power,
-  Trash2,
-  X,
-} from "lucide-react";
+import { Percent, Power, Printer, Trash2, X } from "lucide-react";
 import { ProductDeleteFeedbackDialog } from "@/components/products/product-delete-feedback-dialog";
+import { ProductEmptyState } from "@/components/products/product-empty-state";
+import { ProductListRow } from "@/components/products/product-list-row";
+import { ProductTableDesktopRow } from "@/components/products/product-table-desktop-row";
 import { ProductsBulkResultDialog } from "@/components/products/products-bulk-result-dialog";
 import { ProductsPriceBulkDialog } from "@/components/products/products-price-bulk-dialog";
-import { ProductsRowActions } from "@/components/products/products-row-actions";
-import { ProductThumbnail } from "@/components/products/product-thumbnail";
 import type { ProductDeleteBlockCode } from "@/lib/product-delete-utils";
-import {
-  formatProductMoney,
-  getCategoryBadge,
-  getProductStatusBadge,
-  getStockLevelStyle,
-  type ProductTableRow,
-} from "@/lib/products-page-utils";
+import { printProductBarcodesBulk } from "@/lib/product-ui-utils";
+import { formatProductMoney, type ProductTableRow } from "@/lib/products-page-utils";
 
 type ProductsSelectableTableProps = {
   rows: ProductTableRow[];
@@ -235,6 +224,18 @@ export function ProductsSelectableTable({
     });
   }
 
+  function handleBulkPrintBarcodes() {
+    const selected = rows.filter((row) => selectedIds.has(row.id));
+    printProductBarcodesBulk(
+      selected.map((row) => ({
+        name: row.name,
+        barcode: row.barcode,
+        sku: row.sku,
+        sellPriceLabel: formatProductMoney(row.sellPrice),
+      }))
+    );
+  }
+
   return (
     <>
       {someSelected ? (
@@ -254,6 +255,15 @@ export function ProductsSelectableTable({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={handleBulkPrintBarcodes}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-black text-[#0f1f4d] hover:bg-slate-50 disabled:opacity-60"
+            >
+              <Printer size={14} />
+              Barkod Yazdır
+            </button>
             <button
               type="button"
               disabled={isPending}
@@ -294,159 +304,83 @@ export function ProductsSelectableTable({
         </div>
       ) : null}
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[1160px] text-left">
-          <thead>
-            <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-black text-[#24345f]/80">
-              <th className="w-10 px-4 py-3">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-slate-300 text-blue-600"
-                  checked={allSelected}
-                  onChange={toggleAll}
-                  aria-label="Tümünü seç"
-                />
-              </th>
-              <th className="px-4 py-3">Ürün Adı</th>
-              <th className="px-4 py-3">Stok Kodu</th>
-              <th className="px-4 py-3">Barkod</th>
-              <th className="px-4 py-3">Grup</th>
-              <th className="px-4 py-3">Stok Miktarı</th>
-              <th className="px-4 py-3">Birim Fiyat</th>
-              <th className="px-4 py-3">Durum</th>
-              <th className="px-4 py-3 text-center">İşlemler</th>
-            </tr>
-          </thead>
-
-          <tbody className="divide-y divide-slate-100">
-            {rows.map((product) => {
-              const statusBadge = getProductStatusBadge(product.status);
-              const isSelected = selectedIds.has(product.id);
-
-              return (
-                <tr
-                  key={product.id}
-                  className={[
-                    "text-[12px] font-semibold text-[#24345f] transition hover:bg-slate-50/80",
-                    isSelected ? "bg-blue-50/40" : "",
-                  ].join(" ")}
-                >
-                  <td className="px-4 py-3">
+      {rows.length > 0 ? (
+        <>
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full min-w-[900px] text-left">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/80 text-[11px] font-black text-slate-500">
+                  <th className="w-10 px-3 py-2">
                     <input
                       type="checkbox"
                       className="h-4 w-4 rounded border-slate-300 text-blue-600"
-                      checked={isSelected}
-                      onChange={() => toggleOne(product.id)}
-                      aria-label={`${product.name} seç`}
+                      checked={allSelected}
+                      onChange={toggleAll}
+                      aria-label="Tümünü seç"
                     />
-                  </td>
-
-                  <td className="px-4 py-3">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <ProductThumbnail
-                        imageUrl={product.imageUrl}
-                        alt={product.name}
-                        size={40}
-                        iconSize={18}
-                        rounded="lg"
-                      />
-                      <div className="min-w-0">
-                        <p className="truncate font-extrabold text-[#0f1f4d]">
-                          {product.name}
-                        </p>
-                        <p className="mt-0.5 truncate text-[11px] font-medium text-slate-500">
-                          {product.description || "Açıklama yok"}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-
-                  <td className="px-4 py-3 font-bold text-[#24345f]">
-                    {product.sku}
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">
-                    {product.barcode || "-"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={[
-                        "rounded-md px-2 py-1 text-[10px] font-black",
-                        getCategoryBadge(product.categoryName),
-                      ].join(" ")}
-                    >
-                      {product.categoryName}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={[
-                        "font-black tracking-[-0.01em]",
-                        getStockLevelStyle(product.stock),
-                      ].join(" ")}
-                    >
-                      {product.isService ? "—" : `${product.stock} adet`}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 font-bold text-[#24345f]">
-                    {formatProductMoney(product.sellPrice)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={[
-                        "rounded-md px-2 py-1 text-[10px] font-black",
-                        statusBadge.className,
-                      ].join(" ")}
-                    >
-                      {statusBadge.label}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <ProductsRowActions
-                      row={{
-                        id: product.id,
-                        name: product.name,
-                        sku: product.sku,
-                        status: product.status,
-                        isService: product.isService,
-                        exportHref,
-                      }}
-                      onDeleteBlocked={handleDeleteBlocked}
-                    />
-                  </td>
+                  </th>
+                  <th className="px-3 py-2">Ürün</th>
+                  <th className="px-3 py-2">Kategori</th>
+                  <th className="px-3 py-2 text-right">Satış Fiyatı</th>
+                  <th className="px-3 py-2 text-right">Stok</th>
+                  <th className="px-3 py-2">Durum</th>
+                  <th className="px-3 py-2 text-right">İşlem</th>
                 </tr>
-              );
-            })}
+              </thead>
+              <tbody>
+                {rows.map((product) => (
+                  <ProductTableDesktopRow
+                    key={product.id}
+                    product={product}
+                    exportHref={exportHref}
+                    selected={selectedIds.has(product.id)}
+                    onToggleSelect={toggleOne}
+                    onDeleteBlocked={handleDeleteBlocked}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={9} className="px-5 py-16 text-center">
-                  <div className="mx-auto max-w-sm">
-                    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-rose-50 text-rose-600">
-                      <Package size={28} />
-                    </div>
-                    <p className="mt-4 text-lg font-black text-[#0f1f4d]">
-                      {hasFilters
-                        ? "Bu filtrede ürün bulunamadı"
-                        : "Henüz ürün yok"}
-                    </p>
-                    <p className="mt-2 text-sm leading-6 text-slate-500">
-                      {hasFilters
-                        ? "Arama veya filtre kriterlerinizi değiştirerek tekrar deneyebilirsiniz."
-                        : "İlk ürününüzü ekleyerek satış ve stok takibine başlayabilirsiniz."}
-                    </p>
-                    <Link
-                      href={hasFilters ? "/products" : "/products/new"}
-                      className="mt-5 inline-flex h-11 items-center justify-center rounded-2xl bg-rose-600 px-5 text-sm font-black text-white"
-                    >
-                      {hasFilters ? "Filtreyi Temizle" : "İlk Ürünü Ekle"}
-                    </Link>
-                  </div>
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+          <div className="space-y-2 p-3 md:hidden">
+            <div className="flex items-center gap-2 px-1">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-blue-600"
+                checked={allSelected}
+                onChange={toggleAll}
+                aria-label="Tümünü seç"
+              />
+              <span className="text-[11px] font-bold text-slate-500">
+                Toplu işlem için seçin
+              </span>
+            </div>
+            {rows.map((product) => (
+              <ProductListRow
+                key={product.id}
+                product={product}
+                exportHref={exportHref}
+                selected={selectedIds.has(product.id)}
+                onToggleSelect={toggleOne}
+                showCheckbox
+                onDeleteBlocked={handleDeleteBlocked}
+              />
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="p-3">
+          <ProductEmptyState hasFilters={hasFilters} />
+        </div>
+      )}
+
+      <ProductsPriceBulkDialog
+        open={priceDialogOpen}
+        onClose={() => setPriceDialogOpen(false)}
+        selectedCount={selectedIds.size}
+        onApply={handleBulkPrice}
+        isPending={isPending}
+      />
 
       <ProductDeleteFeedbackDialog
         state={deleteFeedback}
@@ -455,22 +389,14 @@ export function ProductsSelectableTable({
         isPending={isPending}
       />
 
-      <ProductsPriceBulkDialog
-        open={priceDialogOpen}
-        selectedCount={selectedIds.size}
-        onClose={() => setPriceDialogOpen(false)}
-        onApply={handleBulkPrice}
-        isPending={isPending}
-      />
-
       <ProductsBulkResultDialog
         open={Boolean(bulkResult?.open)}
+        onClose={() => setBulkResult(null)}
         title={bulkResult?.title ?? ""}
         summary={bulkResult?.summary ?? ""}
         successCount={bulkResult?.successCount ?? 0}
         failed={bulkResult?.failed ?? []}
         productNameById={productNameById}
-        onClose={() => setBulkResult(null)}
       />
     </>
   );

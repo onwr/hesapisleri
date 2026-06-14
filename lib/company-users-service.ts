@@ -10,6 +10,7 @@ import {
   validateActorCanManageUsers,
   validateInviteTargetEmail,
   validateRemoveCompanyUser,
+  getCompanyUserStatusLabel,
   validateRoleChange,
   type AssignableInviteRole,
 } from "@/lib/company-users-utils";
@@ -76,8 +77,10 @@ function serializeCompanyUser(entry: CompanyUser & { user: { name: string; email
     role: entry.role,
     roleLabel: getUserRoleLabel(entry.role),
     status: entry.status,
+    statusLabel: getCompanyUserStatusLabel(entry.status),
     isOwner: entry.isOwner,
     joinedAt: entry.createdAt.toISOString(),
+    updatedAt: entry.updatedAt.toISOString(),
   };
 }
 

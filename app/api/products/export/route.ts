@@ -2,9 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthToken, verifyToken } from "@/lib/auth";
 import {
   getProductsExportRows,
-  parseCategoryFilter,
-  parseProductTab,
-  parseSearchQuery,
+  parseProductsListOptions,
 } from "@/lib/products-page-data";
 
 type AuthPayload = {
@@ -47,15 +45,15 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const tab = parseProductTab(searchParams.get("tab"));
-    const category = parseCategoryFilter(searchParams.get("category"));
-    const q = parseSearchQuery(searchParams.get("q"));
-
-    const products = await getProductsExportRows(payload.companyId, {
-      tab,
-      category,
-      q,
+    const listOptions = parseProductsListOptions({
+      tab: searchParams.get("tab"),
+      category: searchParams.get("category"),
+      q: searchParams.get("q"),
+      stock: searchParams.get("stock"),
+      sort: searchParams.get("sort"),
     });
+
+    const products = await getProductsExportRows(payload.companyId, listOptions);
 
     const header = [
       "Ürün Adı",

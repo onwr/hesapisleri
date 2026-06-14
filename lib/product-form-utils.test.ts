@@ -8,6 +8,20 @@ import {
   productToFormValues,
 } from "./product-form-utils";
 
+describe("product-form-utils decimal prices", () => {
+  it("buildProductPayload virgüllü fiyatları parse eder", () => {
+    const payload = buildProductPayload({
+      ...emptyProductFormValues,
+      name: "Demo Ürün",
+      buyPrice: "780,50",
+      sellPrice: "1.108,60",
+    });
+
+    assert.equal(payload.buyPrice, 780.5);
+    assert.equal(payload.sellPrice, 1108.6);
+  });
+});
+
 describe("product-form-utils imageUrl", () => {
   it("normalizeImageUrl boş değeri null yapar", () => {
     assert.equal(normalizeImageUrl(""), null);

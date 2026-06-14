@@ -32,6 +32,10 @@ import {
   listStagger,
 } from "@/components/dashboard/dashboard-motion";
 import { formatMoney } from "@/lib/dashboard-metrics";
+import {
+  resolveDashboardStatLinks,
+  type DashboardStatLinks,
+} from "@/lib/dashboard-ui-utils";
 
 type ActivityTagColor = "green" | "blue" | "orange" | "purple" | "slate";
 
@@ -77,7 +81,9 @@ export type DashboardContentProps = {
     amountFormatted: string;
     dueDateFormatted: string;
     daysLeft: number;
+    href: string;
   }>;
+  statLinks?: DashboardStatLinks;
   aiInsight: string;
 };
 
@@ -124,8 +130,11 @@ export function DashboardContent({
   recentActivities,
   accounts,
   upcomingPayments,
+  statLinks,
   aiInsight,
 }: DashboardContentProps) {
+  const links = resolveDashboardStatLinks(statLinks);
+
   function getBankLogo(accountName: string) {
     const name = accountName.toLocaleLowerCase("tr-TR");
 
@@ -186,7 +195,7 @@ export function DashboardContent({
           {
             title: "Tahsilat Al",
             description: "Müşteriden ödeme al",
-            href: "/cash-bank",
+            href: "/cash-bank/collections",
             icon: <Wallet size={22} />,
             gradient: "bg-linear-to-br from-sky-400 to-blue-600",
           },
@@ -216,6 +225,7 @@ export function DashboardContent({
             changePercent={todaySalesChange}
             icon={<TrendingUp size={20} />}
             color="green"
+            href={links.todaySales}
           />
         </motion.div>
         <motion.div variants={dashboardFadeUp}>
@@ -226,6 +236,7 @@ export function DashboardContent({
             changePercent={monthSalesChange}
             icon={<ShoppingCart size={20} />}
             color="blue"
+            href={links.monthSales}
           />
         </motion.div>
         <motion.div variants={dashboardFadeUp}>
@@ -240,6 +251,7 @@ export function DashboardContent({
             subtitle={dueCollection === 0 ? "Vadesi gelen yok" : undefined}
             icon={<CalendarClock size={20} />}
             color="orange"
+            href={links.pendingCollection}
           />
         </motion.div>
         <motion.div variants={dashboardFadeUp}>
@@ -249,6 +261,7 @@ export function DashboardContent({
             subtitle="Bu ay"
             icon={<ReceiptText size={20} />}
             color="red"
+            href={links.monthExpenses}
           />
         </motion.div>
         <motion.div variants={dashboardFadeUp}>
@@ -258,6 +271,7 @@ export function DashboardContent({
             subtitle={`${accountsCount} hesap`}
             icon={<Banknote size={20} />}
             color="purple"
+            href={links.cashBank}
           />
         </motion.div>
       </motion.section>
@@ -395,9 +409,9 @@ export function DashboardContent({
                     const bankLogo = getBankLogo(displayName);
 
                     return (
-                      <motion.div
+                      <Link
                         key={account.id}
-                        variants={dashboardFadeUp}
+                        href={`/cash-bank/${account.id}`}
                         className="flex items-center justify-between gap-4 rounded-2xl transition hover:bg-slate-50"
                       >
                         <div className="flex min-w-0 items-center gap-3">
@@ -437,7 +451,7 @@ export function DashboardContent({
                         <p className="shrink-0 text-[13px] font-extrabold tracking-[-0.02em] text-[#0f1f4d]">
                           {account.balanceFormatted}
                         </p>
-                      </motion.div>
+                      </Link>
                     );
                   })
                 )}
@@ -458,7 +472,7 @@ export function DashboardContent({
               </h3>
 
               <Link
-                href="/invoices"
+                href={links.pendingCollection}
                 className="text-[11px] font-bold text-blue-600 hover:text-blue-700"
               >
                 Tümünü Gör
@@ -486,10 +500,10 @@ export function DashboardContent({
                         : "bg-amber-50 text-amber-500";
 
                   return (
-                    <motion.div
+                    <Link
                       key={payment.id}
-                      variants={dashboardFadeUp}
-                      className="flex items-start gap-3"
+                      href={payment.href || `/invoices/${payment.id}`}
+                      className="flex items-start gap-3 rounded-xl p-1 transition hover:bg-slate-50"
                     >
                       <div
                         className={[
@@ -526,7 +540,7 @@ export function DashboardContent({
                             : `${payment.daysLeft} gün kaldı`}
                         </span>
                       </div>
-                    </motion.div>
+                    </Link>
                   );
                 })
               )}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { CalendarDays, Filter, Search } from "lucide-react";
+import type { OrderSourceChannel } from "@prisma/client";
 import {
   buildOrdersQuery,
   formatDateInputValue,
@@ -16,6 +17,7 @@ type OrdersTableControlsProps = {
   from: Date;
   to: Date;
   searchQuery: string | null;
+  channel: OrderSourceChannel | null;
   totalPages: number;
   currentPage: number;
   totalRecords: number;
@@ -28,20 +30,28 @@ export function OrdersTableToolbar({
   from,
   to,
   searchQuery,
-}: Pick<OrdersTableControlsProps, "activeTab" | "from" | "to" | "searchQuery">) {
+  channel,
+}: Pick<
+  OrdersTableControlsProps,
+  "activeTab" | "from" | "to" | "searchQuery" | "channel"
+>) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [fromDate, setFromDate] = useState(() => formatDateInputValue(from));
   const [toDate, setToDate] = useState(() => formatDateInputValue(to));
   const [queryValue, setQueryValue] = useState(searchQuery ?? "");
+  const [channelValue, setChannelValue] = useState<OrderSourceChannel | "">(
+    channel ?? ""
+  );
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setFromDate(formatDateInputValue(from));
     setToDate(formatDateInputValue(to));
     setQueryValue(searchQuery ?? "");
+    setChannelValue(channel ?? "");
     setError(null);
-  }, [from, to, searchQuery]);
+  }, [from, to, searchQuery, channel]);
 
   function handleFilterSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -69,6 +79,7 @@ export function OrdersTableToolbar({
           from: nextFrom,
           to: nextTo,
           q: queryValue.trim() || null,
+          channel: channelValue === "" ? null : channelValue,
         })
       );
     });
@@ -89,6 +100,7 @@ export function OrdersTableToolbar({
                 from,
                 to,
                 q: searchQuery,
+                channel,
               })}
               className={[
                 "flex min-h-[40px] items-center justify-center px-2 py-2.5 text-center text-[10px] font-extrabold leading-tight transition xl:text-[11px]",
@@ -136,6 +148,21 @@ export function OrdersTableToolbar({
             aria-label="Bitiş tarihi"
           />
         </div>
+        <select
+          value={channelValue}
+            onChange={(event) =>
+              setChannelValue(event.target.value as OrderSourceChannel | "")
+            }
+          className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[12px] font-bold text-[#0f1f4d]"
+          aria-label="Kanal filtresi"
+        >
+          <option value="">Tümü</option>
+          <option value="MANUAL">Manuel</option>
+          <option value="POS">POS</option>
+          <option value="WEBSITE">Web Site</option>
+          <option value="TRENDYOL">Trendyol</option>
+          <option value="HEPSIBURADA">Hepsiburada</option>
+        </select>
 
         <button
           type="submit"
@@ -159,6 +186,7 @@ export function OrdersTablePagination({
   from,
   to,
   searchQuery,
+  channel,
   totalPages,
   currentPage,
   totalRecords,
@@ -186,6 +214,7 @@ export function OrdersTablePagination({
               from,
               to,
               q: searchQuery,
+              channel,
             })}
             className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-bold leading-none text-[#24345f] transition hover:bg-slate-50"
           >
@@ -206,6 +235,7 @@ export function OrdersTablePagination({
               from,
               to,
               q: searchQuery,
+              channel,
             })}
             className={[
               "flex h-9 w-9 items-center justify-center rounded-lg text-[12px] font-black",
@@ -226,6 +256,7 @@ export function OrdersTablePagination({
               from,
               to,
               q: searchQuery,
+              channel,
             })}
             className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-bold leading-none text-[#24345f] transition hover:bg-slate-50"
           >

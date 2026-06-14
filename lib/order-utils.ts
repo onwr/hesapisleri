@@ -3,6 +3,7 @@ import type { OrderSourceChannel, OrderStatus, PaymentStatus } from "@prisma/cli
 export type OrderTabKey =
   | "all"
   | "waiting"
+  | "matching"
   | "approved"
   | "shipping"
   | "delivered"
@@ -20,6 +21,7 @@ export type OrderStatusLabel =
 export const ORDER_TAB_LABELS: Record<OrderTabKey, string> = {
   all: "Tüm Siparişler",
   waiting: "Beklemede",
+  matching: "Eşleşme Bekleyenler",
   approved: "Onaylandı",
   shipping: "Kargoda",
   delivered: "Teslim Edildi",
@@ -74,6 +76,7 @@ export const SOURCE_CHANNEL_LABELS: Record<OrderSourceChannel, string> = {
 
 const TAB_STATUS_MAP: Record<Exclude<OrderTabKey, "all">, OrderStatus[]> = {
   waiting: ["WAITING"],
+  matching: ["WAITING"],
   approved: ["APPROVED"],
   shipping: ["SHIPPING"],
   delivered: ["DELIVERED"],
@@ -93,6 +96,7 @@ const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 export function parseOrderTab(value?: string | null): OrderTabKey {
   if (
     value === "waiting" ||
+    value === "matching" ||
     value === "approved" ||
     value === "shipping" ||
     value === "delivered" ||

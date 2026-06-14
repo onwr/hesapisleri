@@ -16,7 +16,11 @@ function isStalePrismaClient(client: PrismaClient | undefined): client is undefi
     !("customerGroup" in client) ||
     !("warehouse" in client) ||
     !("warehouseStock" in client) ||
-    !("warehouseTransfer" in client)
+    !("warehouseTransfer" in client) ||
+    !("employee" in client) ||
+    !("employeePayment" in client) ||
+    !("payrollRun" in client) ||
+    !("employeeDepartment" in client)
   );
 }
 

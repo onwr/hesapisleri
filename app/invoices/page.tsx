@@ -19,6 +19,7 @@ import {
 import { InvoicesSidebarWidgets } from "@/components/invoices/invoices-sidebar-widgets";
 import { getAuthToken, verifyToken } from "@/lib/auth";
 import { endOfMonth, startOfMonth } from "@/lib/dashboard-metrics";
+import { getInvoiceCollectionAccounts } from "@/lib/invoice-service";
 import { db } from "@/lib/prisma";
 import { getInvoicesPageData } from "@/lib/invoices-page-data";
 import {
@@ -132,6 +133,8 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageProps) 
     to,
     q: searchQuery,
   });
+
+  const collectionAccounts = await getInvoiceCollectionAccounts(company.id);
 
   const hasFilters =
     Boolean(searchQuery) ||
@@ -297,7 +300,10 @@ export default async function InvoicesPage({ searchParams }: InvoicesPageProps) 
                       </td>
 
                       <td className="px-2 py-2.5">
-                        <InvoicesRowActions row={mapInvoiceRowActions(invoice)} />
+                        <InvoicesRowActions
+                          row={mapInvoiceRowActions(invoice)}
+                          accounts={collectionAccounts}
+                        />
                       </td>
                     </tr>
                   ))}

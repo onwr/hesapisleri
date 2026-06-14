@@ -8,15 +8,12 @@ import {
   CheckCircle2,
   ChevronDown,
   CreditCard,
-  FileText,
   Loader2,
   Minus,
   Package,
   Plus,
-  ReceiptText,
   Search,
   ShoppingCart,
-  Sparkles,
   Trash2,
   User,
   Wallet,
@@ -28,6 +25,13 @@ import {
   getSaleProductStock,
 } from "@/lib/sale-warehouse-ui-utils";
 import { formatMoney } from "@/lib/format-utils";
+import { parseTurkishMoneyInput } from "@/lib/money-input-utils";
+
+const SALES_HERO_CLASS =
+  "rounded-[24px] border border-slate-200/70 bg-white p-5 shadow-[0_10px_26px_rgba(15,23,42,0.035)] sm:p-6";
+const SALES_FORM_SECTION_CLASS =
+  "rounded-[22px] border border-slate-200/70 bg-white shadow-[0_10px_26px_rgba(15,23,42,0.035)]";
+const STOCK_INSUFFICIENT_MESSAGE = "Bu ürün için yeterli stok bulunmuyor.";
 
 type Customer = {
   id: string;
@@ -45,6 +49,8 @@ type WarehouseOption = {
 type Product = {
   id: string;
   name: string;
+  sku?: string | null;
+  barcode?: string | null;
   stock: number;
   warehouseStock?: number;
   sellPrice: string | number;
@@ -207,9 +213,21 @@ export default function NewSalePage() {
   }, [customers, selectedCustomerId]);
 
   const filteredProducts = useMemo(() => {
-    return products.filter((product) =>
-      product.name.toLowerCase().includes(productSearch.toLowerCase())
-    );
+    const query = productSearch.trim().toLocaleLowerCase("tr-TR");
+    if (!query) return products;
+
+    return products.filter((product) => {
+      const haystack = [
+        product.name,
+        product.sku ?? "",
+        product.barcode ?? "",
+        product.category?.name ?? "",
+      ]
+        .join(" ")
+        .toLocaleLowerCase("tr-TR");
+
+      return haystack.includes(query);
+    });
   }, [products, productSearch]);
 
   const subtotal = useMemo(() => {
@@ -230,7 +248,7 @@ export default function NewSalePage() {
     if (paymentStatus === "PAID") return total;
     if (paymentStatus === "UNPAID") return 0;
 
-    const parsed = Number(paidAmountInput);
+    const parsed = parseTurkishMoneyInput(paidAmountInput);
     if (!Number.isFinite(parsed) || parsed <= 0) return 0;
     return Math.min(total, parsed);
   }, [paymentStatus, paidAmountInput, total]);
@@ -239,7 +257,12 @@ export default function NewSalePage() {
   const remainingAmount = Math.max(0, total - collectedAmount);
 
   function showStockLimitError(stock: number) {
-    setError(`Bu üründen stokta en fazla ${stock} adet var.`);
+    if (stock <= 0) {
+      setError(STOCK_INSUFFICIENT_MESSAGE);
+      return;
+    }
+
+    setError(`Bu ürün için stokta en fazla ${stock} adet var.`);
   }
 
   function addToCart(product: Product) {
@@ -422,7 +445,7 @@ export default function NewSalePage() {
       ) : null}
 
       <div className="mx-auto max-w-[1500px] space-y-5">
-        <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+        <section className={SALES_HERO_CLASS}>
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex items-start gap-4">
               <Link
@@ -470,7 +493,7 @@ export default function NewSalePage() {
 
         <section className="grid gap-5 xl:grid-cols-[1fr_420px]">
           <div className="space-y-5">
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+            <div className={`${SALES_FORM_SECTION_CLASS} p-4`}>
               <WarehouseSelectField
                 warehouses={warehouses}
                 value={selectedWarehouseId}
@@ -481,7 +504,7 @@ export default function NewSalePage() {
             </div>
 
             <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
-              <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+              <div className={`${SALES_FORM_SECTION_CLASS} p-4`}>
                 <div className="mb-4 flex items-center gap-3">
                   <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
                     <User size={20} strokeWidth={2.4} />
@@ -533,7 +556,7 @@ export default function NewSalePage() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+              <div className={`${SALES_FORM_SECTION_CLASS} p-4`}>
                 <div className="mb-4 flex items-center gap-3">
                   <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
                     <CreditCard size={20} strokeWidth={2.4} />
@@ -580,7 +603,9 @@ export default function NewSalePage() {
 
                         if (item.value === "PARTIAL" && !paidAmountInput) {
                           setPaidAmountInput(
-                            total > 0 ? Math.max(1, Math.floor(total / 2)).toFixed(2) : ""
+                            total > 0
+                              ? Math.max(1, Math.floor(total / 2)).toFixed(2)
+                              : ""
                           );
                         }
                       }}
@@ -626,7 +651,9 @@ export default function NewSalePage() {
                       max={total > 0 ? total - 0.01 : undefined}
                       step="0.01"
                       value={paidAmountInput}
-                      onChange={(event) => setPaidAmountInput(event.target.value)}
+                      onChange={(event) =>
+                        setPaidAmountInput(event.target.value)
+                      }
                       className="mt-2 h-11 w-full rounded-xl border border-orange-200 bg-white px-4 text-[13px] font-bold text-[#0f1f4d] outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-100"
                       placeholder="Örn. 500"
                     />
@@ -656,7 +683,7 @@ export default function NewSalePage() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+            <div className={`${SALES_FORM_SECTION_CLASS} overflow-hidden`}>
               <div className="flex flex-col gap-3 border-b border-slate-100 p-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <h2 className="text-[16px] font-black text-[#0f1f4d]">
@@ -721,7 +748,8 @@ export default function NewSalePage() {
                       </p>
 
                       <p className="mt-1 text-[11px] font-semibold text-slate-400">
-                        {product.category?.name ?? "Genel"} · KDV %{product.vatRate}
+                        {product.category?.name ?? "Genel"} · KDV %
+                        {product.vatRate}
                       </p>
 
                       {warehouseEnabled && selectedWarehouseId ? (
@@ -787,68 +815,68 @@ export default function NewSalePage() {
                   const atStockLimit = item.quantity >= item.stock;
 
                   return (
-                  <div
-                    key={item.productId}
-                    className="rounded-2xl border border-slate-100 bg-slate-50 p-3"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-[13px] font-black text-[#0f1f4d]">
-                          {item.name}
-                        </p>
+                    <div
+                      key={item.productId}
+                      className="rounded-2xl border border-slate-100 bg-slate-50 p-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-black text-[#0f1f4d]">
+                            {item.name}
+                          </p>
 
-                        <p className="mt-1 text-[11px] font-medium text-slate-500">
-                          {formatMoney(item.unitPrice)} · KDV %{item.vatRate}
-                        </p>
+                          <p className="mt-1 text-[11px] font-medium text-slate-500">
+                            {formatMoney(item.unitPrice)} · KDV %{item.vatRate}
+                          </p>
 
-                        <p className="mt-1 text-[10px] font-semibold text-slate-400">
-                          Stok: {item.stock} adet
-                        </p>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => removeItem(item.productId)}
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white text-rose-500 transition hover:bg-rose-50"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-
-                    <div className="mt-3 flex items-center justify-between">
-                      <div className="flex items-center gap-2 rounded-xl bg-white p-1">
-                        <button
-                          type="button"
-                          onClick={() => decreaseQuantity(item.productId)}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-600"
-                        >
-                          <Minus size={14} />
-                        </button>
-
-                        <span className="min-w-7 text-center text-[12px] font-black text-[#0f1f4d]">
-                          {item.quantity}
-                        </span>
+                          <p className="mt-1 text-[10px] font-semibold text-slate-400">
+                            Stok: {item.stock} adet
+                          </p>
+                        </div>
 
                         <button
                           type="button"
-                          onClick={() => increaseQuantity(item.productId)}
-                          disabled={atStockLimit}
-                          className={[
-                            "flex h-7 w-7 items-center justify-center rounded-lg",
-                            atStockLimit
-                              ? "cursor-not-allowed bg-blue-600/50 text-white opacity-50"
-                              : "bg-blue-600 text-white",
-                          ].join(" ")}
+                          onClick={() => removeItem(item.productId)}
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white text-rose-500 transition hover:bg-rose-50"
                         >
-                          <Plus size={14} />
+                          <Trash2 size={15} />
                         </button>
                       </div>
 
-                      <p className="text-[13px] font-black text-[#0f1f4d]">
-                        {formatMoney(item.quantity * item.unitPrice)}
-                      </p>
+                      <div className="mt-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2 rounded-xl bg-white p-1">
+                          <button
+                            type="button"
+                            onClick={() => decreaseQuantity(item.productId)}
+                            className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-600"
+                          >
+                            <Minus size={14} />
+                          </button>
+
+                          <span className="min-w-7 text-center text-[12px] font-black text-[#0f1f4d]">
+                            {item.quantity}
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() => increaseQuantity(item.productId)}
+                            disabled={atStockLimit}
+                            className={[
+                              "flex h-7 w-7 items-center justify-center rounded-lg",
+                              atStockLimit
+                                ? "cursor-not-allowed bg-blue-600/50 text-white opacity-50"
+                                : "bg-blue-600 text-white",
+                            ].join(" ")}
+                          >
+                            <Plus size={14} />
+                          </button>
+                        </div>
+
+                        <p className="text-[13px] font-black text-[#0f1f4d]">
+                          {formatMoney(item.quantity * item.unitPrice)}
+                        </p>
+                      </div>
                     </div>
-                  </div>
                   );
                 })}
 

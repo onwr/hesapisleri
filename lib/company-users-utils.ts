@@ -35,6 +35,26 @@ export function normalizeInviteEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
+export function getCompanyUserStatusLabel(status: string) {
+  if (status === "ACTIVE") return "Aktif";
+  if (status === "PASSIVE") return "Pasif";
+  if (status === "INVITED") return "Davetli";
+  return status;
+}
+
+export function getCompanyUserStatusBadgeClass(status: string) {
+  if (status === "ACTIVE") {
+    return "bg-emerald-50 text-emerald-700 border-emerald-100/80";
+  }
+  if (status === "INVITED") {
+    return "bg-sky-50 text-sky-700 border-sky-100/80";
+  }
+  if (status === "PASSIVE") {
+    return "bg-slate-100 text-slate-600 border-slate-200/80";
+  }
+  return "bg-slate-100 text-slate-600 border-slate-200/80";
+}
+
 export function buildInviteExpiryDate(from = new Date()) {
   const expiresAt = new Date(from);
   expiresAt.setDate(expiresAt.getDate() + INVITE_EXPIRY_DAYS);

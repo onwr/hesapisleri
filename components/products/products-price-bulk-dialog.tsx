@@ -151,7 +151,7 @@ export function ProductsPriceBulkDialog({
               </label>
               <input
                 type="number"
-                min="0.01"
+                min="0"
                 step={mode === "percent" ? "0.1" : "0.01"}
                 value={value}
                 onChange={(e) => setValue(e.target.value)}

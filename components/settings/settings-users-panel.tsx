@@ -9,6 +9,7 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
+import { getCompanyUserStatusBadgeClass } from "@/lib/company-users-utils";
 
 type TeamUser = {
   id: string;
@@ -18,8 +19,10 @@ type TeamUser = {
   role: string;
   roleLabel: string;
   status: string;
+  statusLabel: string;
   isOwner: boolean;
   joinedAt: string;
+  updatedAt?: string;
 };
 
 type PendingInvite = {
@@ -231,6 +234,13 @@ export function SettingsUsersPanel() {
 
   return (
     <div className="space-y-6">
+      <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-950">
+        <p className="font-black">Bu alan sisteme giriş yapan kullanıcılar ve yetkiler içindir.</p>
+        <p className="mt-1 font-semibold text-blue-900/80">
+          Personel kayıtları için Çalışanlar sayfasını kullanın.
+        </p>
+      </div>
+
       {error ? (
         <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
           {error}
@@ -323,13 +333,11 @@ export function SettingsUsersPanel() {
                   <td className="px-4 py-3">
                     <span
                       className={[
-                        "rounded-full px-3 py-1 text-xs font-black",
-                        user.status === "ACTIVE"
-                          ? "bg-green-100 text-green-700"
-                          : "bg-slate-200 text-slate-600",
+                        "rounded-full border px-3 py-1 text-xs font-black",
+                        getCompanyUserStatusBadgeClass(user.status),
                       ].join(" ")}
                     >
-                      {user.status === "ACTIVE" ? "Aktif" : user.status}
+                      {user.statusLabel || user.status}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-slate-500">

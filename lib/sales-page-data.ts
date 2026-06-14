@@ -9,6 +9,7 @@ import {
   startOfMonth,
 } from "@/lib/dashboard-metrics";
 import { getCollectedAmount, getSaleRemainingAmount } from "@/lib/sale-payment-utils";
+import { getInvoiceRemainingAmount } from "@/lib/invoice-payment-utils";
 import {
   formatShortDateTime,
   normalizeDateRange,
@@ -84,32 +85,43 @@ async function fetchDocuments(companyId: string) {
 
   const invoiceRows: SalesDocumentRow[] = invoices
     .filter((invoice) => isActiveInvoiceStatus(invoice.status))
-    .map((invoice) => ({
-    id: `invoice-${invoice.id}`,
-    createdAt: invoice.createdAt,
-    documentNo: invoice.invoiceNo,
-    customerName: invoice.customer?.name ?? "Müşteri seçilmedi",
-    typeLabel: "Fatura",
-    typeBadgeClass: "bg-violet-100 text-violet-700",
-    amount: Number(invoice.total),
-    paymentStatus: invoice.paymentStatus,
-    saleStatus: invoice.status,
-    detailHref: `/invoices/${invoice.id}`,
-    pdfUrl: invoice.pdfUrl,
-    sourceType: "invoice",
-    sourceId: invoice.id,
-    saleId: invoice.saleId,
-    invoiceId: invoice.id,
-    canCancel:
-      invoice.status !== "CANCELLED" && invoice.status !== "APPROVED",
-    canCreateInvoice: false,
-    canCollect: invoice.paymentStatus !== "PAID",
-    canConvert: false,
-    isQuote: false,
-    downloadHref: invoice.pdfUrl
-      ? invoice.pdfUrl
-      : `/api/invoices/${invoice.id}/pdf`,
-  }));
+    .map((invoice) => {
+      const totalAmount = Number(invoice.total);
+      const paidAmount = Number(invoice.paidAmount);
+      const remainingAmount = getInvoiceRemainingAmount(totalAmount, paidAmount);
+
+      return {
+        id: `invoice-${invoice.id}`,
+        createdAt: invoice.createdAt,
+        documentNo: invoice.invoiceNo,
+        customerName: invoice.customer?.name ?? "Müşteri seçilmedi",
+        typeLabel: "Fatura",
+        typeBadgeClass: "bg-violet-100 text-violet-700",
+        amount: totalAmount,
+        paymentStatus: invoice.paymentStatus,
+        saleStatus: invoice.status,
+        detailHref: `/invoices/${invoice.id}`,
+        pdfUrl: invoice.pdfUrl,
+        sourceType: "invoice" as const,
+        sourceId: invoice.id,
+        saleId: invoice.saleId,
+        invoiceId: invoice.id,
+        canCancel:
+          invoice.status !== "CANCELLED" && invoice.status !== "APPROVED",
+        canCreateInvoice: false,
+        canCollect: remainingAmount > 0,
+        canConvert: false,
+        isQuote: false,
+        downloadHref: invoice.pdfUrl
+          ? invoice.pdfUrl
+          : `/api/invoices/${invoice.id}/pdf`,
+        collectTargetType: "INVOICE" as const,
+        collectTargetId: invoice.id,
+        totalAmount,
+        paidAmount,
+        remainingAmount,
+      };
+    });
 
   const collectionRows: SalesDocumentRow[] = collections.map((tx) => ({
     id: `collection-${tx.id}`,
@@ -197,32 +209,43 @@ async function fetchDocuments(companyId: string) {
         sale.status !== "CANCELLED" &&
         sale.status !== "DRAFT"
     )
-    .map((sale) => ({
-      id: `sale-${sale.id}`,
-      createdAt: sale.createdAt,
-      documentNo: sale.saleNo,
-      customerName: sale.customer?.name ?? "Müşteri seçilmedi",
-      typeLabel: "Satış",
-      typeBadgeClass: "bg-emerald-100 text-emerald-700",
-      amount: Number(sale.total),
-      paymentStatus: sale.paymentStatus,
-      saleStatus: sale.status,
-      detailHref: `/sales/${sale.id}`,
-      pdfUrl: sale.invoice?.pdfUrl ?? null,
-      sourceType: "sale",
-      sourceId: sale.id,
-      saleId: sale.id,
-      invoiceId: sale.invoice?.id ?? null,
-      canCancel: sale.status === "COMPLETED" && sale.invoice?.status !== "APPROVED",
-      canCreateInvoice: !sale.invoice && sale.status === "COMPLETED",
-      canCollect:
-        getSaleRemainingAmount(Number(sale.total), Number(sale.paidAmount)) > 0,
-      canConvert: false,
-      isQuote: false,
-      downloadHref: sale.invoice?.pdfUrl
-        ? sale.invoice.pdfUrl
-        : `/api/sales/export?saleId=${sale.id}`,
-    }));
+    .map((sale) => {
+      const totalAmount = Number(sale.total);
+      const paidAmount = Number(sale.paidAmount);
+      const remainingAmount = getSaleRemainingAmount(totalAmount, paidAmount);
+
+      return {
+        id: `sale-${sale.id}`,
+        createdAt: sale.createdAt,
+        documentNo: sale.saleNo,
+        customerName: sale.customer?.name ?? "Müşteri seçilmedi",
+        typeLabel: "Satış",
+        typeBadgeClass: "bg-emerald-100 text-emerald-700",
+        amount: totalAmount,
+        paymentStatus: sale.paymentStatus,
+        saleStatus: sale.status,
+        detailHref: `/sales/${sale.id}`,
+        pdfUrl: sale.invoice?.pdfUrl ?? null,
+        sourceType: "sale" as const,
+        sourceId: sale.id,
+        saleId: sale.id,
+        invoiceId: sale.invoice?.id ?? null,
+        canCancel:
+          sale.status === "COMPLETED" && sale.invoice?.status !== "APPROVED",
+        canCreateInvoice: !sale.invoice && sale.status === "COMPLETED",
+        canCollect: remainingAmount > 0,
+        canConvert: false,
+        isQuote: false,
+        downloadHref: sale.invoice?.pdfUrl
+          ? sale.invoice.pdfUrl
+          : `/api/sales/export?saleId=${sale.id}`,
+        collectTargetType: "SALE" as const,
+        collectTargetId: sale.id,
+        totalAmount,
+        paidAmount,
+        remainingAmount,
+      };
+    });
 
   return {
     all: [...invoiceRows, ...collectionRows, ...returnRows, ...standaloneSaleRows],

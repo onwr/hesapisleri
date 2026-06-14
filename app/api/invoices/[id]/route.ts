@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { createNotification } from "@/lib/notification-service";
 import { db } from "@/lib/prisma";
 import { getAuthToken, verifyToken } from "@/lib/auth";
 import { cancelSaleById } from "@/lib/sale-cancel-service";
@@ -206,15 +207,21 @@ export async function PATCH(req: Request, { params }: Props) {
         },
       });
 
-      await tx.notification.create({
-        data: {
+      await createNotification(
+        {
           companyId: payload.companyId!,
           userId: payload.userId,
           type: "WARNING",
+          category: "INVOICES",
+          module: "invoices",
+          entityType: "INVOICE",
+          entityId: invoice.id,
+          actionUrl: `/invoices/${invoice.id}`,
           title: "Fatura iptal edildi",
           message: `${invoice.invoiceNo} numaralı fatura iptal edildi.`,
         },
-      });
+        tx
+      );
     });
 
     return NextResponse.json({

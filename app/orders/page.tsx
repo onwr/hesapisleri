@@ -35,6 +35,7 @@ import {
   parseOrderTab,
   parsePage,
   parseSearchQuery,
+  parseSourceChannelFilter,
 } from "@/lib/orders-page-utils";
 
 type AuthPayload = {
@@ -49,6 +50,7 @@ type OrdersPageProps = {
     from?: string;
     to?: string;
     q?: string;
+    channel?: string;
   }>;
 };
 
@@ -109,6 +111,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
   const activeTab = parseOrderTab(params.tab);
   const currentPage = parsePage(params.page);
   const searchQuery = parseSearchQuery(params.q);
+  const sourceChannel = parseSourceChannelFilter(params.channel);
   const defaultFrom = startOfMonth(now);
   const defaultTo = endOfMonth(now);
   const { from, to } = normalizeDateRange(
@@ -128,19 +131,22 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
     currentPage: page,
     exportHref,
     integrationOrderCounts,
+    integrationStatuses,
   } = await getOrdersPageData(company.id, {
     tab: activeTab,
     page: currentPage,
     from,
     to,
     q: searchQuery,
+    channel: sourceChannel,
   });
 
   const hasFilters =
     Boolean(searchQuery) ||
     activeTab !== "all" ||
     parseDateParam(params.from) !== null ||
-    parseDateParam(params.to) !== null;
+    parseDateParam(params.to) !== null ||
+    Boolean(sourceChannel);
 
   return (
     <AppShell>
@@ -229,6 +235,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
               from={from}
               to={to}
               searchQuery={searchQuery}
+              channel={sourceChannel}
             />
 
             <div className="overflow-x-auto">
@@ -369,6 +376,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
               from={from}
               to={to}
               searchQuery={searchQuery}
+              channel={sourceChannel}
               totalPages={totalPages}
               currentPage={page}
               totalRecords={totalRecords}
@@ -381,6 +389,7 @@ export default async function OrdersPage({ searchParams }: OrdersPageProps) {
               integrationActivities={integrationActivities}
               totalCount={periodOrderCount}
               integrationOrderCounts={integrationOrderCounts}
+              integrationStatuses={integrationStatuses}
             />
           </aside>
         </div>

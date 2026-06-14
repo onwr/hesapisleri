@@ -26,7 +26,7 @@ export function CashBankActionCards({ accounts }: CashBankActionCardsProps) {
     {
       title: "Tahsilat Al",
       description: "Müşteriden ödeme al",
-      href: "/sales",
+      href: "/cash-bank/collections",
       icon: Wallet,
       gradient: "from-emerald-500 to-green-600",
       action: "link" as const,

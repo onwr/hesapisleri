@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { createNotification } from "@/lib/notification-service";
 import { db } from "@/lib/prisma";
 import { getAuthToken, verifyToken } from "@/lib/auth";
 import {
@@ -202,15 +203,21 @@ export async function POST(req: Request) {
         },
       });
 
-      await tx.notification.create({
-        data: {
+      await createNotification(
+        {
           companyId: payload.companyId!,
           userId: payload.userId,
           type: "SUCCESS",
+          category: "SALES",
+          module: "sales",
+          entityType: "SALE",
+          entityId: createdSale.id,
+          actionUrl: `/sales/${createdSale.id}`,
           title: "Yeni satış oluşturuldu",
           message: `${createdSale.saleNo} numaralı satış başarıyla oluşturuldu.`,
         },
-      });
+        tx
+      );
 
       return createdSale;
     });

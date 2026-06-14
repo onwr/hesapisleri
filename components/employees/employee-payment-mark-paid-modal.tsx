@@ -1,0 +1,191 @@
+"use client";
+
+import { Loader2, X } from "lucide-react";
+import { TEAM_CARD_CLASS } from "@/components/team/team-ui-tokens";
+import { validateEmployeePaymentMarkPaidForm } from "@/lib/employee-payment-finance-utils";
+import { formatMoney } from "@/lib/format-utils";
+
+type CashBankAccount = {
+  id: string;
+  name: string;
+  type: string;
+  balance: number;
+};
+
+type EmployeePaymentMarkPaidModalProps = {
+  open: boolean;
+  saving: boolean;
+  paymentLabel: string;
+  paymentAmount: number;
+  accounts: CashBankAccount[];
+  accountsLoading: boolean;
+  paidAt: string;
+  relatedAccountId: string;
+  createExpense: boolean;
+  createTransaction: boolean;
+  notes: string;
+  formError: string;
+  onPaidAtChange: (value: string) => void;
+  onRelatedAccountIdChange: (value: string) => void;
+  onCreateExpenseChange: (value: boolean) => void;
+  onCreateTransactionChange: (value: boolean) => void;
+  onNotesChange: (value: string) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+};
+
+export function EmployeePaymentMarkPaidModal({
+  open,
+  saving,
+  paymentLabel,
+  paymentAmount,
+  accounts,
+  accountsLoading,
+  paidAt,
+  relatedAccountId,
+  createExpense,
+  createTransaction,
+  notes,
+  formError,
+  onPaidAtChange,
+  onRelatedAccountIdChange,
+  onCreateExpenseChange,
+  onCreateTransactionChange,
+  onNotesChange,
+  onClose,
+  onSubmit,
+}: EmployeePaymentMarkPaidModalProps) {
+  if (!open) return null;
+
+  const validationError = validateEmployeePaymentMarkPaidForm({
+    createTransaction,
+    relatedAccountId,
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+      <div
+        className={[
+          TEAM_CARD_CLASS,
+          "w-full max-w-lg space-y-5 p-6 shadow-xl",
+        ].join(" ")}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-black text-[#0f1f4d]">
+              Ödendi işaretle
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">
+              {paymentLabel} · {formatMoney(paymentAmount)}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            aria-label="Kapat"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <p className="text-xs font-semibold text-slate-500">
+          Seçili hesap ve onay kutularına göre gider ve/veya kasa/banka hareketi
+          oluşturulur; ödeme kaydı ödendi yapılır.
+        </p>
+
+        <div className="space-y-4">
+          <label className="block space-y-1">
+            <span className="text-xs font-bold text-slate-500">
+              Ödeme tarihi
+            </span>
+            <input
+              type="date"
+              value={paidAt}
+              onChange={(e) => onPaidAtChange(e.target.value)}
+              className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
+            />
+          </label>
+
+          <label className="block space-y-1">
+            <span className="text-xs font-bold text-slate-500">
+              Kasa / Banka hesabı
+            </span>
+            <select
+              value={relatedAccountId}
+              onChange={(e) => onRelatedAccountIdChange(e.target.value)}
+              disabled={accountsLoading}
+              className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm disabled:opacity-50"
+            >
+              <option value="">
+                {accountsLoading ? "Hesaplar yükleniyor..." : "Hesap seçin"}
+              </option>
+              {accounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.name} ({formatMoney(account.balance)})
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <input
+              type="checkbox"
+              checked={createExpense}
+              onChange={(e) => onCreateExpenseChange(e.target.checked)}
+              className="rounded border-slate-300"
+            />
+            Personel gideri oluştur
+          </label>
+
+          <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <input
+              type="checkbox"
+              checked={createTransaction}
+              onChange={(e) => onCreateTransactionChange(e.target.checked)}
+              className="rounded border-slate-300"
+            />
+            Kasa/Banka hareketi oluştur
+          </label>
+
+          <label className="block space-y-1">
+            <span className="text-xs font-bold text-slate-500">Not</span>
+            <textarea
+              value={notes}
+              onChange={(e) => onNotesChange(e.target.value)}
+              rows={2}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+              placeholder="Opsiyonel not"
+            />
+          </label>
+        </div>
+
+        {validationError || formError ? (
+          <p className="text-sm font-semibold text-red-600">
+            {validationError ?? formError}
+          </p>
+        ) : null}
+
+        <div className="flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="h-10 rounded-xl border border-slate-200 px-4 text-xs font-black text-slate-600 disabled:opacity-50"
+          >
+            Vazgeç
+          </button>
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={saving || Boolean(validationError)}
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-xs font-black text-white disabled:opacity-50"
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Ödendi işaretle
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

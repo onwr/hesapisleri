@@ -87,7 +87,8 @@ export function LoginForm() {
       );
 
       const defaultPath =
-        data.data?.user?.role === "SUPER_ADMIN" ? "/admin" : "/dashboard";
+        data.data?.redirectTo ??
+        (data.data?.user?.role === "SUPER_ADMIN" ? "/admin" : "/dashboard");
 
       router.push(redirectPath ?? defaultPath);
       router.refresh();

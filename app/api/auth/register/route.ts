@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/prisma";
 import { hashPassword, signToken } from "@/lib/auth";
-
-const TRIAL_DAYS = 14;
+import {
+  TRIAL_DAYS,
+  createCompanyForUser,
+} from "@/lib/create-company-service";
 
 const registerSchema = z.object({
   name: z.string().min(2, "Ad soyad en az 2 karakter olmalıdır."),
@@ -77,97 +79,17 @@ export async function POST(req: Request) {
           ? companyName.trim()
           : "İşletmem";
 
-      const company = await tx.company.create({
-        data: {
-          name: finalCompanyName,
-          taxNo: wantsCompanyInfo ? taxNo || null : null,
-          taxOffice: wantsCompanyInfo ? taxOffice || null : null,
-          phone: phone || null,
-          email,
-          status: "ACTIVE",
-        },
-      });
-
-      await tx.companyUser.create({
-        data: {
-          userId: user.id,
-          companyId: company.id,
-          role: "OWNER",
-          status: "ACTIVE",
-          isOwner: true,
-        },
-      });
-
-      const now = new Date();
-      const trialEnd = new Date();
-      trialEnd.setDate(trialEnd.getDate() + TRIAL_DAYS);
-
-      await tx.membershipPayment.create({
-        data: {
-          companyId: company.id,
-          periodStart: now,
-          periodEnd: trialEnd,
-          amount: 1499,
-          status: "PENDING",
-          provider: "TRIAL",
-          paymentRef: `TRIAL-${Date.now()}`,
-          paidAt: null,
-        },
-      });
-
-      await tx.warehouse.create({
-        data: {
-          companyId: company.id,
-          name: "Ana Depo",
-          code: "MAIN",
-          isDefault: true,
-          status: "ACTIVE",
-        },
-      });
-
-      await tx.account.createMany({
-        data: [
-          {
-            companyId: company.id,
-            type: "CASH",
-            name: "Merkez Kasa",
-            balance: 0,
-            currency: "TRY",
-            status: "ACTIVE",
-          },
-          {
-            companyId: company.id,
-            type: "BANK",
-            name: "Banka Hesabı",
-            bankName: "Varsayılan Banka",
-            balance: 0,
-            currency: "TRY",
-            status: "ACTIVE",
-          },
-        ],
-      });
-
-      await tx.notification.create({
-        data: {
-          companyId: company.id,
-          userId: user.id,
-          type: "SUCCESS",
-          title: "Hesabınız oluşturuldu",
-          message:
-            wantsCompanyInfo && companyName?.trim()
-              ? `Firma bilgilerinizle hesabınız açıldı. ${TRIAL_DAYS} gün ücretsiz deneme süreniz başladı.`
-              : `Hesabınız açıldı. ${TRIAL_DAYS} gün ücretsiz deneme süreniz başladı. Firma bilgilerinizi panelden tamamlayabilirsiniz.`,
-        },
-      });
-
-      await tx.activityLog.create({
-        data: {
-          companyId: company.id,
-          userId: user.id,
-          action: "REGISTER",
-          module: "auth",
-          message: "Yeni kullanıcı kaydı oluşturuldu.",
-        },
+      const { company } = await createCompanyForUser(tx, {
+        userId: user.id,
+        name: finalCompanyName,
+        taxNo: wantsCompanyInfo ? taxNo || null : null,
+        taxOffice: wantsCompanyInfo ? taxOffice || null : null,
+        phone: phone || null,
+        email,
+        source: "REGISTER",
+        registerCompanyNameProvided: Boolean(
+          wantsCompanyInfo && companyName?.trim()
+        ),
       });
 
       return { user, company };

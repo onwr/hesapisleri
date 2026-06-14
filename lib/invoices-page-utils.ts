@@ -50,6 +50,9 @@ export type InvoiceRowActionData = {
   canCancel: boolean;
   canCollect: boolean;
   canConvertToEInvoice: boolean;
+  totalAmount?: number;
+  paidAmount?: number;
+  remainingAmount?: number;
 };
 
 export function mapInvoiceRowActions(row: InvoiceTableRow): InvoiceRowActionData {
@@ -74,6 +77,9 @@ export function mapInvoiceRowActions(row: InvoiceTableRow): InvoiceRowActionData
       row.invoiceStatus !== "DRAFT",
     canConvertToEInvoice:
       row.invoiceType === "NORMAL" && row.invoiceStatus !== "CANCELLED",
+    totalAmount: row.amount,
+    paidAmount: row.paidAmount,
+    remainingAmount: row.remainingAmount,
   };
 }
 

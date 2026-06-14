@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { createNotification } from "@/lib/notification-service";
 import { db } from "@/lib/prisma";
 import { getAuthToken, verifyToken } from "@/lib/auth";
 import {
@@ -123,14 +124,17 @@ export async function PUT(req: Request) {
       },
     });
 
-    await db.notification.create({
-      data: {
-        companyId: company.id,
-        userId: payload.userId,
-        type: "SUCCESS",
-        title: "Firma bilgileri tamamlandı",
-        message: "Firma bilgileriniz başarıyla güncellendi.",
-      },
+    await createNotification({
+      companyId: company.id,
+      userId: payload.userId,
+      type: "SUCCESS",
+      category: "SYSTEM",
+      module: "settings",
+      entityType: "COMPANY",
+      entityId: company.id,
+      actionUrl: "/settings",
+      title: "Firma bilgileri tamamlandı",
+      message: "Firma bilgileriniz başarıyla güncellendi.",
     });
 
     return NextResponse.json({

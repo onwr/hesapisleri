@@ -110,6 +110,13 @@ const reportCards = [
     icon: Boxes,
     color: "cyan",
   },
+  {
+    title: "Personel Performansı",
+    description: "Çalışan satış ve maliyet analizi",
+    href: "/reports/personnel-performance",
+    icon: Users,
+    color: "blue",
+  },
 ];
 
 const tabs = ["Tüm Raporlar", "Finansal", "Satış", "Stok", "Müşteri"];

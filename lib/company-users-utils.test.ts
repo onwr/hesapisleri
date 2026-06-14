@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   buildInviteExpiryDate,
   buildInviteLink,
+  getCompanyUserStatusLabel,
   isInviteExpired,
   normalizeInviteEmail,
   validateActorCanManageUsers,
@@ -114,5 +115,44 @@ describe("company users utils", () => {
 
   it("email normalize edilir", () => {
     assert.equal(normalizeInviteEmail("  Test@Mail.COM "), "test@mail.com");
+  });
+
+  it("status label mapping döner", () => {
+    assert.equal(getCompanyUserStatusLabel("ACTIVE"), "Aktif");
+    assert.equal(getCompanyUserStatusLabel("PASSIVE"), "Pasif");
+    assert.equal(getCompanyUserStatusLabel("INVITED"), "Davetli");
+  });
+
+  it("ADMIN owner rolünü değiştiremez", () => {
+    const result = validateRoleChange({
+      actorRole: "ADMIN",
+      actorIsOwner: false,
+      actorUserId: "admin-1",
+      targetUserId: "owner-1",
+      targetRole: "OWNER",
+      targetIsOwner: true,
+      nextRole: "ADMIN",
+    });
+    assert.equal(result.ok, false);
+  });
+
+  it("ADMIN owner kullanıcıyı pasif yapamaz", () => {
+    const result = validateRemoveCompanyUser({
+      actorRole: "ADMIN",
+      actorIsOwner: false,
+      actorUserId: "admin-1",
+      targetUserId: "owner-1",
+      targetRole: "OWNER",
+      targetIsOwner: true,
+    });
+    assert.equal(result.ok, false);
+  });
+
+  it("ACCOUNTANT kullanıcı yönetemez", () => {
+    const result = validateActorCanManageUsers({
+      actorRole: "ACCOUNTANT",
+      actorIsOwner: false,
+    });
+    assert.equal(result.ok, false);
   });
 });

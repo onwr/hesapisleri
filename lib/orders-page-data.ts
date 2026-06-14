@@ -1,4 +1,4 @@
-import type { OrderSourceChannel, OrderStatus, Prisma } from "@prisma/client";
+import type { OrderSourceChannel, Prisma } from "@prisma/client";
 import { db } from "@/lib/prisma";
 import { orderStatusesForTab } from "@/lib/order-utils";
 import {
@@ -88,6 +88,13 @@ function buildActionCards(): OrderActionCard[] {
       iconKey: "grid",
       gradient: "from-rose-400 to-pink-600",
     },
+    {
+      title: "Entegrasyonlar",
+      description: "Pazaryeri bağlantılarını yönet",
+      href: "/settings/integrations",
+      iconKey: "grid",
+      gradient: "from-cyan-500 to-blue-600",
+    },
   ];
 }
 
@@ -128,8 +135,21 @@ function buildListWhere(
   if (statuses) {
     where.orderStatus = { in: statuses };
   }
-
-  if (filters.channel) {
+  if (filters.tab === "matching") {
+    where.orderStatus = "WAITING";
+    where.orderNote = {
+      contains: "Eşleşmeyen SKU",
+      mode: "insensitive",
+    };
+    if (
+      filters.channel === "TRENDYOL" ||
+      filters.channel === "HEPSIBURADA"
+    ) {
+      where.sourceChannel = filters.channel;
+    } else {
+      where.sourceChannel = { in: ["TRENDYOL", "HEPSIBURADA"] };
+    }
+  } else if (filters.channel) {
     where.sourceChannel = filters.channel;
   }
 
@@ -214,7 +234,7 @@ export async function getOrdersPageData(
 ) {
   const where = buildListWhere(companyId, options);
 
-  const [totalRecords, sales, periodStats, channelCounts, latestByChannel] =
+  const [totalRecords, sales, periodStats, channelCounts, latestByChannel, integrations] =
     await Promise.all([
       db.sale.count({ where }),
       db.sale.findMany({
@@ -227,6 +247,14 @@ export async function getOrdersPageData(
       getPeriodStats(companyId, options.from, options.to),
       getChannelCounts(companyId, options.from, options.to),
       getLatestByChannel(companyId, options.from, options.to),
+      db.marketplaceIntegration.findMany({
+        where: { companyId },
+        select: {
+          channel: true,
+          status: true,
+          lastSyncAt: true,
+        },
+      }),
     ]);
 
   const totalPages = Math.max(1, Math.ceil(totalRecords / PAGE_SIZE));
@@ -255,6 +283,17 @@ export async function getOrdersPageData(
     0
   );
 
+  const integrationStatuses: Record<
+    string,
+    { status: string; lastSyncAt: Date | null }
+  > = {};
+  for (const integration of integrations) {
+    integrationStatuses[integration.channel] = {
+      status: integration.status,
+      lastSyncAt: integration.lastSyncAt,
+    };
+  }
+
   return {
     rows,
     statCards,
@@ -268,6 +307,7 @@ export async function getOrdersPageData(
     pageSize: PAGE_SIZE,
     exportHref,
     integrationOrderCounts,
+    integrationStatuses,
   };
 }
 

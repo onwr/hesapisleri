@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Building2, Check, ChevronDown, Loader2, LogOut } from "lucide-react";
+import { Building2, Check, ChevronDown, Loader2, LogOut, Plus } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -183,6 +183,27 @@ export function AppUserMenu({ userName, companyName }: AppUserMenuProps) {
             </DropdownMenuItem>
           ))
         )}
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuItem asChild className="cursor-pointer rounded-xl px-2 py-2.5">
+          <Link
+            href="/companies/new"
+            className="flex items-center gap-2 text-sm font-bold text-blue-600 focus:text-blue-700"
+          >
+            <Plus size={16} />
+            Yeni Firma Ekle
+          </Link>
+        </DropdownMenuItem>
+
+        <DropdownMenuItem asChild className="cursor-pointer rounded-xl px-2 py-2.5">
+          <Link
+            href="/companies/select"
+            className="text-sm font-semibold text-slate-600"
+          >
+            Tüm firmaları gör
+          </Link>
+        </DropdownMenuItem>
 
         <DropdownMenuSeparator />
 

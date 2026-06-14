@@ -16,8 +16,11 @@ export type AppModule =
   | "reports"
   | "ai-assistant"
   | "notifications"
+  | "calendar"
   | "settings"
   | "settings-users"
+  | "employees"
+  | "directory"
   | "admin";
 
 const FULL_ACCESS_ROLES: PermissionRole[] = [
@@ -28,7 +31,7 @@ const FULL_ACCESS_ROLES: PermissionRole[] = [
 
 const MODULE_ACCESS: Record<AppModule, PermissionRole[]> = {
   dashboard: ["OWNER", "ADMIN", "ACCOUNTANT", "STAFF", "SUPER_ADMIN"],
-  pos: ["OWNER", "ADMIN", "STAFF", "SUPER_ADMIN"],
+  pos: ["OWNER", "ADMIN", "STAFF", "POS_STAFF", "SUPER_ADMIN"],
   sales: ["OWNER", "ADMIN", "ACCOUNTANT", "STAFF", "SUPER_ADMIN"],
   customers: ["OWNER", "ADMIN", "ACCOUNTANT", "STAFF", "SUPER_ADMIN"],
   products: ["OWNER", "ADMIN", "STAFF", "SUPER_ADMIN"],
@@ -40,8 +43,11 @@ const MODULE_ACCESS: Record<AppModule, PermissionRole[]> = {
   reports: ["OWNER", "ADMIN", "ACCOUNTANT", "SUPER_ADMIN"],
   "ai-assistant": ["OWNER", "ADMIN", "ACCOUNTANT", "SUPER_ADMIN"],
   notifications: ["OWNER", "ADMIN", "ACCOUNTANT", "STAFF", "SUPER_ADMIN"],
+  calendar: ["OWNER", "ADMIN", "ACCOUNTANT", "STAFF", "SUPER_ADMIN"],
   settings: ["OWNER", "ADMIN", "ACCOUNTANT", "STAFF", "SUPER_ADMIN"],
   "settings-users": ["OWNER", "ADMIN", "SUPER_ADMIN"],
+  employees: ["OWNER", "ADMIN", "SUPER_ADMIN", "ACCOUNTANT"],
+  directory: ["OWNER", "ADMIN", "STAFF", "SUPER_ADMIN"],
   admin: ["SUPER_ADMIN"],
 };
 
@@ -90,6 +96,46 @@ export function getAccessibleModules(
   );
 }
 
+const EMPLOYEE_MANAGE_ROLES: PermissionRole[] = [
+  "OWNER",
+  "ADMIN",
+  "SUPER_ADMIN",
+];
+
+export function canAccessEmployees(role: PermissionRole, isOwner = false) {
+  return canAccessModule(role, "employees", isOwner);
+}
+
+export function canManageEmployees(role: PermissionRole, isOwner = false) {
+  return hasRoleAccess(role, EMPLOYEE_MANAGE_ROLES, isOwner);
+}
+
+const DIRECTORY_MANAGE_ROLES: PermissionRole[] = [
+  "OWNER",
+  "ADMIN",
+  "SUPER_ADMIN",
+];
+
+export function canManageDirectory(role: PermissionRole, isOwner = false) {
+  return hasRoleAccess(role, DIRECTORY_MANAGE_ROLES, isOwner);
+}
+
+export function canManageEmployeeSalary(role: PermissionRole, isOwner = false) {
+  return canManageEmployees(role, isOwner);
+}
+
+export function canManagePayrollRuns(role: PermissionRole, isOwner = false) {
+  return canManageEmployees(role, isOwner);
+}
+
+export function canProcessEmployeePayments(role: PermissionRole, isOwner = false) {
+  return canAccessEmployees(role, isOwner);
+}
+
+export function canManagePerformanceTargets(role: PermissionRole, isOwner = false) {
+  return canManageEmployees(role, isOwner);
+}
+
 export function canManageUsers(role: PermissionRole, isOwner = false) {
   return canAccessModule(role, "settings-users", isOwner);
 }
@@ -116,6 +162,16 @@ export function canAccessPOS(role: PermissionRole, isOwner = false) {
 
 export function canAccessReports(role: PermissionRole, isOwner = false) {
   return canAccessModule(role, "reports", isOwner);
+}
+
+export function getPostAuthRedirectPath(
+  role: PermissionRole,
+  isOwner = false
+): string {
+  const effective = resolveEffectiveRole({ role, isOwner });
+  if (effective === "SUPER_ADMIN") return "/admin";
+  if (effective === "POS_STAFF") return "/pos";
+  return "/dashboard";
 }
 
 export function canManageProducts(role: PermissionRole, isOwner = false) {

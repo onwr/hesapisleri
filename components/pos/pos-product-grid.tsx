@@ -1,21 +1,14 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Plus, ShoppingBag } from "lucide-react";
 import { ProductThumbnail } from "@/components/products/product-thumbnail";
-
-export type PosGridProduct = {
-  id: string;
-  name: string;
-  stock: number;
-  warehouseStock?: number;
-  sellPrice: string | number;
-  vatRate: number;
-  imageUrl?: string | null;
-  category?: {
-    id: string;
-    name: string;
-  } | null;
-};
+import { POS_PRODUCT_CARD_CLASS } from "@/components/pos/pos-ui-tokens";
+import {
+  getPosProductStock,
+  isPosProductLowStock,
+  isPosProductOutOfStock,
+  type PosGridProduct,
+} from "@/lib/pos-page-utils";
 
 type PosProductGridProps = {
   products: PosGridProduct[];
@@ -32,10 +25,15 @@ export function PosProductGrid({
 }: PosProductGridProps) {
   if (products.length === 0) {
     return (
-      <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-10 text-center">
-        <p className="text-lg font-black text-slate-950">Ürün bulunamadı</p>
-        <p className="mt-2 text-sm text-slate-500">
-          Barkod, SKU, ürün adı veya kategori ile arama yapabilirsiniz.
+      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm">
+          <ShoppingBag size={24} />
+        </div>
+        <p className="mt-4 text-sm font-extrabold text-[#0f1f4d]">
+          Ürün bulunamadı
+        </p>
+        <p className="mt-2 text-xs text-slate-500">
+          Arama, barkod veya kategori filtrelerini değiştirin.
         </p>
       </div>
     );
@@ -44,79 +42,78 @@ export function PosProductGrid({
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
       {products.map((product) => {
-        const displayStock =
-          showWarehouseStock && product.warehouseStock !== undefined
-            ? product.warehouseStock
-            : product.stock;
-        const outOfStock = displayStock <= 0;
-        const lowStock = displayStock > 0 && displayStock <= 10;
+        const displayStock = getPosProductStock(product, showWarehouseStock);
+        const outOfStock = isPosProductOutOfStock(product, showWarehouseStock);
+        const lowStock = isPosProductLowStock(product, showWarehouseStock);
 
         return (
-          <button
+          <article
             key={product.id}
-            type="button"
-            onClick={() => onAdd(product)}
-            disabled={outOfStock}
             className={[
-              "group rounded-3xl border p-4 text-left transition",
-              outOfStock
-                ? "cursor-not-allowed border-red-100 bg-red-50/80 opacity-60"
-                : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-100/60",
+              POS_PRODUCT_CARD_CLASS,
+              outOfStock ? "cursor-not-allowed opacity-60" : "",
             ].join(" ")}
           >
             <div className="mb-3 flex items-start justify-between gap-3">
               <ProductThumbnail
                 imageUrl={product.imageUrl}
                 alt={product.name}
-                size={48}
+                size={52}
                 iconSize={22}
                 rounded="2xl"
                 dimmed={outOfStock}
-                className="border border-slate-200 bg-linear-to-br from-blue-50 to-violet-50"
+                className="border border-slate-200/70 bg-blue-50/50"
               />
 
               <span
                 className={[
-                  "rounded-full px-2.5 py-1 text-xs font-black",
+                  "rounded-full px-2.5 py-1 text-[10px] font-black",
                   outOfStock
-                    ? "bg-red-100 text-red-700"
+                    ? "bg-slate-100 text-slate-500"
                     : lowStock
-                      ? "bg-orange-100 text-orange-700"
-                      : "bg-green-100 text-green-700",
+                      ? "bg-amber-50 text-amber-700"
+                      : "bg-emerald-50 text-emerald-700",
                 ].join(" ")}
               >
                 {outOfStock ? "Stok yok" : `${displayStock} stok`}
               </span>
             </div>
 
-            <p className="font-black text-slate-950 group-hover:text-blue-600">
+            <p className="line-clamp-2 font-extrabold text-[#0f1f4d]">
               {product.name}
             </p>
 
-            <p className="mt-1 text-xs font-semibold text-slate-400">
-              {product.category?.name ?? "Genel"}
+            <p className="mt-1 text-[11px] font-medium text-slate-500">
+              {[product.sku, product.barcode].filter(Boolean).join(" · ") ||
+                product.category?.name ||
+                "Genel"}
             </p>
 
-            {showWarehouseStock ? (
-              <p className="mt-1 text-[11px] font-bold text-blue-600">
-                Bu depoda: {displayStock} adet
-              </p>
-            ) : null}
+            <div className="mt-4 flex items-end justify-between gap-3">
+              <div>
+                <p className="text-lg font-extrabold text-[#0f1f4d]">
+                  {formatMoney(Number(product.sellPrice))}
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  KDV %{product.vatRate}
+                </p>
+              </div>
 
-            <div className="mt-4 flex items-center justify-between">
-              <p className="text-lg font-black text-slate-950">
-                {formatMoney(Number(product.sellPrice))}
-              </p>
-
-              {!outOfStock ? (
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-white">
-                  <Plus size={18} />
-                </span>
-              ) : null}
+              <button
+                type="button"
+                onClick={() => onAdd(product)}
+                disabled={outOfStock}
+                className="inline-flex h-10 items-center gap-1.5 rounded-2xl bg-[#0f1f4d] px-3 text-xs font-black text-white transition hover:bg-[#162a5c] disabled:bg-slate-200 disabled:text-slate-500"
+              >
+                <Plus size={14} />
+                Sepete Ekle
+              </button>
             </div>
-          </button>
+          </article>
         );
       })}
     </div>
   );
 }
+
+export type { PosGridProduct };

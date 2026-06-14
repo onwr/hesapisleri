@@ -1,33 +1,18 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import {
-  AlertTriangle,
-  ArrowDownToLine,
-  ArrowRight,
-  Boxes,
-  FileSpreadsheet,
-  Package,
-  Plus,
-  Tags,
-  Upload,
-  Wallet,
-} from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
+import { ProductsFilters } from "@/components/products/products-filters";
 import { ProductsSelectableTable } from "@/components/products/products-selectable-table";
-import {
-  ProductsTablePagination,
-  ProductsTableToolbar,
-} from "@/components/products/products-table-controls";
+import { ProductsShell } from "@/components/products/products-shell";
+import { ProductsTablePagination } from "@/components/products/products-table-controls";
+import { PRODUCT_CARD_CLASS } from "@/components/products/product-ui-tokens";
 import { getAuthToken, verifyToken } from "@/lib/auth";
 import { db } from "@/lib/prisma";
-import { getProductsPageData } from "@/lib/products-page-data";
+import { resolveEffectiveRole } from "@/lib/permission-utils";
 import {
   buildProductsExportQuery,
-  parseCategoryFilter,
-  parsePage,
-  parseProductTab,
-  parseSearchQuery,
-} from "@/lib/products-page-utils";
+  getProductsPageData,
+  parseProductsListOptions,
+} from "@/lib/products-page-data";
 
 type AuthPayload = {
   userId: string;
@@ -40,63 +25,10 @@ type ProductsPageProps = {
     page?: string;
     category?: string;
     q?: string;
+    stock?: string;
+    sort?: string;
   }>;
 };
-
-const statIconMap = {
-  package: Package,
-  boxes: Boxes,
-  alert: AlertTriangle,
-  wallet: Wallet,
-  spreadsheet: FileSpreadsheet,
-};
-
-const colorClassMap = {
-  emerald: "bg-emerald-50 text-emerald-600",
-  blue: "bg-blue-50 text-blue-600",
-  orange: "bg-orange-50 text-orange-500",
-  violet: "bg-violet-50 text-violet-600",
-};
-
-function buildActionCards(exportHref: string) {
-  return [
-    {
-      title: "Yeni Ürün Ekle",
-      description: "Ürün ekle",
-      href: "/products/new",
-      icon: Plus,
-      gradient: "from-emerald-500 to-green-600",
-    },
-    {
-      title: "Ürün Kategorileri",
-      description: "Kategorileri yönet",
-      href: "/products/categories",
-      icon: Tags,
-      gradient: "from-blue-500 to-blue-600",
-    },
-    {
-      title: "Stok Girişi",
-      description: "Stok miktarı artır",
-      href: "/stocks",
-      icon: ArrowDownToLine,
-      gradient: "from-orange-400 to-orange-600",
-    },
-    {
-      title: "Stok Çıkışı",
-      description: "Stok miktarı azalt",
-      href: "/stocks",
-      icon: Upload,
-      gradient: "from-violet-500 to-purple-600",
-    },
-    {
-      title: "Fiyat Listesi",
-      description: "Listeyi dışa aktar",
-      href: exportHref,
-      icon: Tags,
-      gradient: "from-rose-400 to-pink-600",
-    },
-  ];
-}
 
 export default async function ProductsPage({ searchParams }: ProductsPageProps) {
   const params = await searchParams;
@@ -127,127 +59,56 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
 
   if (!company) redirect("/login");
 
-  const activeTab = parseProductTab(params.tab);
-  const currentPage = parsePage(params.page);
-  const activeCategory = parseCategoryFilter(params.category);
-  const searchQuery = parseSearchQuery(params.q);
+  const membership =
+    user.companyUsers.find((item) => item.companyId === company.id) ??
+    user.companyUsers[0];
+
+  const effectiveRole = membership
+    ? resolveEffectiveRole({
+        role: membership.role,
+        isOwner: membership.isOwner,
+      })
+    : "STAFF";
+
+  const canSyncStock =
+    Boolean(membership?.isOwner) ||
+    effectiveRole === "OWNER" ||
+    effectiveRole === "ADMIN";
+
+  const listOptions = parseProductsListOptions(params);
 
   const {
-    statCards,
+    stats,
     rows,
     categories,
     totalRecords,
     totalPages,
     currentPage: page,
-  } = await getProductsPageData(company.id, {
-    tab: activeTab,
-    page: currentPage,
-    category: activeCategory,
-    q: searchQuery,
-  });
+  } = await getProductsPageData(company.id, listOptions);
 
-  const exportHref = buildProductsExportQuery({
-    tab: activeTab,
-    category: activeCategory,
-    q: searchQuery,
-  });
+  const exportHref = buildProductsExportQuery(listOptions);
 
-  const actionCards = buildActionCards(exportHref);
-  const hasFilters = Boolean(searchQuery || activeCategory || activeTab !== "all");
+  const hasFilters = Boolean(
+    listOptions.q ||
+      listOptions.category ||
+      listOptions.tab !== "all" ||
+      listOptions.stock !== "all" ||
+      listOptions.sort !== "recent"
+  );
 
   return (
     <AppShell>
-      <div className="space-y-5">
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          {actionCards.map((card) => {
-            const Icon = card.icon;
+      <ProductsShell stats={stats} canSyncStock={canSyncStock}>
+        <ProductsFilters
+          activeTab={listOptions.tab}
+          activeCategory={listOptions.category}
+          searchQuery={listOptions.q}
+          stockFilter={listOptions.stock}
+          sortKey={listOptions.sort}
+          categories={categories}
+        />
 
-            return (
-              <Link
-                key={card.title}
-                href={card.href}
-                className={[
-                  "group flex h-[86px] items-center justify-between rounded-2xl bg-linear-to-br p-4 text-white shadow-[0_14px_30px_rgba(15,23,42,0.12)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgba(15,23,42,0.16)]",
-                  card.gradient,
-                ].join(" ")}
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/15 shadow-inner">
-                    <Icon size={22} strokeWidth={2.4} />
-                  </div>
-
-                  <div className="min-w-0">
-                    <p className="truncate text-[15px] font-black leading-tight">
-                      {card.title}
-                    </p>
-                    <p className="mt-1 truncate text-[11px] font-medium text-white/85">
-                      {card.description}
-                    </p>
-                  </div>
-                </div>
-
-                <ArrowRight
-                  size={18}
-                  strokeWidth={3}
-                  className="shrink-0 opacity-90 transition group-hover:translate-x-1 group-hover:opacity-100"
-                />
-              </Link>
-            );
-          })}
-        </section>
-
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          {statCards.map((stat) => {
-            const Icon = statIconMap[stat.iconKey];
-
-            return (
-              <div
-                key={stat.title}
-                className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[12px] font-extrabold text-[#24345f]/80">
-                      {stat.title}
-                    </p>
-
-                    <p className="mt-3 text-[20px] font-black tracking-[-0.03em] text-[#0f1f4d]">
-                      {stat.value}
-                    </p>
-                  </div>
-
-                  <div
-                    className={[
-                      "flex h-12 w-12 shrink-0 items-center justify-center rounded-full",
-                      colorClassMap[stat.color],
-                    ].join(" ")}
-                  >
-                    <Icon size={22} strokeWidth={2.4} />
-                  </div>
-                </div>
-
-                <div className="mt-3 flex items-center gap-2 text-[11px] font-semibold text-slate-500">
-                  <span>{stat.subtitle}</span>
-                  {stat.secondSubtitle ? (
-                    <>
-                      <span className="text-slate-300">•</span>
-                      <span>{stat.secondSubtitle}</span>
-                    </>
-                  ) : null}
-                </div>
-              </div>
-            );
-          })}
-        </section>
-
-        <section className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
-          <ProductsTableToolbar
-            activeTab={activeTab}
-            activeCategory={activeCategory}
-            searchQuery={searchQuery}
-            categories={categories}
-          />
-
+        <section id="products-list" className={PRODUCT_CARD_CLASS}>
           <ProductsSelectableTable
             rows={rows}
             exportHref={exportHref}
@@ -255,15 +116,17 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
           />
 
           <ProductsTablePagination
-            activeTab={activeTab}
-            activeCategory={activeCategory}
-            searchQuery={searchQuery}
+            activeTab={listOptions.tab}
+            activeCategory={listOptions.category}
+            searchQuery={listOptions.q}
+            stockFilter={listOptions.stock}
+            sortKey={listOptions.sort}
             totalPages={totalPages}
             currentPage={page}
             totalRecords={totalRecords}
           />
         </section>
-      </div>
+      </ProductsShell>
     </AppShell>
   );
 }

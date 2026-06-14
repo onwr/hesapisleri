@@ -12,6 +12,7 @@ enum UserRole {
   ADMIN
   ACCOUNTANT
   STAFF
+  POS_STAFF
   SUPER_ADMIN
 }
 
@@ -63,6 +64,31 @@ enum OrderStatus {
   RETURN_REQUESTED
   RETURNED
   CANCELLED
+}
+
+enum MarketplaceChannel {
+  TRENDYOL
+  HEPSIBURADA
+}
+
+enum MarketplaceIntegrationStatus {
+  DISCONNECTED
+  CONNECTED
+  ERROR
+  DISABLED
+}
+
+enum MarketplaceSyncRunType {
+  MANUAL
+  AUTO
+  TEST
+}
+
+enum MarketplaceSyncRunStatus {
+  SUCCESS
+  PARTIAL_SUCCESS
+  FAILED
+  RUNNING
 }
 
 enum PaymentStatus {
@@ -157,6 +183,44 @@ enum NotificationType {
   ERROR
 }
 
+enum NotificationCategory {
+  SALES
+  INVOICES
+  STOCK
+  FINANCE
+  SYSTEM
+  TEAM
+  MARKETPLACE
+}
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum NotificationChannel {
+  IN_APP
+}
+
+enum CalendarEventType {
+  APPOINTMENT
+  PAYMENT
+  REMINDER
+}
+
+enum CalendarEventStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum CalendarEventSource {
+  MANUAL
+  SYSTEM
+}
+
 model User {
   id           String   @id @default(cuid())
   name         String
@@ -172,6 +236,8 @@ model User {
   notifications Notification[]
   activityLogs  ActivityLog[]
   warehouseTransfers WarehouseTransfer[]
+  calendarEvents CalendarEvent[]
+  directoryContacts DirectoryContact[] @relation("DirectoryContactCreator")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -207,9 +273,79 @@ model Company {
   warehouses         Warehouse[]
   warehouseStocks    WarehouseStock[]
   warehouseTransfers WarehouseTransfer[]
+  marketplaceIntegrations MarketplaceIntegration[]
+  marketplaceSyncRuns MarketplaceSyncRun[]
+  productChannelMappings ProductChannelMapping[]
+  calendarEvents         CalendarEvent[]
+  employees              Employee[]
+  employeeSalaries       EmployeeSalary[]
+  employeePayments       EmployeePayment[]
+  employeeLeaves         EmployeeLeave[]
+  employeePerformanceRecords EmployeePerformanceRecord[]
+  employeePerformanceTargets EmployeePerformanceTarget[]
+  payrollRuns            PayrollRun[]
+  payrollRunItems        PayrollRunItem[]
+  employeeDepartments    EmployeeDepartment[]
+  directoryContacts      DirectoryContact[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+enum DirectoryContactType {
+  PERSON
+  COMPANY
+  CUSTOMER
+  EMPLOYEE
+  SUPPLIER
+  OTHER
+}
+
+enum DirectorySourceType {
+  MANUAL
+  CUSTOMER
+  EMPLOYEE
+  SUPPLIER
+}
+
+model DirectoryContact {
+  id        String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  type       DirectoryContactType @default(PERSON)
+  sourceType DirectorySourceType? @default(MANUAL)
+  sourceId   String?
+
+  name         String
+  companyName  String?
+  title        String?
+  department   String?
+  phone        String?
+  mobilePhone  String?
+  email        String?
+  website      String?
+  address      String?
+  city         String?
+  district     String?
+  taxNumber    String?
+  notes        String?
+  tags         String[] @default([])
+  isFavorite   Boolean  @default(false)
+  isActive     Boolean  @default(true)
+
+  createdByUserId String?
+  createdByUser   User? @relation("DirectoryContactCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, sourceType, sourceId])
+  @@index([companyId])
+  @@index([companyId, type])
+  @@index([companyId, isFavorite])
+  @@index([companyId, isActive])
 }
 
 model CompanyInvite {
@@ -256,6 +392,7 @@ model CompanySettings {
   notifyDueInvoices     Boolean @default(true)
   notifyLateCollections Boolean @default(true)
   notifyDailySummary    Boolean @default(false)
+  notifyEmployeePayments Boolean @default(true)
 
   membershipStatus MembershipStatus @default(ACTIVE)
   lastPaymentDate  DateTime?
@@ -282,6 +419,8 @@ model CompanyUser {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  employee Employee?
 
   @@unique([companyId, userId])
 }
@@ -382,6 +521,7 @@ model Product {
   stockMovements     StockMovement[]
   warehouseStocks    WarehouseStock[]
   warehouseTransfers WarehouseTransfer[]
+  channelMappings    ProductChannelMapping[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -410,6 +550,7 @@ model Warehouse {
   stockMovements StockMovement[]
   sales          Sale[]
   saleItems      SaleItem[]
+  marketplaceIntegrations MarketplaceIntegration[]
 
   @@unique([companyId, name])
   @@index([companyId])
@@ -505,6 +646,7 @@ model Sale {
   @@index([companyId, orderStatus])
   @@index([companyId, sourceChannel])
   @@index([companyId, createdAt])
+  @@unique([companyId, sourceChannel, externalOrderId])
 }
 
 model SaleItem {
@@ -526,6 +668,75 @@ model SaleItem {
   total     Decimal
 
   createdAt DateTime @default(now())
+}
+
+model MarketplaceIntegration {
+  id                    String                       @id @default(cuid())
+  companyId             String
+  channel               MarketplaceChannel
+  status                MarketplaceIntegrationStatus @default(DISCONNECTED)
+  credentialsEncrypted  String?
+  supplierId            String?
+  merchantId            String?
+  syncEnabled           Boolean                      @default(false)
+  autoSyncIntervalMinutes Int                        @default(15)
+  defaultWarehouseId    String?
+  lastSyncAt            DateTime?
+  lastSyncCursor        String?
+  lastSyncStatus        String?
+  lastError             String?
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+
+  company               Company                      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  defaultWarehouse      Warehouse?                   @relation(fields: [defaultWarehouseId], references: [id])
+  syncRuns              MarketplaceSyncRun[]
+
+  @@unique([companyId, channel])
+  @@index([companyId])
+}
+
+model MarketplaceSyncRun {
+  id            String                 @id @default(cuid())
+  companyId     String
+  integrationId String
+  channel       MarketplaceChannel
+  type          MarketplaceSyncRunType
+  status        MarketplaceSyncRunStatus
+  fetchedCount  Int                    @default(0)
+  createdCount  Int                    @default(0)
+  updatedCount  Int                    @default(0)
+  skippedCount  Int                    @default(0)
+  errors        Json?
+  startedAt     DateTime               @default(now())
+  finishedAt    DateTime?
+  createdAt     DateTime               @default(now())
+
+  company       Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  integration   MarketplaceIntegration  @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([integrationId])
+  @@index([channel])
+}
+
+model ProductChannelMapping {
+  id                String             @id @default(cuid())
+  companyId         String
+  productId         String
+  channel           MarketplaceChannel
+  merchantSku       String
+  barcode           String?
+  externalProductId String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  product           Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, channel, merchantSku])
+  @@index([companyId])
+  @@index([productId])
 }
 
 model Invoice {
@@ -599,6 +810,7 @@ model Expense {
   accountId String?
   account   Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
   accountTransaction AccountTransaction?
+  employeePayments   EmployeePayment[] @relation("EmployeePaymentExpense")
   date      DateTime @default(now())
   note      String?
 
@@ -625,6 +837,7 @@ model Account {
 
   transactions AccountTransaction[]
   expenses     Expense[]
+  employeePayments EmployeePayment[] @relation("EmployeePaymentAccount")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -649,6 +862,8 @@ model AccountTransaction {
 
   invoiceId String?
   invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  employeePayments EmployeePayment[] @relation("EmployeePaymentTransaction")
 
   createdAt DateTime @default(now())
 
@@ -712,14 +927,57 @@ model Notification {
   userId String?
   user   User? @relation(fields: [userId], references: [id])
 
-  type      NotificationType @default(INFO)
+  type      NotificationType     @default(INFO)
+  category  NotificationCategory @default(SYSTEM)
+  module    String?
+  entityType String?
+  entityId  String?
+  actionUrl String?
+  metadata  Json?
+  priority  NotificationPriority @default(NORMAL)
+  channel   NotificationChannel  @default(IN_APP)
+  dedupeKey String?
+
   title     String
   message   String
   readAt    DateTime?
 
   createdAt DateTime @default(now())
 
-  @@index([companyId])
+  @@index([companyId, createdAt])
+  @@index([companyId, readAt])
+  @@index([companyId, category])
+  @@index([companyId, priority])
+  @@index([companyId, dedupeKey])
+  @@index([userId, readAt])
+}
+
+model CalendarEvent {
+  id          String              @id @default(cuid())
+  companyId   String
+  company     Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        CalendarEventType
+  title       String
+  description String?
+  startAt     DateTime
+  endAt       DateTime?
+  allDay      Boolean             @default(false)
+  amount      Decimal?
+  currency    String?
+  color       String?
+  status      CalendarEventStatus @default(SCHEDULED)
+  source      CalendarEventSource @default(MANUAL)
+  relatedType String?
+  relatedId   String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([companyId, startAt])
+  @@index([companyId, type])
+  @@index([companyId, status])
+  @@index([companyId, source])
 }
 
 model ActivityLog {
@@ -737,4 +995,376 @@ model ActivityLog {
   ip        String?
 
   createdAt DateTime @default(now())
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  PASSIVE
+  ON_LEAVE
+  TERMINATED
+}
+
+enum EmployeeEmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACTOR
+  INTERN
+  SEASONAL
+}
+
+enum EmployeeSalaryPeriod {
+  MONTHLY
+  WEEKLY
+  DAILY
+  HOURLY
+}
+
+enum EmployeePaymentType {
+  SALARY
+  ADVANCE
+  BONUS
+  DEDUCTION
+  EXPENSE_REIMBURSEMENT
+  OTHER
+}
+
+enum EmployeePaymentDirection {
+  PAYABLE
+  PAID
+  DEDUCTED
+}
+
+enum EmployeePaymentStatus {
+  PENDING
+  PAID
+  CANCELLED
+  OVERDUE
+}
+
+enum EmployeeLeaveType {
+  ANNUAL
+  SICK
+  UNPAID
+  EXCUSE
+  REMOTE
+  OTHER
+}
+
+enum EmployeeLeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model EmployeeDepartment {
+  id        String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  color       String?
+
+  managerEmployeeId String?
+  managerEmployee   Employee? @relation("ManagedDepartments", fields: [managerEmployeeId], references: [id], onDelete: SetNull)
+
+  isActive Boolean @default(true)
+
+  employees Employee[] @relation("EmployeeDepartmentMembership")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, name])
+  @@index([companyId, isActive])
+}
+
+model Employee {
+  id        String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  companyUserId String? @unique
+  companyUser   CompanyUser? @relation(fields: [companyUserId], references: [id], onDelete: SetNull)
+
+  firstName String
+  lastName  String
+  email     String?
+  phone     String?
+  avatarUrl String?
+  nationalId String?
+
+  jobTitle   String?
+  department String?
+  departmentId String?
+  departmentRef EmployeeDepartment? @relation("EmployeeDepartmentMembership", fields: [departmentId], references: [id], onDelete: SetNull)
+  managedDepartments EmployeeDepartment[] @relation("ManagedDepartments")
+
+  employmentType EmployeeEmploymentType @default(FULL_TIME)
+  status         EmployeeStatus         @default(ACTIVE)
+
+  startDate DateTime?
+  endDate   DateTime?
+  birthDate DateTime?
+  address   String?
+
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  notes                 String?
+
+  salaryRecords       EmployeeSalary[]
+  payments            EmployeePayment[]
+  leaveRequests       EmployeeLeave[]
+  performanceRecords  EmployeePerformanceRecord[]
+  performanceTargets  EmployeePerformanceTarget[]
+  payrollRunItems     PayrollRunItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, status])
+  @@index([companyId, department])
+  @@index([companyId, departmentId])
+  @@index([companyId, email])
+}
+
+model EmployeeSalary {
+  id        String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  amount   Decimal              @db.Decimal(18, 2)
+  currency String               @default("TRY")
+  period   EmployeeSalaryPeriod @default(MONTHLY)
+
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  isActive      Boolean  @default(true)
+  notes         String?
+
+  payrollRunItems PayrollRunItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, employeeId])
+  @@index([employeeId, isActive])
+}
+
+model EmployeePayment {
+  id        String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  type      EmployeePaymentType
+  direction EmployeePaymentDirection @default(PAYABLE)
+  amount    Decimal                  @db.Decimal(18, 2)
+  currency  String                   @default("TRY")
+
+  dueDate DateTime?
+  paidAt  DateTime?
+
+  status EmployeePaymentStatus @default(PENDING)
+
+  description            String?
+  relatedExpenseId       String?
+  relatedExpense         Expense? @relation("EmployeePaymentExpense", fields: [relatedExpenseId], references: [id], onDelete: SetNull)
+  relatedAccountId       String?
+  relatedAccount         Account? @relation("EmployeePaymentAccount", fields: [relatedAccountId], references: [id], onDelete: SetNull)
+  relatedTransactionId   String?
+  relatedTransaction     AccountTransaction? @relation("EmployeePaymentTransaction", fields: [relatedTransactionId], references: [id], onDelete: SetNull)
+  payrollRunItem         PayrollRunItem?
+  createdByUserId        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, employeeId])
+  @@index([companyId, status])
+  @@index([companyId, dueDate])
+  @@index([relatedExpenseId])
+  @@index([relatedAccountId])
+  @@index([relatedTransactionId])
+}
+
+model EmployeeLeave {
+  id        String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  type      EmployeeLeaveType
+  startAt   DateTime
+  endAt     DateTime
+  totalDays Decimal? @db.Decimal(8, 2)
+
+  status EmployeeLeaveStatus @default(PENDING)
+
+  reason           String?
+  approvedByUserId String?
+  approvedAt       DateTime?
+  createdByUserId  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, employeeId])
+  @@index([companyId, status])
+  @@index([companyId, startAt])
+}
+
+model EmployeePerformanceRecord {
+  id        String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  periodStart DateTime
+  periodEnd   DateTime
+
+  salesCount       Int     @default(0)
+  salesTotal       Decimal @default(0) @db.Decimal(18, 2)
+  posSalesCount    Int     @default(0)
+  manualSalesCount Int     @default(0)
+  invoiceCount     Int     @default(0)
+  expenseCount     Int     @default(0)
+  taskScore        Decimal? @db.Decimal(8, 2)
+  note             String?
+  metadata         Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, employeeId])
+  @@index([employeeId, periodStart])
+  @@unique([employeeId, periodStart, periodEnd])
+}
+
+model EmployeePerformanceTarget {
+  id        String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  employeeId String?
+  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  department String?
+
+  periodStart DateTime
+  periodEnd   DateTime
+
+  salesCountTarget        Int?
+  revenueTarget           Decimal? @db.Decimal(18, 2)
+  collectionTarget        Decimal? @db.Decimal(18, 2)
+  maxLeaveDays            Int?
+  payrollEfficiencyTarget Decimal? @db.Decimal(8, 2)
+  scoreTarget             Decimal? @db.Decimal(8, 2)
+  notes                   String?
+
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([companyId, periodStart, periodEnd])
+  @@index([companyId, employeeId])
+  @@index([companyId, department])
+}
+
+enum PayrollRunStatus {
+  DRAFT
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+enum PayrollRunItemStatus {
+  DRAFT
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+model PayrollRun {
+  id        String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  title       String
+  periodStart DateTime
+  periodEnd   DateTime
+  payDate     DateTime?
+  status      PayrollRunStatus @default(DRAFT)
+  currency    String           @default("TRY")
+
+  grossTotal     Decimal @default(0) @db.Decimal(18, 2)
+  deductionTotal Decimal @default(0) @db.Decimal(18, 2)
+  bonusTotal     Decimal @default(0) @db.Decimal(18, 2)
+  netTotal       Decimal @default(0) @db.Decimal(18, 2)
+
+  createdByUserId  String?
+  approvedByUserId String?
+  approvedAt       DateTime?
+  paidAt           DateTime?
+  notes            String?
+
+  items PayrollRunItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, status])
+  @@index([companyId, periodStart, periodEnd])
+}
+
+model PayrollRunItem {
+  id           String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  payrollRunId String
+  payrollRun   PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  salaryId String?
+  salary   EmployeeSalary? @relation(fields: [salaryId], references: [id], onDelete: SetNull)
+
+  baseSalary       Decimal @db.Decimal(18, 2)
+  bonusAmount      Decimal @default(0) @db.Decimal(18, 2)
+  deductionAmount  Decimal @default(0) @db.Decimal(18, 2)
+  advanceDeduction Decimal @default(0) @db.Decimal(18, 2)
+  netPayable       Decimal @db.Decimal(18, 2)
+  currency         String  @default("TRY")
+  status           PayrollRunItemStatus @default(DRAFT)
+
+  employeePaymentId String? @unique
+  employeePayment   EmployeePayment? @relation(fields: [employeePaymentId], references: [id], onDelete: SetNull)
+  notes             String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([payrollRunId])
+  @@index([companyId, employeeId])
 }

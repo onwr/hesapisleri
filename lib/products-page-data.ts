@@ -1,20 +1,26 @@
+import type { MarketplaceChannel } from "@prisma/client";
 import { db } from "@/lib/prisma";
 import {
-  endOfLastMonth,
-  endOfMonth,
-  startOfLastMonth,
-  startOfMonth,
-} from "@/lib/dashboard-metrics";
+  matchesProductStockFilter,
+  parseProductSort,
+  parseProductStockFilter,
+  sortProducts,
+  type ProductSortKey,
+  type ProductStockFilterKey,
+} from "@/lib/product-ui-utils";
 import {
   formatProductMoney,
   formatProductNumber,
   isServiceProduct,
-  type ProductStatCard,
+  parseCategoryFilter,
+  parsePage,
+  parseProductTab,
+  parseSearchQuery,
   type ProductTabKey,
   type ProductTableRow,
 } from "@/lib/products-page-utils";
 
-export type { ProductStatCard, ProductTabKey, ProductTableRow } from "@/lib/products-page-utils";
+export type { ProductTabKey, ProductTableRow } from "@/lib/products-page-utils";
 export {
   buildProductsExportQuery,
   buildProductsQuery,
@@ -31,6 +37,14 @@ export {
   PRODUCT_TAB_LABELS,
 } from "@/lib/products-page-utils";
 
+export type ProductPageStats = {
+  totalProducts: number;
+  activeProducts: number;
+  lowStockProducts: number;
+  outOfStockProducts: number;
+  totalStockValue: number;
+};
+
 const PAGE_SIZE = 10;
 
 type ProductRecord = {
@@ -42,6 +56,7 @@ type ProductRecord = {
   imageUrl: string | null;
   stock: number;
   minStock: number;
+  buyPrice: unknown;
   sellPrice: unknown;
   status: string;
   createdAt: Date;
@@ -68,6 +83,8 @@ function withMeta(product: ProductRecord) {
   return {
     ...product,
     categoryName,
+    buyPrice: Number(product.buyPrice),
+    sellPrice: Number(product.sellPrice),
     isService: isServiceProduct({
       name: product.name,
       description: product.description,
@@ -98,7 +115,11 @@ function filterByTab(
   }
 }
 
-function toTableRow(product: ReturnType<typeof withMeta>, index: number): ProductTableRow {
+function toTableRow(
+  product: ReturnType<typeof withMeta>,
+  index: number,
+  channelMap: Map<string, MarketplaceChannel[]>
+): ProductTableRow {
   return {
     id: product.id,
     name: product.name,
@@ -107,10 +128,13 @@ function toTableRow(product: ReturnType<typeof withMeta>, index: number): Produc
     barcode: product.barcode,
     categoryName: product.categoryName,
     stock: product.stock,
-    sellPrice: Number(product.sellPrice),
+    minStock: product.minStock,
+    buyPrice: product.buyPrice,
+    sellPrice: product.sellPrice,
     status: product.status,
     imageUrl: product.imageUrl,
     isService: product.isService,
+    mappedChannels: channelMap.get(product.id) ?? [],
   };
 }
 
@@ -121,19 +145,31 @@ export async function getProductsPageData(
     page: number;
     category?: string | null;
     q?: string | null;
+    stock?: ProductStockFilterKey;
+    sort?: ProductSortKey;
   }
 ) {
-  const now = new Date();
-  const monthStart = startOfMonth(now);
-  const monthEnd = endOfMonth(now);
-  const lastMonthStart = startOfLastMonth(now);
-  const lastMonthEnd = endOfLastMonth(now);
+  const [products, channelMappings] = await Promise.all([
+    db.product.findMany({
+      where: { companyId },
+      include: { category: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    db.productChannelMapping.findMany({
+      where: { companyId },
+      select: { productId: true, channel: true },
+    }),
+  ]);
 
-  const products = await db.product.findMany({
-    where: { companyId },
-    include: { category: true },
-    orderBy: { createdAt: "desc" },
-  });
+  const channelMap = new Map<string, MarketplaceChannel[]>();
+
+  for (const mapping of channelMappings) {
+    const current = channelMap.get(mapping.productId) ?? [];
+    if (!current.includes(mapping.channel)) {
+      current.push(mapping.channel);
+    }
+    channelMap.set(mapping.productId, current);
+  }
 
   const enrichedProducts = products.map(withMeta);
 
@@ -148,71 +184,28 @@ export async function getProductsPageData(
   const activeProducts = enrichedProducts.filter(
     (product) => product.status === "ACTIVE"
   );
-  const passiveProducts = enrichedProducts.filter(
-    (product) => product.status !== "ACTIVE"
-  );
   const lowStockProducts = enrichedProducts.filter(
-    (product) => !product.isService && product.stock <= product.minStock
+    (product) =>
+      !product.isService &&
+      product.stock > 0 &&
+      product.stock <= product.minStock
   );
-
-  const totalStock = enrichedProducts.reduce(
-    (sum, product) => sum + product.stock,
-    0
+  const outOfStockProducts = enrichedProducts.filter(
+    (product) => !product.isService && product.stock <= 0
   );
 
   const totalStockValue = enrichedProducts.reduce(
-    (sum, product) => sum + product.stock * Number(product.sellPrice),
+    (sum, product) => sum + product.stock * product.sellPrice,
     0
   );
 
-  const addedThisMonth = enrichedProducts.filter(
-    (product) =>
-      product.createdAt >= monthStart && product.createdAt <= monthEnd
-  ).length;
-
-  const addedLastMonth = enrichedProducts.filter(
-    (product) =>
-      product.createdAt >= lastMonthStart && product.createdAt <= lastMonthEnd
-  ).length;
-
-  const statCards: ProductStatCard[] = [
-    {
-      title: "Toplam Ürün",
-      value: formatProductNumber(enrichedProducts.length),
-      subtitle: `Aktif: ${activeProducts.length}`,
-      secondSubtitle: `Pasif: ${passiveProducts.length}`,
-      iconKey: "package",
-      color: "emerald",
-    },
-    {
-      title: "Toplam Stok",
-      value: formatProductNumber(totalStock),
-      subtitle: "Tüm depolardaki toplam stok",
-      iconKey: "boxes",
-      color: "blue",
-    },
-    {
-      title: "Düşük Stoklu Ürün",
-      value: formatProductNumber(lowStockProducts.length),
-      subtitle: "Stok limiti altındaki ürünler",
-      iconKey: "alert",
-      color: "orange",
-    },
-    {
-      title: "Stok Değeri",
-      value: formatProductMoney(totalStockValue),
-      subtitle: "Tahmini toplam stok değeri",
-      iconKey: "wallet",
-      color: "emerald",
-    },
-    {
-      title: "Bu Ay Eklenen",
-      value: formatProductNumber(addedThisMonth),
-      subtitle: `Geçen ay: ${addedLastMonth}`,
-      iconKey: "spreadsheet",
-      color: "violet",
-    },
-  ];
+  const stats: ProductPageStats = {
+    totalProducts: enrichedProducts.length,
+    activeProducts: activeProducts.length,
+    lowStockProducts: lowStockProducts.length,
+    outOfStockProducts: outOfStockProducts.length,
+    totalStockValue,
+  };
 
   let filteredProducts = filterByTab(enrichedProducts, options.tab);
 
@@ -228,6 +221,14 @@ export async function getProductsPageData(
     );
   }
 
+  if (options.stock && options.stock !== "all") {
+    filteredProducts = filteredProducts.filter((product) =>
+      matchesProductStockFilter(product, options.stock!)
+    );
+  }
+
+  filteredProducts = sortProducts(filteredProducts, options.sort ?? "recent");
+
   const totalRecords = filteredProducts.length;
   const totalPages = Math.max(1, Math.ceil(totalRecords / PAGE_SIZE));
   const currentPage = Math.min(options.page, totalPages);
@@ -235,10 +236,10 @@ export async function getProductsPageData(
 
   const rows = filteredProducts
     .slice(startIndex, startIndex + PAGE_SIZE)
-    .map((product, index) => toTableRow(product, startIndex + index));
+    .map((product, index) => toTableRow(product, startIndex + index, channelMap));
 
   return {
-    statCards,
+    stats,
     rows,
     categories,
     totalRecords,
@@ -254,6 +255,8 @@ export async function getProductsExportRows(
     tab: ProductTabKey;
     category?: string | null;
     q?: string | null;
+    stock?: ProductStockFilterKey;
+    sort?: ProductSortKey;
   }
 ) {
   const products = await db.product.findMany({
@@ -277,5 +280,29 @@ export async function getProductsExportRows(
     );
   }
 
-  return filteredProducts;
+  if (options.stock && options.stock !== "all") {
+    filteredProducts = filteredProducts.filter((product) =>
+      matchesProductStockFilter(product, options.stock!)
+    );
+  }
+
+  return sortProducts(filteredProducts, options.sort ?? "recent");
+}
+
+export function parseProductsListOptions(params: {
+  tab?: string | null;
+  page?: string | null;
+  category?: string | null;
+  q?: string | null;
+  stock?: string | null;
+  sort?: string | null;
+}) {
+  return {
+    tab: parseProductTab(params.tab),
+    page: parsePage(params.page),
+    category: parseCategoryFilter(params.category),
+    q: parseSearchQuery(params.q),
+    stock: parseProductStockFilter(params.stock),
+    sort: parseProductSort(params.sort),
+  };
 }

@@ -15,6 +15,12 @@ import {
   XCircle,
 } from "lucide-react";
 import {
+  CollectPaymentDialog,
+  toCollectPaymentTarget,
+  type CollectPaymentTarget,
+} from "@/components/collections/collect-payment-dialog";
+import type { CollectionAccountOption } from "@/components/sales/sale-collect-modal";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -25,12 +31,16 @@ import type { SalesRowActionData } from "@/lib/sales-page-utils";
 
 type SalesRowActionsProps = {
   row: SalesRowActionData;
+  accounts: CollectionAccountOption[];
 };
 
-export function SalesRowActions({ row }: SalesRowActionsProps) {
+export function SalesRowActions({ row, accounts }: SalesRowActionsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
+  const [collectTarget, setCollectTarget] = useState<CollectPaymentTarget | null>(
+    null
+  );
 
   function handleDownload() {
     if (row.pdfUrl) {
@@ -55,6 +65,23 @@ export function SalesRowActions({ row }: SalesRowActionsProps) {
     }
 
     window.open(row.detailHref, "_blank", "noopener,noreferrer");
+  }
+
+  function openCollectModal() {
+    const target = toCollectPaymentTarget({
+      collectTargetType: row.collectTargetType,
+      collectTargetId: row.collectTargetId,
+      documentNo: row.documentNo,
+      totalAmount: row.totalAmount,
+      paidAmount: row.paidAmount,
+      remainingAmount: row.remainingAmount,
+      collectViaInvoice: row.collectViaInvoice,
+      linkedInvoiceId: row.linkedInvoiceId,
+    });
+
+    if (target) {
+      setCollectTarget(target);
+    }
   }
 
   async function handleCancel() {
@@ -169,119 +196,128 @@ export function SalesRowActions({ row }: SalesRowActionsProps) {
   }
 
   return (
-    <div className="flex flex-col items-center gap-1">
-      <div className="flex items-center justify-center gap-2">
-        <Link
-          href={row.detailHref}
-          className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-[#24345f] transition hover:border-blue-100 hover:bg-blue-50 hover:text-blue-600"
-          title="Detay"
-        >
-          <Eye size={15} />
-        </Link>
+    <>
+      <div className="flex flex-col items-center gap-1">
+        <div className="flex items-center justify-center gap-2">
+          <Link
+            href={row.detailHref}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-[#24345f] transition hover:border-blue-100 hover:bg-blue-50 hover:text-blue-600"
+            title="Detay"
+          >
+            <Eye size={15} />
+          </Link>
 
-        <button
-          type="button"
-          onClick={handleDownload}
-          disabled={!canDownload || isBusy}
-          className={[
-            "flex h-8 w-8 items-center justify-center rounded-lg border bg-white transition",
-            canDownload
-              ? "border-slate-200 text-[#24345f] hover:bg-slate-50"
-              : "cursor-not-allowed border-slate-100 text-slate-300",
-          ].join(" ")}
-          title={canDownload ? "İndir" : "İndirilebilir dosya yok"}
-        >
-          <Download size={15} />
-        </button>
+          <button
+            type="button"
+            onClick={handleDownload}
+            disabled={!canDownload || isBusy}
+            className={[
+              "flex h-8 w-8 items-center justify-center rounded-lg border bg-white transition",
+              canDownload
+                ? "border-slate-200 text-[#24345f] hover:bg-slate-50"
+                : "cursor-not-allowed border-slate-100 text-slate-300",
+            ].join(" ")}
+            title={canDownload ? "İndir" : "İndirilebilir dosya yok"}
+          >
+            <Download size={15} />
+          </button>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              disabled={isBusy}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-[#24345f] transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
-              title="İşlemler"
-            >
-              <MoreVertical size={15} />
-            </button>
-          </DropdownMenuTrigger>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                disabled={isBusy}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-[#24345f] transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
+                title="İşlemler"
+              >
+                <MoreVertical size={15} />
+              </button>
+            </DropdownMenuTrigger>
 
-          <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuItem asChild>
-              <Link href={row.detailHref} className="cursor-pointer">
-                <Eye size={14} />
-                Detay görüntüle
-              </Link>
-            </DropdownMenuItem>
-
-            <DropdownMenuItem
-              disabled={!canDownload}
-              onClick={handleDownload}
-              className="cursor-pointer"
-            >
-              <Download size={14} />
-              Belge indir
-            </DropdownMenuItem>
-
-            <DropdownMenuItem onClick={handlePrint} className="cursor-pointer">
-              <Printer size={14} />
-              Yazdır
-            </DropdownMenuItem>
-
-            {row.canCreateInvoice && row.saleId ? (
+            <DropdownMenuContent align="end" className="w-52">
               <DropdownMenuItem asChild>
-                <Link
-                  href={`/invoices/e-invoice?saleId=${row.saleId}`}
-                  className="cursor-pointer"
-                >
-                  <FileText size={14} />
-                  Fatura kes
+                <Link href={row.detailHref} className="cursor-pointer">
+                  <Eye size={14} />
+                  Detay görüntüle
                 </Link>
               </DropdownMenuItem>
-            ) : null}
 
-            {row.canCollect ? (
-              <DropdownMenuItem asChild>
-                <Link href="/cash-bank" className="cursor-pointer">
+              <DropdownMenuItem
+                disabled={!canDownload}
+                onClick={handleDownload}
+                className="cursor-pointer"
+              >
+                <Download size={14} />
+                Belge indir
+              </DropdownMenuItem>
+
+              <DropdownMenuItem onClick={handlePrint} className="cursor-pointer">
+                <Printer size={14} />
+                Yazdır
+              </DropdownMenuItem>
+
+              {row.canCreateInvoice && row.saleId ? (
+                <DropdownMenuItem asChild>
+                  <Link
+                    href={`/invoices/e-invoice?saleId=${row.saleId}`}
+                    className="cursor-pointer"
+                  >
+                    <FileText size={14} />
+                    Fatura kes
+                  </Link>
+                </DropdownMenuItem>
+              ) : null}
+
+              {row.canCollect ? (
+                <DropdownMenuItem
+                  onClick={openCollectModal}
+                  className="cursor-pointer"
+                >
                   <Wallet size={14} />
                   Tahsilat al
-                </Link>
-              </DropdownMenuItem>
-            ) : null}
-
-            {row.canCancel ? (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  variant="destructive"
-                  onClick={() => void handleCancel()}
-                  className="cursor-pointer"
-                >
-                  <XCircle size={14} />
-                  {isBusy ? "İptal ediliyor..." : "İptal et"}
                 </DropdownMenuItem>
-              </>
-            ) : null}
+              ) : null}
 
-            {row.sourceType === "sale" &&
-            row.saleStatus !== "CANCELLED" &&
-            row.saleStatus !== "REFUNDED" ? (
-              <DropdownMenuItem asChild>
-                <Link href={`/sales?tab=returns`} className="cursor-pointer">
-                  <RefreshCcw size={14} />
-                  İade kayıtları
-                </Link>
-              </DropdownMenuItem>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
+              {row.canCancel ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onClick={() => void handleCancel()}
+                    className="cursor-pointer"
+                  >
+                    <XCircle size={14} />
+                    {isBusy ? "İptal ediliyor..." : "İptal et"}
+                  </DropdownMenuItem>
+                </>
+              ) : null}
+
+              {row.sourceType === "sale" &&
+              row.saleStatus !== "CANCELLED" &&
+              row.saleStatus !== "REFUNDED" ? (
+                <DropdownMenuItem asChild>
+                  <Link href={`/sales?tab=returns`} className="cursor-pointer">
+                    <RefreshCcw size={14} />
+                    İade kayıtları
+                  </Link>
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {message ? (
+          <p className="max-w-[180px] text-center text-[10px] font-semibold text-rose-500">
+            {message}
+          </p>
+        ) : null}
       </div>
 
-      {message ? (
-        <p className="max-w-[180px] text-center text-[10px] font-semibold text-rose-500">
-          {message}
-        </p>
-      ) : null}
-    </div>
+      <CollectPaymentDialog
+        target={collectTarget}
+        accounts={accounts}
+        onClose={() => setCollectTarget(null)}
+      />
+    </>
   );
 }

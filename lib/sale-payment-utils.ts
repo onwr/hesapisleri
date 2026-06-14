@@ -125,6 +125,7 @@ export async function recordSaleCollection(
     amount: number;
     paymentMethod: SalePaymentMethod;
     accountId?: string;
+    collectedAt?: Date;
     note?: string;
   }
 ) {
@@ -171,7 +172,7 @@ export async function recordSaleCollection(
       type: "INCOME",
       title: `Satış Tahsilatı - ${input.saleNo}`,
       amount,
-      date: new Date(),
+      date: input.collectedAt ?? new Date(),
       note:
         input.note ??
         `${getPaymentMethodLabel(input.paymentMethod)} ile ${input.saleNo} numaralı satış tahsilatı.`,

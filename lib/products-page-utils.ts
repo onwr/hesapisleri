@@ -14,19 +14,24 @@ export type ProductTableRow = {
   barcode: string | null;
   categoryName: string;
   stock: number;
+  minStock: number;
+  buyPrice: number;
   sellPrice: number;
   status: string;
   imageUrl: string | null;
   isService: boolean;
+  mappedChannels: Array<"TRENDYOL" | "HEPSIBURADA">;
 };
 
 export type ProductRowActionData = {
   id: string;
   name: string;
   sku: string;
+  barcode?: string | null;
   status: string;
   isService: boolean;
   exportHref: string;
+  sellPriceLabel?: string;
 };
 
 export type ProductStatCard = {
@@ -97,6 +102,8 @@ export function buildProductsQuery(params: {
   page?: number;
   category?: string | null;
   q?: string | null;
+  stock?: string | null;
+  sort?: string | null;
 }) {
   const search = new URLSearchParams();
 
@@ -116,6 +123,14 @@ export function buildProductsQuery(params: {
     search.set("q", params.q);
   }
 
+  if (params.stock) {
+    search.set("stock", params.stock);
+  }
+
+  if (params.sort) {
+    search.set("sort", params.sort);
+  }
+
   const query = search.toString();
   return query ? `/products?${query}` : "/products";
 }
@@ -124,6 +139,8 @@ export function buildProductsExportQuery(params: {
   tab?: ProductTabKey;
   category?: string | null;
   q?: string | null;
+  stock?: string | null;
+  sort?: string | null;
 }) {
   const search = new URLSearchParams();
 
@@ -137,6 +154,14 @@ export function buildProductsExportQuery(params: {
 
   if (params.q) {
     search.set("q", params.q);
+  }
+
+  if (params.stock) {
+    search.set("stock", params.stock);
+  }
+
+  if (params.sort) {
+    search.set("sort", params.sort);
   }
 
   const query = search.toString();

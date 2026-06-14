@@ -1,3 +1,4 @@
+import { createNotification } from "@/lib/notification-service";
 import { db } from "@/lib/prisma";
 import { applyCustomerCollection } from "@/lib/customer-balance-utils";
 import {
@@ -309,18 +310,24 @@ export async function collectInvoicePayment(input: {
       },
     });
 
-    await tx.notification.create({
-      data: {
+    await createNotification(
+      {
         companyId: input.companyId,
         userId: input.userId,
         type: nextPaidState.paymentStatus === "PAID" ? "SUCCESS" : "INFO",
+        category: "INVOICES",
+        module: "invoices",
+        entityType: "INVOICE",
+        entityId: invoice.id,
+        actionUrl: `/invoices/${invoice.id}`,
         title:
           nextPaidState.paymentStatus === "PAID"
             ? "Fatura tahsilatı tamamlandı"
             : "Kısmi fatura tahsilatı alındı",
         message: `${invoice.invoiceNo} için ${collectAmount.toFixed(2)} TL tahsil edildi.`,
       },
-    });
+      tx
+    );
 
     return {
       ok: true as const,

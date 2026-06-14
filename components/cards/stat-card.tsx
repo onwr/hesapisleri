@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ChevronRight, TrendingDown, TrendingUp } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -10,6 +11,7 @@ type StatCardProps = {
   highlight?: string;
   icon: ReactNode;
   color?: "green" | "blue" | "orange" | "purple" | "red";
+  href?: string;
 };
 
 const colorMap = {
@@ -29,13 +31,19 @@ export function StatCard({
   highlight,
   icon,
   color = "blue",
+  href,
 }: StatCardProps) {
   const showChange =
     comparisonLabel !== undefined && changePercent !== undefined;
   const isPositive = (changePercent ?? 0) >= 0;
 
-  return (
-    <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+  const card = (
+    <div
+      className={[
+        "rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]",
+        href ? "transition hover:-translate-y-0.5 hover:shadow-[0_14px_30px_rgba(15,23,42,0.08)]" : "",
+      ].join(" ")}
+    >
       <div className="flex items-start justify-between gap-3">
         <div
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${colorMap[color]}`}
@@ -83,4 +91,14 @@ export function StatCard({
       ) : null}
     </div>
   );
+
+  if (href) {
+    return (
+      <Link href={href} className="block rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-200">
+        {card}
+      </Link>
+    );
+  }
+
+  return card;
 }

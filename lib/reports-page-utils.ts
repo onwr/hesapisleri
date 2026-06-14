@@ -117,6 +117,14 @@ export const REPORT_CARDS: ReportCardItem[] = [
     iconKey: "boxes",
     color: "cyan",
   },
+  {
+    key: "personnel-performance",
+    title: "Personel Performansı",
+    description: "Çalışan satış ve verimlilik analizi",
+    tab: "all",
+    iconKey: "users",
+    color: "blue",
+  },
 ];
 
 export function parseReportTab(value?: string | null): ReportTabKey {

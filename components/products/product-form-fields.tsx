@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { PRODUCT_FORM_SECTION_CLASS } from "@/components/products/product-ui-tokens";
 import { useState } from "react";
 import {
   Barcode,
@@ -91,9 +92,9 @@ export function ProductFormFields({
     <div className="space-y-5">
       <FormSection
         title="Temel Bilgiler"
-        description="Ürünün sistemde tanımlanması için gerekli bilgiler."
+        description="Ürün adı, kategori, açıklama ve görsel bilgileri."
         icon={<Package size={20} strokeWidth={2.4} />}
-        iconClass="bg-rose-50 text-rose-600"
+        iconClass="bg-blue-50 text-blue-600"
       >
         <div className="grid gap-4 md:grid-cols-2">
           <div className="md:col-span-2">
@@ -114,17 +115,33 @@ export function ProductFormFields({
             error={fieldErrors.categoryName}
           />
 
-          <SelectField
-            label="Durum"
-            icon={<ShieldCheck size={18} />}
-            value={form.status}
-            onChange={(value) => onStatusChange(value as "ACTIVE" | "PASSIVE")}
-            options={[
-              { value: "ACTIVE", label: "Aktif" },
-              { value: "PASSIVE", label: "Pasif" },
-            ]}
-          />
+          <div className="md:col-span-2">
+            <label className="text-[12px] font-black text-[#24345f]">
+              Açıklama
+            </label>
+            <div className="relative mt-2">
+              <FileText
+                size={18}
+                className="absolute left-4 top-4 text-slate-400"
+              />
+              <textarea
+                value={form.description}
+                onChange={(event) => onChange("description", event.target.value)}
+                className="min-h-28 w-full rounded-2xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-[13px] font-medium text-[#24345f] outline-none transition placeholder:text-slate-400 focus:border-blue-200 focus:ring-4 focus:ring-blue-50"
+                placeholder="Ürün açıklaması"
+              />
+            </div>
+          </div>
+        </div>
+      </FormSection>
 
+      <FormSection
+        title="Stok & Barkod"
+        description="Stok kodu, barkod, stok miktarı ve depo bilgileri."
+        icon={<Boxes size={20} strokeWidth={2.4} />}
+        iconClass="bg-orange-50 text-orange-600"
+      >
+        <div className="grid gap-4 md:grid-cols-2">
           <IdentifierField
             label="SKU / Stok Kodu"
             icon={<Tag size={18} />}
@@ -162,41 +179,9 @@ export function ProductFormFields({
               SKU ve Barkod Otomatik Oluştur
             </button>
           </div>
-
-          <div className="md:col-span-2">
-            <label className="text-[12px] font-black text-[#24345f]">
-              Açıklama
-            </label>
-            <div className="relative mt-2">
-              <FileText
-                size={18}
-                className="absolute left-4 top-4 text-slate-400"
-              />
-              <textarea
-                value={form.description}
-                onChange={(event) => onChange("description", event.target.value)}
-                className="min-h-28 w-full rounded-2xl border border-slate-200 bg-white py-3 pl-11 pr-4 text-[13px] font-medium text-[#24345f] outline-none transition placeholder:text-slate-400 focus:border-blue-200 focus:ring-4 focus:ring-blue-50"
-                placeholder="Ürün açıklaması"
-              />
-            </div>
-          </div>
-        </div>
-      </FormSection>
-
-      <FormSection
-        title="Stok Bilgileri"
-        description={
-          mode === "edit"
-            ? "Stok miktarı stok hareketleriyle güncellenir."
-            : "Başlangıç stoğu girilirse otomatik stok girişi oluşur."
-        }
-        icon={<Boxes size={20} strokeWidth={2.4} />}
-        iconClass="bg-blue-50 text-blue-600"
-      >
-        <div className="grid gap-4 md:grid-cols-2">
           {mode === "create" ? (
             <InputField
-              label="Başlangıç Stoğu"
+              label="Stok Miktarı"
               type="number"
               icon={<Boxes size={18} />}
               value={form.stock}
@@ -254,7 +239,7 @@ export function ProductFormFields({
         <div className="grid gap-4 md:grid-cols-2">
           <InputField
             label="Alış Fiyatı"
-            type="number"
+            inputMode="decimal"
             icon={<TurkishLira size={18} />}
             value={form.buyPrice}
             onChange={(value) => onChange("buyPrice", value)}
@@ -264,7 +249,7 @@ export function ProductFormFields({
 
           <InputField
             label="Satış Fiyatı"
-            type="number"
+            inputMode="decimal"
             icon={<TurkishLira size={18} />}
             value={form.sellPrice}
             onChange={(value) => onChange("sellPrice", value)}
@@ -304,6 +289,33 @@ export function ProductFormFields({
           />
         </div>
       </FormSection>
+
+      <FormSection
+        title="Durum"
+        description="Ürünün satış ve POS görünürlük durumu."
+        icon={<ShieldCheck size={20} strokeWidth={2.4} />}
+        iconClass="bg-violet-50 text-violet-600"
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <SelectField
+            label="Durum"
+            icon={<ShieldCheck size={18} />}
+            value={form.status}
+            onChange={(value) => onStatusChange(value as "ACTIVE" | "PASSIVE")}
+            options={[
+              { value: "ACTIVE", label: "Aktif" },
+              { value: "PASSIVE", label: "Pasif" },
+            ]}
+          />
+
+          <ReadonlyField
+            label="POS Görünürlüğü"
+            icon={<ShieldCheck size={18} />}
+            value={form.status === "ACTIVE" ? "POS'ta gösteriliyor" : "POS'ta gizli"}
+            hint="Aktif ürünler POS ekranında listelenir."
+          />
+        </div>
+      </FormSection>
     </div>
   );
 }
@@ -322,7 +334,7 @@ function FormSection({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+    <section className={PRODUCT_FORM_SECTION_CLASS}>
       <div className="border-b border-slate-100 p-4">
         <div className="flex items-center gap-3">
           <div
@@ -418,6 +430,7 @@ function InputField({
   placeholder,
   icon,
   type = "text",
+  inputMode,
   required = false,
   error,
 }: {
@@ -427,6 +440,7 @@ function InputField({
   placeholder: string;
   icon: ReactNode;
   type?: string;
+  inputMode?: "decimal" | "numeric" | "text";
   required?: boolean;
   error?: string;
 }) {
@@ -448,6 +462,7 @@ function InputField({
           required={required}
           minLength={required ? 2 : undefined}
           type={type}
+          inputMode={inputMode}
           min={type === "number" ? 0 : undefined}
           className={[
             "h-12 w-full rounded-2xl border bg-white pl-11 pr-4 text-[13px] font-medium text-[#24345f] outline-none transition placeholder:text-slate-400 focus:ring-4",

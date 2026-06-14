@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import {
+  AlertTriangle,
   ArrowLeft,
   ExternalLink,
   FileText,
@@ -51,6 +52,12 @@ export default async function OrderDetailPage({ params }: Props) {
   if (!data) notFound();
 
   const { sale, orderRow, activities } = data;
+  const isMarketplaceOrder =
+    sale.sourceChannel === "TRENDYOL" || sale.sourceChannel === "HEPSIBURADA";
+  const hasUnmatchedSkuWarning =
+    isMarketplaceOrder &&
+    sale.orderStatus === "WAITING" &&
+    (sale.orderNote ?? "").toLowerCase().includes("eşleşmeyen sku");
 
   return (
     <AppShell>
@@ -136,6 +143,25 @@ export default async function OrderDetailPage({ params }: Props) {
                 <p className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-[12px] font-semibold text-slate-600">
                   {sale.orderNote}
                 </p>
+              ) : null}
+              {hasUnmatchedSkuWarning ? (
+                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                  <p className="flex items-center gap-2 text-[12px] font-extrabold text-amber-800">
+                    <AlertTriangle size={15} />
+                    Eşleşmeyen SKU bulundu. Ürün eşleme yapmadan stok onayı vermeyin.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Link
+                      href={`/products/channel-mapping?channel=${sale.sourceChannel}`}
+                      className="inline-flex h-9 items-center rounded-lg bg-amber-600 px-3 text-[11px] font-black text-white"
+                    >
+                      Ürün Eşleştirmeye Git
+                    </Link>
+                    <span className="inline-flex h-9 items-center rounded-lg border border-amber-300 px-3 text-[11px] font-bold text-amber-700">
+                      Eşleme sonrası yeniden işleyin veya onaylayın.
+                    </span>
+                  </div>
+                </div>
               ) : null}
             </section>
 

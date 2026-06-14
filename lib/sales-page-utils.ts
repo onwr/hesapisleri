@@ -24,6 +24,13 @@ export type SalesDocumentRow = {
   canConvert: boolean;
   isQuote: boolean;
   downloadHref: string | null;
+  collectTargetType?: "SALE" | "INVOICE";
+  collectTargetId?: string;
+  totalAmount?: number;
+  paidAmount?: number;
+  remainingAmount?: number;
+  collectViaInvoice?: boolean;
+  linkedInvoiceId?: string | null;
 };
 
 export type SalesRowActionData = {
@@ -43,6 +50,13 @@ export type SalesRowActionData = {
   canCollect: boolean;
   canConvert: boolean;
   isQuote: boolean;
+  collectTargetType?: "SALE" | "INVOICE";
+  collectTargetId?: string;
+  totalAmount?: number;
+  paidAmount?: number;
+  remainingAmount?: number;
+  collectViaInvoice?: boolean;
+  linkedInvoiceId?: string | null;
 };
 
 export type SalesStatCard = {
@@ -244,5 +258,12 @@ export function toSalesRowActionData(row: SalesDocumentRow): SalesRowActionData 
     canCollect: row.canCollect,
     canConvert: row.canConvert,
     isQuote: row.isQuote,
+    collectTargetType: row.collectTargetType,
+    collectTargetId: row.collectTargetId,
+    totalAmount: row.totalAmount,
+    paidAmount: row.paidAmount,
+    remainingAmount: row.remainingAmount,
+    collectViaInvoice: row.collectViaInvoice,
+    linkedInvoiceId: row.linkedInvoiceId,
   };
 }

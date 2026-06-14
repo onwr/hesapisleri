@@ -5,8 +5,13 @@ import { getSuperAdminSession } from "@/lib/admin-auth";
 import { getAppSession, type AppSession } from "@/lib/app-session";
 import {
   canAccessModule,
+  canManageDirectory,
   type AppModule,
 } from "@/lib/permission-utils";
+import {
+  hasEmployeeApiPermission,
+  type EmployeeApiPermission,
+} from "@/lib/employee-permission-utils";
 import { db } from "@/lib/prisma";
 import type { UserRole } from "@prisma/client";
 import { resolveEffectiveRole } from "@/lib/permission-utils";
@@ -215,6 +220,51 @@ export async function requireApiModuleAccess(module: AppModule) {
   }
 }
 
+export async function requireApiEmployeesPermission(
+  permission: EmployeeApiPermission
+) {
+  const auth = await requireApiModuleAccess("employees");
+  if ("error" in auth) return auth;
+
+  if (
+    !hasEmployeeApiPermission(
+      auth.session.effectiveRole,
+      permission,
+      auth.session.companyUser.isOwner
+    )
+  ) {
+    return {
+      error: NextResponse.json(
+        { success: false, message: "Bu işlem için yetkiniz yok." },
+        { status: 403 }
+      ),
+    };
+  }
+
+  return auth;
+}
+
+export async function requireApiDirectoryManage() {
+  const auth = await requireApiModuleAccess("directory");
+  if ("error" in auth) return auth;
+
+  if (
+    !canManageDirectory(
+      auth.session.effectiveRole,
+      auth.session.companyUser.isOwner
+    )
+  ) {
+    return {
+      error: NextResponse.json(
+        { success: false, message: "Bu işlem için yetkiniz yok." },
+        { status: 403 }
+      ),
+    };
+  }
+
+  return auth;
+}
+
 export function getModuleForPath(pathname: string): AppModule | null {
   if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) {
     return "dashboard";
@@ -223,6 +273,9 @@ export function getModuleForPath(pathname: string): AppModule | null {
   if (pathname === "/sales" || pathname.startsWith("/sales/")) return "sales";
   if (pathname === "/customers" || pathname.startsWith("/customers/")) {
     return "customers";
+  }
+  if (pathname === "/directory" || pathname.startsWith("/directory/")) {
+    return "directory";
   }
   if (pathname === "/products" || pathname.startsWith("/products/")) {
     return "products";
@@ -246,6 +299,12 @@ export function getModuleForPath(pathname: string): AppModule | null {
   }
   if (pathname === "/notifications" || pathname.startsWith("/notifications/")) {
     return "notifications";
+  }
+  if (pathname === "/calendar" || pathname.startsWith("/calendar/")) {
+    return "calendar";
+  }
+  if (pathname === "/team" || pathname.startsWith("/team/")) {
+    return "employees";
   }
   if (pathname === "/settings" || pathname.startsWith("/settings/")) {
     return "settings";

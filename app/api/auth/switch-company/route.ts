@@ -6,6 +6,7 @@ import {
   switchUserCompany,
 } from "@/lib/auth-companies-service";
 import { attachAuthCookie } from "@/lib/auth-session-utils";
+import { getPostAuthRedirectPath, resolveEffectiveRole } from "@/lib/permission-utils";
 
 type AuthPayload = {
   userId: string;
@@ -55,13 +56,18 @@ export async function POST(req: Request) {
       companyId: parsed.data.companyId,
     });
 
+    const effectiveRole = resolveEffectiveRole({
+      role: result.membershipRole,
+      isOwner: result.isOwner,
+    });
+
     const response = NextResponse.json({
       success: true,
       message: "Aktif firma güncellendi.",
       data: {
         companyId: result.companyId,
         companyName: result.companyName,
-        redirectTo: "/dashboard",
+        redirectTo: getPostAuthRedirectPath(effectiveRole, result.isOwner),
       },
     });
 

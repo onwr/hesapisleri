@@ -1,4 +1,5 @@
 import { db } from "@/lib/prisma";
+import { createNotification } from "@/lib/notification-service";
 import { applyCustomerDebtFromDocument } from "@/lib/customer-balance-utils";
 import {
   recordSaleCollection,
@@ -125,15 +126,21 @@ export async function executePosCheckout(input: {
       },
     });
 
-    await tx.notification.create({
-      data: {
+    await createNotification(
+      {
         companyId,
         userId,
         type: "SUCCESS",
+        category: "SALES",
+        module: "pos",
+        entityType: "SALE",
+        entityId: createdSale.id,
+        actionUrl: `/sales/${createdSale.id}`,
         title: "POS satışı tamamlandı",
         message: `${createdSale.saleNo} numaralı hızlı satış başarıyla tamamlandı.`,
       },
-    });
+      tx
+    );
 
     return createdSale;
   });

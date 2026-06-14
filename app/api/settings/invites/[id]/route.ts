@@ -1,15 +1,10 @@
 import { NextResponse } from "next/server";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import {
   CompanyUsersError,
   cancelCompanyInvite,
 } from "@/lib/company-users-service";
+import { requireApiModuleAccess } from "@/lib/module-access";
 import { SettingsAccessError } from "@/lib/settings-service";
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -17,29 +12,14 @@ type RouteContext = {
 
 export async function DELETE(_req: Request, context: RouteContext) {
   try {
-    const token = await getAuthToken();
-
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.userId || !payload.companyId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
+    const auth = await requireApiModuleAccess("settings-users");
+    if ("error" in auth) return auth.error;
 
     const { id } = await context.params;
 
     await cancelCompanyInvite({
-      companyId: payload.companyId,
-      userId: payload.userId,
+      companyId: auth.companyId,
+      userId: auth.userId,
       inviteId: id,
     });
 

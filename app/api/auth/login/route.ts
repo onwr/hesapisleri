@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/prisma";
 import { comparePassword, signToken } from "@/lib/auth";
+import { resolveLoginEmail } from "@/lib/employee-pos-utils";
+import { getPostAuthRedirectPath, resolveEffectiveRole } from "@/lib/permission-utils";
 
 const loginSchema = z.object({
-  email: z.string().email("Geçerli bir e-posta girin."),
+  email: z.string().min(1, "E-posta veya kullanıcı adı zorunludur."),
   password: z.string().min(1, "Şifre zorunludur."),
 });
 
@@ -24,7 +26,23 @@ export async function POST(req: Request) {
       );
     }
 
-    const { email, password } = parsed.data;
+    const { email: emailOrUsername, password } = parsed.data;
+
+    let email: string;
+    try {
+      email = await resolveLoginEmail(emailOrUsername);
+    } catch (error) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            error instanceof Error
+              ? error.message
+              : "Giriş bilgileri çözümlenemedi.",
+        },
+        { status: 400 }
+      );
+    }
 
     const user = await db.user.findUnique({
       where: { email },
@@ -59,7 +77,14 @@ export async function POST(req: Request) {
       );
     }
 
-    const activeCompany = user.companyUsers[0]?.company ?? null;
+    const activeMembership = user.companyUsers[0] ?? null;
+    const activeCompany = activeMembership?.company ?? null;
+    const effectiveRole = activeMembership
+      ? resolveEffectiveRole({
+          role: activeMembership.role,
+          isOwner: activeMembership.isOwner,
+        })
+      : user.role;
 
     const token = signToken({
       userId: user.id,
@@ -86,6 +111,10 @@ export async function POST(req: Request) {
               phone: activeCompany.phone,
             }
           : null,
+        redirectTo: getPostAuthRedirectPath(
+          effectiveRole,
+          activeMembership?.isOwner ?? false
+        ),
       },
     });
 

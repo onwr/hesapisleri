@@ -11,6 +11,7 @@ import {
   assertUniqueProductIdentifiers,
   resolveProductCategoryId,
 } from "@/lib/product-service";
+import { applyWarehouseStockMovement } from "@/lib/warehouse-service";
 
 export async function POST(req: Request) {
   try {
@@ -79,10 +80,11 @@ export async function POST(req: Request) {
     });
 
     if (data.stock > 0) {
-      await db.stockMovement.create({
-        data: {
-          companyId: companyId,
-          productId: product.id,
+      await applyWarehouseStockMovement({
+        companyId,
+        userId,
+        productId: product.id,
+        input: {
           type: "IN",
           quantity: data.stock,
           note: "Ürün oluşturulurken başlangıç stoğu eklendi.",

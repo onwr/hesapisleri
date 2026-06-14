@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  formatMoneyInput,
+  parseProductMoneyInput,
+} from "@/lib/money-input-utils";
 
 export const PRODUCT_UNIT_TYPES = [
   "PIECE",
@@ -104,8 +108,8 @@ export function buildProductPayload(form: ProductFormValues): ProductFormInput {
     minStock: Number(form.minStock || DEFAULT_MIN_STOCK),
     unitType: form.unitType,
     warehouseLocation: normalizeOptionalText(form.warehouseLocation) ?? undefined,
-    buyPrice: Number(form.buyPrice || 0),
-    sellPrice: Number(form.sellPrice || 0),
+    buyPrice: parseProductMoneyInput(form.buyPrice),
+    sellPrice: parseProductMoneyInput(form.sellPrice),
     vatRate: Number(form.vatRate || 20),
   };
 }
@@ -200,8 +204,8 @@ export function productToFormValues(product: {
     minStock: String(product.minStock),
     unitType: product.unitType,
     warehouseLocation: product.warehouseLocation ?? "",
-    buyPrice: String(Number(product.buyPrice)),
-    sellPrice: String(Number(product.sellPrice)),
+    buyPrice: formatMoneyInput(Number(product.buyPrice)),
+    sellPrice: formatMoneyInput(Number(product.sellPrice)),
     vatRate: String(product.vatRate),
   };
 }

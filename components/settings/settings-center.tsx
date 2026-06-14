@@ -6,6 +6,7 @@ import {
   Bell,
   Building2,
   ChevronDown,
+  PlugZap,
   CreditCard,
   Database,
   FileText,
@@ -21,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { SettingsUsersPanel } from "@/components/settings/settings-users-panel";
+import { TeamSettingsBanner } from "@/components/settings/team-settings-banner";
 import type { SerializedSettingsBundle } from "@/lib/settings-service";
 import { formatMoney } from "@/lib/format-utils";
 import { getInvoiceTypeLabel } from "@/lib/settings-utils";
@@ -31,6 +33,7 @@ type SettingsSection =
   | "users"
   | "invoice"
   | "cash-bank"
+  | "integrations"
   | "notifications"
   | "data"
   | "membership";
@@ -64,6 +67,12 @@ const MENU_ITEMS: Array<{
     label: "Kasa & Banka",
     description: "Varsayılan hesaplar",
     icon: <Wallet size={18} />,
+  },
+  {
+    id: "integrations",
+    label: "Entegrasyonlar",
+    description: "Pazaryeri bağlantıları",
+    icon: <PlugZap size={18} />,
   },
   {
     id: "notifications",
@@ -157,6 +166,7 @@ export function SettingsCenter({
     notifyDueInvoices: bundle.settings.notifyDueInvoices,
     notifyLateCollections: bundle.settings.notifyLateCollections,
     notifyDailySummary: bundle.settings.notifyDailySummary,
+    notifyEmployeePayments: bundle.settings.notifyEmployeePayments ?? true,
   });
 
   const visibleAccounts = useMemo(() => {
@@ -395,7 +405,12 @@ export function SettingsCenter({
     }
 
     if (activeSection === "users") {
-      return <SettingsUsersPanel />;
+      return (
+        <div className="space-y-0">
+          <TeamSettingsBanner />
+          <SettingsUsersPanel />
+        </div>
+      );
     }
 
     if (activeSection === "invoice") {
@@ -555,6 +570,24 @@ export function SettingsCenter({
       );
     }
 
+    if (activeSection === "integrations") {
+      return (
+        <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+          <p className="font-black text-slate-950">Pazaryeri Entegrasyonları</p>
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            Trendyol bağlantısı, bağlantı testi ve manuel senkronizasyon ayarlarını
+            yönetmek için Entegrasyonlar sayfasına gidin.
+          </p>
+          <a
+            href="/settings/integrations"
+            className="mt-4 inline-flex h-11 items-center justify-center rounded-2xl bg-blue-600 px-4 text-sm font-black text-white"
+          >
+            Entegrasyonlar Sayfasını Aç
+          </a>
+        </div>
+      );
+    }
+
     if (activeSection === "notifications") {
       return (
         <div className="space-y-4">
@@ -599,6 +632,17 @@ export function SettingsCenter({
               setNotificationForm((prev) => ({
                 ...prev,
                 notifyDailySummary: checked,
+              }))
+            }
+          />
+          <ToggleRow
+            label="Çalışan ödeme hatırlatmaları"
+            description="Vadesi yaklaşan personel ödemeleri için hatırlatma."
+            checked={notificationForm.notifyEmployeePayments}
+            onChange={(checked) =>
+              setNotificationForm((prev) => ({
+                ...prev,
+                notifyEmployeePayments: checked,
               }))
             }
           />

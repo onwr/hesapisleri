@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/prisma";
+import { syncProductStockFromWarehouses } from "@/lib/product-stock-sync-service";
 import {
   calculateStockMovement,
   normalizeMovementNote,
@@ -152,18 +153,11 @@ export async function syncProductTotalStock(
   productId: string,
   tx: TransactionClient = db
 ) {
-  const aggregate = await tx.warehouseStock.aggregate({
-    where: { companyId, productId },
-    _sum: { quantity: true },
-  });
-
-  const total = aggregate._sum.quantity ?? 0;
-
-  return tx.product.update({
-    where: { id: productId },
-    data: { stock: total },
-  });
+  return syncProductStockFromWarehouses(companyId, productId, tx);
 }
+
+export { syncProductStockFromWarehouses } from "@/lib/product-stock-sync-service";
+export { reconcileCompanyProductStocks } from "@/lib/product-stock-sync-service";
 
 export async function getProductStockByWarehouses(
   companyId: string,

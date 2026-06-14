@@ -33,7 +33,7 @@ const ACTION_CONFIG: Partial<
   >
 > = {
   WAITING: {
-    label: "Onayla",
+    label: "Onayla ve Stok Düş",
     nextStatus: "APPROVED",
     icon: CheckCircle2,
     tone: "bg-emerald-600 hover:bg-emerald-700",
@@ -105,8 +105,28 @@ export function OrderDetailActions({
     });
   }
 
+  function approveAndDecrementStock() {
+    setError(null);
+    startTransition(async () => {
+      const response = await fetch(`/api/orders/${orderId}/approve`, {
+        method: "POST",
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        setError(result.message ?? "Sipariş onaylanamadı.");
+        return;
+      }
+      router.refresh();
+    });
+  }
+
   function handlePrimaryAction() {
     if (!primaryAction) return;
+
+    if (orderStatus === "WAITING") {
+      approveAndDecrementStock();
+      return;
+    }
 
     if (primaryAction.nextStatus === "SHIPPING") {
       setShippingOpen(true);

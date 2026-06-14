@@ -29,6 +29,7 @@ export async function listUserCompanies(
   return memberships.map((entry) => ({
     companyId: entry.companyId,
     companyName: entry.company.name,
+    logoUrl: entry.company.logoUrl,
     role: entry.role,
     roleLabel: getUserRoleLabel(entry.role),
     isOwner: entry.isOwner,
@@ -63,6 +64,8 @@ export async function switchUserCompany(input: {
   return {
     companyId: membership.companyId,
     companyName: membership.company.name,
+    membershipRole: membership.role,
+    isOwner: membership.isOwner,
     user: {
       id: membership.user.id,
       email: membership.user.email,

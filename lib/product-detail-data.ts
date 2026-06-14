@@ -1,6 +1,7 @@
+import { startOfMonth, endOfMonth } from "@/lib/dashboard-metrics";
 import { db } from "@/lib/prisma";
 import { DEFAULT_CATEGORY_NAME } from "@/lib/product-form-utils";
-import { formatProductMoney } from "@/lib/products-page-utils";
+import { formatProductMoney, isServiceProduct } from "@/lib/products-page-utils";
 
 export async function getProductDetailData(companyId: string, productId: string) {
   const product = await db.product.findFirst({
@@ -17,7 +18,12 @@ export async function getProductDetailData(companyId: string, productId: string)
     return null;
   }
 
-  const [stockMovements, warehouseStocks, saleItems] = await Promise.all([
+  const now = new Date();
+  const monthStart = startOfMonth(now);
+  const monthEnd = endOfMonth(now);
+
+  const [stockMovements, warehouseStocks, saleItems, channelMappings, monthSaleItems] =
+    await Promise.all([
     db.stockMovement.findMany({
       where: {
         companyId,
@@ -58,6 +64,24 @@ export async function getProductDetailData(companyId: string, productId: string)
       orderBy: { createdAt: "desc" },
       take: 10,
     }),
+    db.productChannelMapping.findMany({
+      where: { companyId, productId },
+      orderBy: { channel: "asc" },
+    }),
+    db.saleItem.findMany({
+      where: {
+        productId,
+        createdAt: { gte: monthStart, lte: monthEnd },
+        sale: {
+          companyId,
+          status: { not: "CANCELLED" },
+        },
+      },
+      select: {
+        quantity: true,
+        total: true,
+      },
+    }),
   ]);
 
   const buyPrice = Number(product.buyPrice);
@@ -65,16 +89,30 @@ export async function getProductDetailData(companyId: string, productId: string)
   const profit = sellPrice - buyPrice;
   const margin = buyPrice > 0 ? (profit / buyPrice) * 100 : sellPrice > 0 ? 100 : 0;
   const isCriticalStock = product.stock <= product.minStock;
+  const categoryName = product.category?.name ?? DEFAULT_CATEGORY_NAME;
+  const monthSalesQuantity = monthSaleItems.reduce(
+    (sum, item) => sum + item.quantity,
+    0
+  );
+  const monthSalesTotal = monthSaleItems.reduce(
+    (sum, item) => sum + Number(item.total),
+    0
+  );
 
   return {
     product: {
       ...product,
-      categoryName: product.category?.name ?? DEFAULT_CATEGORY_NAME,
+      categoryName,
       buyPrice,
       sellPrice,
       profit,
       margin,
       stockValue: product.stock * sellPrice,
+      isService: isServiceProduct({
+        name: product.name,
+        description: product.description,
+        categoryName,
+      }),
     },
     stockMovements,
     warehouseStocks: warehouseStocks.map((entry) => ({
@@ -94,11 +132,21 @@ export async function getProductDetailData(companyId: string, productId: string)
       saleTotal: Number(item.sale.total),
     })),
     isCriticalStock,
+    monthSalesQuantity,
+    monthSalesTotal,
+    channelMappings: channelMappings.map((mapping) => ({
+      id: mapping.id,
+      channel: mapping.channel,
+      merchantSku: mapping.merchantSku,
+      barcode: mapping.barcode,
+      externalProductId: mapping.externalProductId,
+    })),
     formatted: {
       buyPrice: formatProductMoney(buyPrice),
       sellPrice: formatProductMoney(sellPrice),
       profit: formatProductMoney(profit),
       stockValue: formatProductMoney(product.stock * sellPrice),
+      monthSalesTotal: formatProductMoney(monthSalesTotal),
     },
   };
 }

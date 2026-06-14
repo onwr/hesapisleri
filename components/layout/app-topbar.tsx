@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, HelpCircle, Search } from "lucide-react";
+import { HelpCircle, Search } from "lucide-react";
+import { CalendarTopbarButton } from "@/components/calendar/calendar-modal";
+import { NotificationTopbarButton } from "@/components/notifications/notification-topbar-button";
 import { AppUserMenu } from "@/components/layout/app-user-menu";
 import { sidebarOffsetClass, useSidebar } from "./sidebar-context";
 
@@ -64,16 +66,9 @@ export function AppTopbar({
             Destek
           </button>
 
-          <Link
-            href="/notifications"
-            className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-[#0f1f4d] shadow-sm shadow-slate-100/70 transition hover:border-blue-100 hover:bg-blue-50/60 hover:text-blue-600"
-          >
-            <Bell size={18} />
+          <CalendarTopbarButton />
 
-            <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white ring-2 ring-white">
-              3
-            </span>
-          </Link>
+          <NotificationTopbarButton />
 
           <AppUserMenu userName={userName} companyName={companyName} />
         </div>

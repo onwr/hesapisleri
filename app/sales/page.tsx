@@ -28,6 +28,7 @@ import {
   parseSalesTab,
   toSalesRowActionData,
 } from "@/lib/sales-page-utils";
+import { getInvoiceCollectionAccounts } from "@/lib/invoice-service";
 import { formatMoney } from "@/lib/format-utils";
 
 type AuthPayload = {
@@ -95,7 +96,7 @@ const actionCards = [
   {
     title: "Tahsilat Al",
     description: "Müşteriden ödeme al",
-    href: "/cash-bank",
+    href: "/cash-bank/collections",
     icon: Wallet,
     gradient: "from-sky-400 to-blue-600",
   },
@@ -177,6 +178,8 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
       from,
       to,
     });
+
+  const collectionAccounts = await getInvoiceCollectionAccounts(company.id);
 
   return (
     <AppShell>
@@ -350,7 +353,10 @@ export default async function SalesPage({ searchParams }: SalesPageProps) {
                     </td>
 
                     <td className="px-4 py-3">
-                      <SalesRowActions row={toSalesRowActionData(row)} />
+                      <SalesRowActions
+                        row={toSalesRowActionData(row)}
+                        accounts={collectionAccounts}
+                      />
                     </td>
                   </tr>
                 ))}

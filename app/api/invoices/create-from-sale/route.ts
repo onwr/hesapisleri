@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { createNotification } from "@/lib/notification-service";
 import { db } from "@/lib/prisma";
 import { getAuthToken, verifyToken } from "@/lib/auth";
 import {
@@ -116,14 +117,17 @@ export async function POST(req: Request) {
       },
     });
 
-    await db.notification.create({
-      data: {
-        companyId: payload.companyId,
-        userId: payload.userId,
-        type: status === "ERROR" ? "WARNING" : "SUCCESS",
-        title: "Satıştan fatura oluşturuldu",
-        message: `${invoice.invoiceNo} numaralı fatura kaydı oluşturuldu.`,
-      },
+    await createNotification({
+      companyId: payload.companyId,
+      userId: payload.userId,
+      type: status === "ERROR" ? "WARNING" : "SUCCESS",
+      category: "INVOICES",
+      module: "invoices",
+      entityType: "INVOICE",
+      entityId: invoice.id,
+      actionUrl: `/invoices/${invoice.id}`,
+      title: "Satıştan fatura oluşturuldu",
+      message: `${invoice.invoiceNo} numaralı fatura kaydı oluşturuldu.`,
     });
 
     return NextResponse.json({

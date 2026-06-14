@@ -1,3 +1,4 @@
+import { createNotification } from "@/lib/notification-service";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/prisma";
 import { reverseCustomerDebtFromDocument } from "@/lib/customer-balance-utils";
@@ -176,15 +177,21 @@ export async function reverseSaleEffects(
     },
   });
 
-  await tx.notification.create({
-    data: {
+  await createNotification(
+    {
       companyId,
       userId,
       type: "WARNING",
+      category: "SALES",
+      module: "sales",
+      entityType: "SALE",
+      entityId: sale.id,
+      actionUrl: `/sales/${sale.id}`,
       title: "Satış iptal edildi",
       message: `${sale.saleNo} numaralı satış iptal edildi. Stok ve finansal kayıtlar güncellendi.`,
     },
-  });
+    tx
+  );
 }
 
 export async function cancelSaleById(

@@ -15,6 +15,10 @@ type OrdersSidebarWidgetsProps = {
   integrationActivities: OrderIntegrationActivity[];
   totalCount: number;
   integrationOrderCounts: Record<string, number>;
+  integrationStatuses: Record<
+    string,
+    { status: string; lastSyncAt: Date | string | null }
+  >;
 };
 
 export function OrdersSidebarWidgets({
@@ -22,6 +26,7 @@ export function OrdersSidebarWidgets({
   integrationActivities,
   totalCount,
   integrationOrderCounts,
+  integrationStatuses,
 }: OrdersSidebarWidgetsProps) {
   const chartData = channelBreakdown
     .filter((item) => item.count > 0)
@@ -45,6 +50,11 @@ export function OrdersSidebarWidgets({
         <div className="space-y-3">
           {MARKETPLACE_INTEGRATIONS.map((integration) => {
             const orderCount = integrationOrderCounts[integration.key] ?? 0;
+            const connection = integrationStatuses[integration.key];
+            const isConnected = connection?.status === "CONNECTED";
+            const lastSyncText = connection?.lastSyncAt
+              ? new Date(connection.lastSyncAt).toLocaleString("tr-TR")
+              : null;
 
             return (
               <div key={integration.key} className="flex items-center gap-3">
@@ -55,14 +65,25 @@ export function OrdersSidebarWidgets({
                     {integration.name}
                   </p>
                   <p className="text-[10px] font-semibold text-slate-400">
-                    {orderCount > 0
-                      ? `${orderCount} sipariş bu dönemde`
-                      : "Henüz sipariş yok"}
+                    {isConnected
+                      ? lastSyncText
+                        ? `Son senkronizasyon: ${lastSyncText}`
+                        : "Bağlı · senkronizasyon bekleniyor"
+                      : orderCount > 0
+                        ? `${orderCount} sipariş bu dönemde`
+                        : "Bağlı değil"}
                   </p>
                 </div>
 
-                <span className="rounded-md bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">
-                  Bağlı değil
+                <span
+                  className={[
+                    "rounded-md px-2 py-1 text-[10px] font-black",
+                    isConnected
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-slate-100 text-slate-600",
+                  ].join(" ")}
+                >
+                  {isConnected ? "Bağlı" : "Bağlı değil"}
                 </span>
               </div>
             );
@@ -213,10 +234,10 @@ export function OrdersSidebarWidgets({
         </div>
 
         <Link
-          href="/orders"
+          href="/settings/integrations"
           className="mt-4 flex h-10 items-center justify-center gap-2 rounded-xl border border-violet-100 bg-white text-[12px] font-black text-violet-600 shadow-sm"
         >
-          Tüm Aktiviteleri Görüntüle
+          Entegrasyonları Yönet
           <ArrowRight size={14} strokeWidth={3} />
         </Link>
       </div>

@@ -16,6 +16,7 @@ export const DEFAULT_COMPANY_SETTINGS = {
   notifyDueInvoices: true,
   notifyLateCollections: true,
   notifyDailySummary: false,
+  notifyEmployeePayments: true,
 };
 
 export const updateCompanySettingsSchema = z.object({
@@ -59,6 +60,7 @@ export const updateNotificationSettingsSchema = z.object({
   notifyDueInvoices: z.boolean().default(true),
   notifyLateCollections: z.boolean().default(true),
   notifyDailySummary: z.boolean().default(false),
+  notifyEmployeePayments: z.boolean().default(true),
 });
 
 export type UpdateCompanySettingsInput = z.infer<
@@ -79,6 +81,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
   ADMIN: "Yönetici",
   ACCOUNTANT: "Muhasebeci",
   STAFF: "Personel",
+  POS_STAFF: "POS Personeli",
   SUPER_ADMIN: "Süper Admin",
 };
 

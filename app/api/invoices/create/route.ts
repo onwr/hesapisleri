@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { createNotification } from "@/lib/notification-service";
 import { db } from "@/lib/prisma";
 import { getAuthToken, verifyToken } from "@/lib/auth";
 import { calculateInvoiceTotals } from "@/lib/invoice-form-utils";
@@ -213,11 +214,16 @@ export async function POST(req: Request) {
         },
       });
 
-      await tx.notification.create({
-        data: {
+      await createNotification(
+        {
           companyId: payload.companyId!,
           userId: payload.userId,
           type: action === "DRAFT" ? "INFO" : "SUCCESS",
+          category: "INVOICES",
+          module: "invoices",
+          entityType: "INVOICE",
+          entityId: createdInvoice.id,
+          actionUrl: `/invoices/${createdInvoice.id}`,
           title:
             action === "DRAFT"
               ? "Fatura taslağı kaydedildi"
@@ -227,7 +233,8 @@ export async function POST(req: Request) {
               ? `${createdInvoice.invoiceNo} numaralı fatura taslak olarak kaydedildi.`
               : `${createdInvoice.invoiceNo} numaralı fatura kaydı oluşturuldu.`,
         },
-      });
+        tx
+      );
 
       return createdInvoice;
     });

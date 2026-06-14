@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/prisma";
 import { getAuthToken, verifyToken } from "@/lib/auth";
+import { resolveEffectiveRole } from "@/lib/permission-utils";
 
 type AuthPayload = {
   userId: string;
@@ -60,6 +61,32 @@ export async function GET() {
       user.companyUsers.find((item) => item.companyId === payload.companyId)
         ?.company ?? user.companyUsers[0]?.company ?? null;
 
+    const activeMembership =
+      user.companyUsers.find((item) => item.companyId === payload.companyId) ??
+      user.companyUsers[0] ??
+      null;
+
+    const employee = activeMembership
+      ? await db.employee.findFirst({
+          where: {
+            companyId: activeMembership.companyId,
+            companyUserId: activeMembership.id,
+          },
+          select: { firstName: true, lastName: true },
+        })
+      : null;
+
+    const effectiveRole = activeMembership
+      ? resolveEffectiveRole({
+          role: activeMembership.role,
+          isOwner: activeMembership.isOwner,
+        })
+      : user.role;
+
+    const employeeName = employee
+      ? [employee.firstName, employee.lastName].filter(Boolean).join(" ").trim()
+      : null;
+
     return NextResponse.json({
       success: true,
       data: {
@@ -81,6 +108,14 @@ export async function GET() {
               logoUrl: activeCompany.logoUrl,
             }
           : null,
+        membership: activeMembership
+          ? {
+              role: activeMembership.role,
+              effectiveRole,
+              isOwner: activeMembership.isOwner,
+            }
+          : null,
+        employeeName,
       },
     });
   } catch (error) {

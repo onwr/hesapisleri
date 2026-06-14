@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { createNotification } from "@/lib/notification-service";
 import { db } from "@/lib/prisma";
 import { requireApiModuleAccess } from "@/lib/module-access";
+import { getUnpaidInvoiceForSale } from "@/lib/collections-service";
 import {
   derivePaymentStatus,
   getSaleRemainingAmount,
@@ -15,9 +17,41 @@ type Props = {
   params: Promise<{ id: string }>;
 };
 
+function parsePaymentDate(value?: string | null) {
+  if (!value?.trim()) {
+    return new Date();
+  }
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function resolveLegacyPaymentMethod(
+  method?: string | null,
+  paymentMethod?: string | null
+): SalePaymentMethod {
+  const raw = method ?? paymentMethod ?? "CASH";
+
+  if (raw === "BANK" || raw === "CARD" || raw === "TRANSFER") {
+    return "BANK";
+  }
+
+  return "CASH";
+}
+
 const collectSchema = z.object({
   amount: z.number().min(0.01).optional(),
-  paymentMethod: z.enum(["CASH", "BANK"]).default("CASH"),
+  paymentMethod: z.enum(["CASH", "BANK", "CARD", "TRANSFER"]).optional(),
+  method: z.enum(["CASH", "BANK", "CARD", "TRANSFER"]).optional(),
+  accountId: z.string().trim().min(1).optional(),
+  paymentDate: z.string().optional(),
+  collectedAt: z.string().optional(),
+  note: z.string().optional(),
 });
 
 export async function POST(req: Request, { params }: Props) {
@@ -47,6 +81,9 @@ export async function POST(req: Request, { params }: Props) {
         id,
         companyId,
       },
+      include: {
+        invoice: true,
+      },
     });
 
     if (!sale) {
@@ -59,6 +96,21 @@ export async function POST(req: Request, { params }: Props) {
     if (sale.status === "CANCELLED" || sale.status === "REFUNDED") {
       return NextResponse.json(
         { success: false, message: "İptal edilmiş satıştan tahsilat alınamaz." },
+        { status: 400 }
+      );
+    }
+
+    const unpaidInvoice = await getUnpaidInvoiceForSale(companyId, sale.id);
+
+    if (unpaidInvoice) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Bu satış için fatura oluşturulmuş. Tahsilatı fatura üzerinden alın.",
+          code: "COLLECT_VIA_INVOICE",
+          invoiceId: unpaidInvoice.id,
+        },
         { status: 400 }
       );
     }
@@ -85,7 +137,32 @@ export async function POST(req: Request, { params }: Props) {
       );
     }
 
-    const paymentMethod = parsed.data.paymentMethod as SalePaymentMethod;
+    if (collectAmount > remaining) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: `En fazla ${remaining.toFixed(2)} TL tahsil edebilirsiniz.`,
+        },
+        { status: 400 }
+      );
+    }
+
+    const paymentDate = parsePaymentDate(
+      parsed.data.paymentDate ?? parsed.data.collectedAt
+    );
+
+    if (!paymentDate) {
+      return NextResponse.json(
+        { success: false, message: "Geçerli bir tahsilat tarihi girin." },
+        { status: 400 }
+      );
+    }
+
+    const paymentMethod = resolveLegacyPaymentMethod(
+      parsed.data.method,
+      parsed.data.paymentMethod
+    );
+
     const nextPaidAmount = roundMoney(currentPaid + collectAmount);
     const cappedPaidAmount = roundMoney(Math.min(total, nextPaidAmount));
     const nextPaymentStatus = derivePaymentStatus(total, cappedPaidAmount);
@@ -96,10 +173,9 @@ export async function POST(req: Request, { params }: Props) {
         saleNo: sale.saleNo,
         amount: collectAmount,
         paymentMethod,
-        note:
-          nextPaymentStatus === "PAID"
-            ? `${sale.saleNo} numaralı satışın kalan tahsilatı tamamlandı.`
-            : `${sale.saleNo} numaralı satış için kısmi tahsilat.`,
+        accountId: parsed.data.accountId,
+        collectedAt: paymentDate,
+        note: parsed.data.note?.trim() || undefined,
       });
 
       await applyCustomerCollection(tx, sale.customerId, collectAmount);
@@ -114,26 +190,32 @@ export async function POST(req: Request, { params }: Props) {
 
       await tx.activityLog.create({
         data: {
-        companyId,
-        userId,
+          companyId,
+          userId,
           action: "UPDATE",
           module: "sales",
           message: `${sale.saleNo} numaralı satıştan ${collectAmount.toFixed(2)} TL tahsil edildi.`,
         },
       });
 
-      await tx.notification.create({
-        data: {
-        companyId,
-        userId,
+      await createNotification(
+        {
+          companyId,
+          userId,
           type: nextPaymentStatus === "PAID" ? "SUCCESS" : "INFO",
+          category: "FINANCE",
+          module: "sales",
+          entityType: "SALE",
+          entityId: sale.id,
+          actionUrl: `/sales/${sale.id}`,
           title:
             nextPaymentStatus === "PAID"
               ? "Satış tahsilatı tamamlandı"
               : "Kısmi tahsilat alındı",
           message: `${sale.saleNo} için ${collectAmount.toFixed(2)} TL tahsil edildi.`,
         },
-      });
+        tx
+      );
 
       return updated;
     });

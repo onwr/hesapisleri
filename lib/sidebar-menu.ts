@@ -3,8 +3,10 @@ import {
   BarChart3,
   Banknote,
   Bell,
+  BookUser,
   Box,
   Brain,
+  CalendarDays,
   FileText,
   Home,
   Package,
@@ -12,6 +14,7 @@ import {
   ScanBarcode,
   Settings,
   ShoppingCart,
+  UserCog,
   Users,
 } from "lucide-react";
 import {
@@ -44,6 +47,12 @@ export const SIDEBAR_MENU_ITEMS: SidebarMenuItem[] = [
     module: "sales",
   },
   { title: "Müşteriler", href: "/customers", icon: Users, module: "customers" },
+  {
+    title: "Fihrist",
+    href: "/directory",
+    icon: BookUser,
+    module: "directory",
+  },
   { title: "Ürünler", href: "/products", icon: Box, module: "products" },
   { title: "Stoklar", href: "/stocks", icon: Package, module: "stocks" },
   { title: "Faturalar", href: "/invoices", icon: FileText, module: "invoices" },
@@ -72,6 +81,18 @@ export const SIDEBAR_MENU_ITEMS: SidebarMenuItem[] = [
     href: "/notifications",
     icon: Bell,
     module: "notifications",
+  },
+  {
+    title: "Takvim",
+    href: "/calendar",
+    icon: CalendarDays,
+    module: "calendar",
+  },
+  {
+    title: "Çalışanlar",
+    href: "/team",
+    icon: UserCog,
+    module: "employees",
   },
   { title: "Ayarlar", href: "/settings", icon: Settings, module: "settings" },
 ];

@@ -12,29 +12,37 @@ import {
   Package,
   Scale,
   ShieldCheck,
-  Sparkles,
   Tag,
+  Trash2,
   TurkishLira,
 } from "lucide-react";
 import { ProductCategorySelect } from "@/components/products/product-category-select";
 import {
   calculateProductProfit,
   formatProfitMargin,
+  getUnitTypesForProductType,
   PRODUCT_UNIT_LABELS,
-  PRODUCT_UNIT_TYPES,
+  type ProductBarcodePayloadMode,
   type ProductFormValues,
   type ProductUnitType,
 } from "@/lib/product-form-utils";
+import {
+  PRODUCT_TYPE_DESCRIPTIONS,
+  PRODUCT_TYPE_LABELS,
+  type ProductTypeKey,
+} from "@/lib/product-type-utils";
 
 type ProductFormFieldsProps = {
   form: ProductFormValues;
   fieldErrors: Record<string, string>;
   mode: "create" | "edit";
   currentStock?: number;
+  barcodePayloadMode: ProductBarcodePayloadMode;
+  onBarcodePayloadModeChange: (mode: ProductBarcodePayloadMode) => void;
   onChange: (key: keyof ProductFormValues, value: string) => void;
-  onBatchChange?: (values: Partial<ProductFormValues>) => void;
   onUnitTypeChange: (value: ProductUnitType) => void;
   onStatusChange: (value: "ACTIVE" | "PASSIVE") => void;
+  onProductTypeChange?: (value: ProductTypeKey) => void;
 };
 
 export function ProductFormFields({
@@ -42,54 +50,126 @@ export function ProductFormFields({
   fieldErrors,
   mode,
   currentStock,
+  barcodePayloadMode,
+  onBarcodePayloadModeChange,
   onChange,
-  onBatchChange,
   onUnitTypeChange,
   onStatusChange,
+  onProductTypeChange,
 }: ProductFormFieldsProps) {
-  const [generatingIdentifiers, setGeneratingIdentifiers] = useState(false);
+  const [generatingSku, setGeneratingSku] = useState(false);
+  const [generatingBarcode, setGeneratingBarcode] = useState(false);
+  const isService = form.productType === "SERVICE";
+  const unitTypes = getUnitTypesForProductType(form.productType);
+  const barcodeEnabled = barcodePayloadMode === "include" || barcodePayloadMode === "clear";
   const buyPrice = Number(form.buyPrice || 0);
   const sellPrice = Number(form.sellPrice || 0);
   const { profit, margin } = calculateProductProfit(buyPrice, sellPrice);
 
-  async function generateIdentifiers(target?: "sku" | "barcode" | "both") {
-    setGeneratingIdentifiers(true);
+  async function generateSku() {
+    setGeneratingSku(true);
 
     try {
-      const response = await fetch("/api/products/generate-identifiers");
+      const response = await fetch("/api/products/generate-identifiers?field=sku");
       const data = await response.json();
 
       if (!response.ok || !data.success) {
         return;
       }
 
-      const updates: Partial<ProductFormValues> = {};
+      onChange("sku", data.data.sku as string);
+    } finally {
+      setGeneratingSku(false);
+    }
+  }
 
-      if (target === "sku" || target === "both" || !target) {
-        updates.sku = data.data.sku as string;
+  async function generateBarcode() {
+    setGeneratingBarcode(true);
+
+    try {
+      const response = await fetch("/api/products/generate-barcode", {
+        method: "POST",
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        return;
       }
 
-      if (target === "barcode" || target === "both" || !target) {
-        updates.barcode = data.data.barcode as string;
-      }
-
-      if (target === "sku") {
-        onChange("sku", updates.sku ?? form.sku);
-      } else if (target === "barcode") {
-        onChange("barcode", updates.barcode ?? form.barcode);
-      } else if (onBatchChange) {
-        onBatchChange(updates);
-      } else {
-        if (updates.sku) onChange("sku", updates.sku);
-        if (updates.barcode) onChange("barcode", updates.barcode);
+      onChange("barcode", data.barcode as string);
+      if (barcodePayloadMode !== "include") {
+        onBarcodePayloadModeChange("include");
       }
     } finally {
-      setGeneratingIdentifiers(false);
+      setGeneratingBarcode(false);
     }
+  }
+
+  function handleBarcodeToggle(enabled: boolean) {
+    if (enabled) {
+      onBarcodePayloadModeChange("include");
+      return;
+    }
+
+    if (mode === "edit" && form.barcode.trim()) {
+      onBarcodePayloadModeChange("omit");
+      return;
+    }
+
+    onBarcodePayloadModeChange("omit");
+    onChange("barcode", "");
+  }
+
+  function handleRemoveBarcode() {
+    onChange("barcode", "");
+    onBarcodePayloadModeChange("clear");
   }
 
   return (
     <div className="space-y-5">
+      <FormSection
+        title="Kalem Türü"
+        description="Stoklu ürün veya stoksuz hizmet kalemi seçin."
+        icon={<Package size={20} strokeWidth={2.4} />}
+        iconClass="bg-indigo-50 text-indigo-600"
+      >
+        {mode === "edit" ? (
+          <ReadonlyField
+            label="Kalem Türü"
+            icon={<Package size={18} />}
+            value={PRODUCT_TYPE_LABELS[form.productType]}
+            hint="Kalem türü oluşturulduktan sonra değiştirilemez."
+          />
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2">
+            {(["STOCK", "SERVICE"] as const).map((type) => {
+              const selected = form.productType === type;
+
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => onProductTypeChange?.(type)}
+                  className={[
+                    "rounded-2xl border p-4 text-left transition",
+                    selected
+                      ? "border-blue-200 bg-blue-50/60 ring-1 ring-blue-200"
+                      : "border-slate-200 bg-white hover:border-slate-300",
+                  ].join(" ")}
+                >
+                  <p className="text-[13px] font-black text-[#0f1f4d]">
+                    {PRODUCT_TYPE_LABELS[type]}
+                  </p>
+                  <p className="mt-2 text-[11px] font-medium leading-5 text-slate-500">
+                    {PRODUCT_TYPE_DESCRIPTIONS[type]}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </FormSection>
+
       <FormSection
         title="Temel Bilgiler"
         description="Ürün adı, kategori, açıklama ve görsel bilgileri."
@@ -136,50 +216,81 @@ export function ProductFormFields({
       </FormSection>
 
       <FormSection
-        title="Stok & Barkod"
-        description="Stok kodu, barkod, stok miktarı ve depo bilgileri."
+        title={isService ? "Kod Bilgileri" : "Stok & Barkod"}
+        description={
+          isService
+            ? "Hizmet kodu ve birim bilgileri."
+            : "Stok kodu, barkod, stok miktarı ve depo bilgileri."
+        }
         icon={<Boxes size={20} strokeWidth={2.4} />}
         iconClass="bg-orange-50 text-orange-600"
       >
         <div className="grid gap-4 md:grid-cols-2">
           <IdentifierField
-            label="SKU / Stok Kodu"
+            label={isService ? "SKU / Hizmet Kodu" : "SKU / Stok Kodu"}
             icon={<Tag size={18} />}
             value={form.sku}
             onChange={(value) => onChange("sku", value)}
             placeholder="Opsiyonel"
             error={fieldErrors.sku}
-            generating={generatingIdentifiers}
-            onGenerate={() => void generateIdentifiers("sku")}
+            generating={generatingSku}
+            generateLabel="Oluştur"
+            onGenerate={() => void generateSku()}
           />
 
-          <IdentifierField
-            label="Barkod"
-            icon={<Barcode size={18} />}
-            value={form.barcode}
-            onChange={(value) => onChange("barcode", value)}
-            placeholder="869..."
-            error={fieldErrors.barcode}
-            generating={generatingIdentifiers}
-            onGenerate={() => void generateIdentifiers("barcode")}
-          />
+          {!isService ? (
+          <div className="md:col-span-2 rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={barcodeEnabled}
+                onChange={(event) => handleBarcodeToggle(event.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span>
+                <span className="block text-[13px] font-black text-[#0f1f4d]">
+                  Barkod bilgisi ekle
+                </span>
+                <span className="mt-1 block text-[11px] font-medium leading-5 text-slate-500">
+                  Barkodu kendiniz girebilir veya otomatik oluşturabilirsiniz.
+                </span>
+              </span>
+            </label>
 
-          <div className="md:col-span-2">
-            <button
-              type="button"
-              onClick={() => void generateIdentifiers("both")}
-              disabled={generatingIdentifiers}
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 text-[12px] font-black text-blue-600 transition hover:bg-blue-100 disabled:opacity-60"
-            >
-              {generatingIdentifiers ? (
-                <Loader2 className="animate-spin" size={15} />
-              ) : (
-                <Sparkles size={15} />
-              )}
-              SKU ve Barkod Otomatik Oluştur
-            </button>
+            {barcodeEnabled ? (
+              <div className="mt-4 space-y-3">
+                <IdentifierField
+                  label="Barkod"
+                  icon={<Barcode size={18} />}
+                  value={form.barcode}
+                  onChange={(value) => {
+                    onChange("barcode", value);
+                    if (barcodePayloadMode === "clear") {
+                      onBarcodePayloadModeChange("include");
+                    }
+                  }}
+                  placeholder="Barkod girin veya otomatik oluşturun"
+                  error={fieldErrors.barcode}
+                  generating={generatingBarcode}
+                  generateLabel="Otomatik Oluştur"
+                  onGenerate={() => void generateBarcode()}
+                />
+
+                {mode === "edit" && form.barcode.trim() ? (
+                  <button
+                    type="button"
+                    onClick={handleRemoveBarcode}
+                    className="inline-flex h-9 items-center gap-1 rounded-xl border border-rose-100 bg-white px-3 text-[11px] font-black text-rose-600 transition hover:bg-rose-50"
+                  >
+                    <Trash2 size={14} />
+                    Barkodu Kaldır
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
-          {mode === "create" ? (
+          ) : null}
+          {!isService && mode === "create" ? (
             <InputField
               label="Stok Miktarı"
               type="number"
@@ -190,14 +301,17 @@ export function ProductFormFields({
               error={fieldErrors.stock}
             />
           ) : (
+            !isService ? (
             <ReadonlyField
               label="Mevcut Stok"
               icon={<Boxes size={18} />}
               value={String(currentStock ?? 0)}
               hint="Stok değişimi için Stok modülünü kullanın."
             />
+            ) : null
           )}
 
+          {!isService ? (
           <InputField
             label="Kritik Stok Seviyesi"
             type="number"
@@ -207,18 +321,20 @@ export function ProductFormFields({
             placeholder="10"
             error={fieldErrors.minStock}
           />
+          ) : null}
 
           <SelectField
             label="Birim Tipi"
             icon={<Scale size={18} />}
             value={form.unitType}
             onChange={(value) => onUnitTypeChange(value as ProductUnitType)}
-            options={PRODUCT_UNIT_TYPES.map((unit) => ({
+            options={unitTypes.map((unit) => ({
               value: unit,
               label: PRODUCT_UNIT_LABELS[unit],
             }))}
           />
 
+          {!isService ? (
           <InputField
             label="Raf / Depo Konumu"
             icon={<MapPin size={18} />}
@@ -227,12 +343,13 @@ export function ProductFormFields({
             placeholder="A-12, Depo 1..."
             error={fieldErrors.warehouseLocation}
           />
+          ) : null}
         </div>
       </FormSection>
 
       <FormSection
-        title="Fiyatlandırma"
-        description="Alış ve satış fiyatlarını girin; kâr otomatik hesaplanır."
+        title="Fiyat Bilgileri"
+        description="Alış fiyatı stok değerinde, satış fiyatı satış işlemlerinde kullanılır."
         icon={<TurkishLira size={20} strokeWidth={2.4} />}
         iconClass="bg-emerald-50 text-emerald-600"
       >
@@ -245,6 +362,7 @@ export function ProductFormFields({
             onChange={(value) => onChange("buyPrice", value)}
             placeholder="0"
             error={fieldErrors.buyPrice}
+            hint="Stok değeri ve maliyet hesaplarında kullanılır."
           />
 
           <InputField
@@ -255,6 +373,7 @@ export function ProductFormFields({
             onChange={(value) => onChange("sellPrice", value)}
             placeholder="0"
             error={fieldErrors.sellPrice}
+            hint="Satış, POS, fatura ve tekliflerde kullanılır."
           />
 
           <SelectField
@@ -368,6 +487,7 @@ function IdentifierField({
   icon,
   error,
   generating,
+  generateLabel,
   onGenerate,
 }: {
   label: string;
@@ -377,6 +497,7 @@ function IdentifierField({
   icon: ReactNode;
   error?: string;
   generating?: boolean;
+  generateLabel: string;
   onGenerate: () => void;
 }) {
   return (
@@ -391,10 +512,8 @@ function IdentifierField({
         >
           {generating ? (
             <Loader2 className="animate-spin" size={12} />
-          ) : (
-            <Sparkles size={12} />
-          )}
-          Oluştur
+          ) : null}
+          {generateLabel}
         </button>
       </div>
 
@@ -433,6 +552,7 @@ function InputField({
   inputMode,
   required = false,
   error,
+  hint,
 }: {
   label: string;
   value: string;
@@ -443,6 +563,7 @@ function InputField({
   inputMode?: "decimal" | "numeric" | "text";
   required?: boolean;
   error?: string;
+  hint?: string;
 }) {
   return (
     <div>
@@ -476,6 +597,8 @@ function InputField({
 
       {error ? (
         <p className="mt-2 text-[11px] font-bold text-rose-500">{error}</p>
+      ) : hint ? (
+        <p className="mt-2 text-[11px] font-medium text-slate-500">{hint}</p>
       ) : null}
     </div>
   );

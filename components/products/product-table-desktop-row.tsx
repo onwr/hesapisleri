@@ -9,6 +9,7 @@ import {
   getProductMarketplaceBadge,
   getProductPosVisibilityBadge,
   getProductStockBadge,
+  getProductTypeBadge,
   printProductBarcode,
 } from "@/lib/product-ui-utils";
 import {
@@ -38,6 +39,7 @@ export function ProductTableDesktopRow({
     minStock: product.minStock,
     isService: product.isService,
   });
+  const typeBadge = getProductTypeBadge(product.productType);
   const statusBadge = getProductStatusBadge(product.status);
   const posBadge = getProductPosVisibilityBadge(product.status);
   const mappingBadge = getProductMarketplaceBadge(product.mappedChannels);
@@ -92,7 +94,7 @@ export function ProductTableDesktopRow({
         {formatProductMoney(product.sellPrice)}
       </td>
       <td className="px-3 py-2 text-right font-black">
-        {product.isService ? "—" : product.stock}
+        {product.isService ? "Stoksuz" : product.stock}
       </td>
       <td className="px-3 py-2">
         <div className="flex flex-wrap gap-1">
@@ -107,10 +109,18 @@ export function ProductTableDesktopRow({
           <span
             className={[
               "inline-flex rounded-md px-2 py-0.5 text-[10px] font-black",
+              typeBadge.className,
+            ].join(" ")}
+          >
+            {typeBadge.label}
+          </span>
+          <span
+            className={[
+              "inline-flex rounded-md px-2 py-0.5 text-[10px] font-black",
               stockBadge.className,
             ].join(" ")}
           >
-            {stockBadge.label}
+            {product.isService ? "Stoksuz" : stockBadge.label}
           </span>
           <span
             className={[

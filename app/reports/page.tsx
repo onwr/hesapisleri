@@ -1,14 +1,11 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import {
+  ArrowLeft,
   ArrowRight,
   BarChart3,
   Boxes,
   CalendarDays,
-  ChevronDown,
   Download,
-  FileText,
-  Filter,
   Mail,
   Package,
   ReceiptText,
@@ -18,578 +15,516 @@ import {
   Wallet,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { db } from "@/lib/prisma";
-import { getAuthToken, verifyToken } from "@/lib/auth";
-import { endOfMonth, startOfMonth } from "@/lib/dashboard-metrics";
-import {
-  buildMonthlyCashFlowData,
-  combineFinanceBreakdown,
-  mapAccountTransactions,
-  sumActiveAccountBalances,
-} from "@/lib/finance-aggregation-utils";
-import { activeSaleStatusFilter } from "@/lib/sale-query-utils";
+import { guardPageModule } from "@/lib/module-access";
+
 import {
   CashFlowChart,
   ExpenseDonutChart,
   FinanceBarChart,
   ReportMiniLine,
+  StockReportTable,
   TopProductsTable,
-  type ExpenseCategoryPoint,
-  type MonthlyFinancePoint,
 } from "@/components/reports/report-charts";
-import { formatMoney } from "@/lib/format-utils";
+import { ReportsPageControls } from "@/components/reports/reports-page-controls";
+import { endOfMonth, startOfMonth } from "@/lib/dashboard-metrics";
+import { formatNumber } from "@/lib/format-utils";
+import { getReportsPageData } from "@/lib/reports-page-data";
+import {
+  buildReportCardHref,
+  buildReportsExportQuery,
+  buildReportsQuery,
+  filterReportCards,
+  formatReportDateTime,
+  formatReportMoney,
+  getReportCardByKey,
+  normalizeDateRange,
+  parseDateParam,
+  parseReportTab,
+  parseReportView,
+  resolveReportSections,
+  type ReportCardItem,
+} from "@/lib/reports-page-utils";
 
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
+type ReportsPageProps = {
+  searchParams: Promise<{
+    tab?: string;
+    report?: string;
+    from?: string;
+    to?: string;
+  }>;
 };
 
-function getMonthKey(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+const reportIconMap = {
+  trendingUp: TrendingUp,
+  wallet: Wallet,
+  barChart: BarChart3,
+  package: Package,
+  users: Users,
+  boxes: Boxes,
+};
+
+const summaryIconMap = {
+  wallet: Wallet,
+  trendingDown: TrendingDown,
+  calendar: CalendarDays,
+  receipt: ReceiptText,
+  boxes: Boxes,
+};
+
+const reportColorMap = {
+  emerald: "from-emerald-50 to-white text-emerald-600",
+  blue: "from-blue-50 to-white text-blue-600",
+  orange: "from-orange-50 to-white text-orange-500",
+  violet: "from-violet-50 to-white text-violet-600",
+  rose: "from-rose-50 to-white text-rose-500",
+  cyan: "from-cyan-50 to-white text-cyan-600",
+};
+
+const summaryColorMap = {
+  emerald: "bg-emerald-50 text-emerald-600",
+  rose: "bg-rose-50 text-rose-500",
+  orange: "bg-orange-50 text-orange-500",
+  violet: "bg-violet-50 text-violet-600",
+  blue: "bg-blue-50 text-blue-600",
+};
+
+const kpiColorMap = {
+  emerald: "text-emerald-600",
+  rose: "text-rose-500",
+  blue: "text-blue-600",
+};
+
+function ReportCardLink({
+  card,
+  from,
+  to,
+  isActive,
+}: {
+  card: ReportCardItem;
+  from: Date;
+  to: Date;
+  isActive: boolean;
+}) {
+  const Icon = reportIconMap[card.iconKey];
+  const href = buildReportCardHref(card, from, to);
+
+  return (
+    <Link
+      href={href}
+      className={[
+        "group rounded-2xl border p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(15,23,42,0.08)]",
+        "bg-linear-to-br",
+        reportColorMap[card.color],
+        isActive
+          ? "border-[#0f1f4d] ring-2 ring-blue-100"
+          : "border-slate-200/80",
+      ].join(" ")}
+    >
+      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/70 shadow-sm">
+        <Icon size={23} strokeWidth={2.4} />
+      </div>
+
+      <p className="mt-4 truncate text-[14px] font-black text-[#0f1f4d]">
+        {card.title}
+      </p>
+
+      <p className="mt-1 truncate text-[11px] font-semibold text-slate-500">
+        {card.description}
+      </p>
+
+      <span className="mt-4 inline-flex items-center gap-1 text-[11px] font-black text-blue-600">
+        Raporu Görüntüle
+        <ArrowRight size={13} strokeWidth={3} />
+      </span>
+    </Link>
+  );
 }
 
-function getShortMonth(date: Date) {
-  return new Intl.DateTimeFormat("tr-TR", {
-    month: "short",
-  }).format(date);
-}
-
-function getLastSixMonths() {
-  const today = new Date();
-
-  return Array.from({ length: 6 }).map((_, index) => {
-    const date = new Date(today.getFullYear(), today.getMonth() - (5 - index), 1);
-
-    return {
-      key: getMonthKey(date),
-      label: getShortMonth(date),
-    };
-  });
-}
-
-const reportCards = [
-  {
-    title: "Gelir - Gider Raporu",
-    description: "Kazancınızı görün",
-    href: "/reports",
-    icon: TrendingUp,
-    color: "emerald",
-  },
-  {
-    title: "Nakit Akış Raporu",
-    description: "Para giriş çıkışlarınız",
-    href: "/reports",
-    icon: Wallet,
-    color: "blue",
-  },
-  {
-    title: "Satış Raporu",
-    description: "Satışlarınızı analiz edin",
-    href: "/reports",
-    icon: BarChart3,
-    color: "orange",
-  },
-  {
-    title: "Ürün Raporu",
-    description: "Ürün performansları",
-    href: "/reports",
-    icon: Package,
-    color: "violet",
-  },
-  {
-    title: "Müşteri Raporu",
-    description: "Müşteri analizleri",
-    href: "/reports",
-    icon: Users,
-    color: "rose",
-  },
-  {
-    title: "Stok Raporu",
-    description: "Stok durum raporu",
-    href: "/reports",
-    icon: Boxes,
-    color: "cyan",
-  },
-  {
-    title: "Personel Performansı",
-    description: "Çalışan satış ve maliyet analizi",
-    href: "/reports/personnel-performance",
-    icon: Users,
-    color: "blue",
-  },
-];
-
-const tabs = ["Tüm Raporlar", "Finansal", "Satış", "Stok", "Müşteri"];
-
-export default async function ReportsPage() {
-  const token = await getAuthToken();
-  if (!token) redirect("/login");
-
-  const payload = verifyToken<AuthPayload>(token);
-  if (!payload?.userId || !payload.companyId) redirect("/login");
-
-  const user = await db.user.findUnique({
-    where: { id: payload.userId },
-    include: {
-      companyUsers: {
-        include: {
-          company: true,
-        },
-      },
-    },
-  });
-
-  if (!user) redirect("/login");
-
-  const company =
-    user.companyUsers.find((item) => item.companyId === payload.companyId)
-      ?.company ?? user.companyUsers[0]?.company;
-
-  if (!company) redirect("/login");
-
+export default async function ReportsPage({ searchParams }: ReportsPageProps) {
+  const session = await guardPageModule("reports");
+  const company = session.company;
+  const params = await searchParams;
   const now = new Date();
-  const periodFrom = startOfMonth(new Date(now.getFullYear(), now.getMonth() - 5, 1));
-  const periodTo = endOfMonth(now);
-
-  const [sales, expenses, invoices, products, customers, accounts, accountTransactionRows] =
-    await Promise.all([
-      db.sale.findMany({
-        where: { companyId: company.id, ...activeSaleStatusFilter() },
-        include: {
-          customer: true,
-          items: true,
-        },
-        orderBy: { createdAt: "desc" },
-      }),
-      db.expense.findMany({
-        where: { companyId: company.id },
-        orderBy: { date: "desc" },
-      }),
-      db.invoice.findMany({
-        where: { companyId: company.id },
-        include: { customer: true },
-        orderBy: { createdAt: "desc" },
-      }),
-      db.product.findMany({
-        where: { companyId: company.id },
-        include: {
-          saleItems: true,
-        },
-      }),
-      db.customer.findMany({
-        where: { companyId: company.id },
-        include: {
-          sales: true,
-          invoices: true,
-        },
-      }),
-      db.account.findMany({
-        where: { companyId: company.id },
-      }),
-      db.accountTransaction.findMany({
-        where: { account: { companyId: company.id } },
-        select: {
-          id: true,
-          date: true,
-          createdAt: true,
-          title: true,
-          note: true,
-          amount: true,
-          type: true,
-        },
-      }),
-    ]);
-
-  const accountTransactions = mapAccountTransactions(accountTransactionRows);
-  const financeBreakdown = combineFinanceBreakdown(
-    accountTransactions,
-    expenses,
-    periodFrom,
-    periodTo
+  const activeTab = parseReportTab(params.tab);
+  const activeReport = parseReportView(params.report);
+  const { from, to } = normalizeDateRange(
+    parseDateParam(params.from) ?? startOfMonth(now),
+    parseDateParam(params.to) ?? endOfMonth(now)
   );
 
-  const totalSales = sales.reduce((sum, sale) => sum + Number(sale.total), 0);
-  const totalIncome = financeBreakdown.totalIncome;
-  const totalExpenses = financeBreakdown.totalExpense;
+  const data = await getReportsPageData(company.id, {
+    tab: activeTab,
+    from,
+    to,
+  });
 
-  const netProfit = financeBreakdown.netCashFlow;
-  const accountBalance = sumActiveAccountBalances(accounts);
+  const sections = resolveReportSections(activeReport, activeTab);
+  const visibleCards = filterReportCards(activeTab, activeReport);
+  const activeReportCard = activeReport ? getReportCardByKey(activeReport) : null;
+  const exportHref = buildReportsExportQuery({
+    tab: activeTab,
+    report: activeReport,
+    from,
+    to,
+  });
 
-  const unpaidInvoiceAmount = invoices
-    .filter((invoice) => invoice.paymentStatus !== "PAID")
-    .reduce((sum, invoice) => sum + Number(invoice.total), 0);
-
-  const stockValue = products.reduce(
-    (sum, product) => sum + product.stock * Number(product.sellPrice),
-    0
-  );
-
-  const customerDebt = customers
-    .filter((customer) => Number(customer.balance) > 0)
-    .reduce((sum, customer) => sum + Number(customer.balance), 0);
-
-  const customerReceivable = Math.abs(
-    customers
-      .filter((customer) => Number(customer.balance) < 0)
-      .reduce((sum, customer) => sum + Number(customer.balance), 0)
-  );
-
-  const months = getLastSixMonths();
-
-  const monthlyFinanceData: MonthlyFinancePoint[] = buildMonthlyCashFlowData(
-    accountTransactions,
-    expenses,
-    periodFrom,
-    periodTo
-  ).map(({ month, income, expense, net }) => ({
-    month,
-    income,
-    expense,
-    net,
-  }));
-
-  const expenseCategoryMap = expenses.reduce((map, expense) => {
-    const key = expense.category || "Diğer";
-    map.set(key, (map.get(key) || 0) + Number(expense.amount));
-    return map;
-  }, new Map<string, number>());
-
-  if (financeBreakdown.manualCashExpense > 0) {
-    expenseCategoryMap.set(
-      "Kasa/Banka Çıkış",
-      (expenseCategoryMap.get("Kasa/Banka Çıkış") || 0) +
-        financeBreakdown.manualCashExpense
-    );
-  }
-
-  if (financeBreakdown.saleCancelExpense > 0) {
-    expenseCategoryMap.set(
-      "Satış İptali",
-      (expenseCategoryMap.get("Satış İptali") || 0) +
-        financeBreakdown.saleCancelExpense
-    );
-  }
-
-  const expenseCategories: ExpenseCategoryPoint[] = Array.from(expenseCategoryMap)
-    .map(([name, value]) => ({
-      name,
-      value,
-      percent:
-        totalExpenses > 0 ? Math.round((value / totalExpenses) * 1000) / 10 : 0,
-    }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 5);
-
-  const topProducts = products
-    .map((product) => {
-      const soldQty = product.saleItems.reduce(
-        (sum, item) => sum + item.quantity,
-        0
-      );
-
-      const revenue = product.saleItems.reduce(
-        (sum, item) => sum + Number(item.total),
-        0
-      );
-
-      return {
-        name: product.name,
-        soldQty,
-        revenue,
-      };
-    })
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 5);
-
-  const summaryItems = [
-    {
-      label: "Toplam Alacak",
-      value: formatMoney(customerReceivable),
-      icon: Wallet,
-      color: "emerald",
-    },
-    {
-      label: "Toplam Borç",
-      value: formatMoney(customerDebt),
-      icon: TrendingDown,
-      color: "rose",
-    },
-    {
-      label: "Vadesi Gelen Alacak",
-      value: formatMoney(unpaidInvoiceAmount),
-      icon: CalendarDays,
-      color: "orange",
-    },
-    {
-      label: "Vadesi Gelen Borç",
-      value: formatMoney(totalExpenses * 0.4),
-      icon: ReceiptText,
-      color: "violet",
-    },
-    {
-      label: "Stok Değeri",
-      value: formatMoney(stockValue),
-      icon: Boxes,
-      color: "blue",
-    },
-  ];
-
-  const reportColorMap = {
-    emerald: "from-emerald-50 to-white text-emerald-600",
-    blue: "from-blue-50 to-white text-blue-600",
-    orange: "from-orange-50 to-white text-orange-500",
-    violet: "from-violet-50 to-white text-violet-600",
-    rose: "from-rose-50 to-white text-rose-500",
-    cyan: "from-cyan-50 to-white text-cyan-600",
-  };
-
-  const summaryColorMap = {
-    emerald: "bg-emerald-50 text-emerald-600",
-    rose: "bg-rose-50 text-rose-500",
-    orange: "bg-orange-50 text-orange-500",
-    violet: "bg-violet-50 text-violet-600",
-    blue: "bg-blue-50 text-blue-600",
-  };
-
-  const miniLineData = [
-    { value: 10 },
-    { value: 18 },
-    { value: 14 },
-    { value: 25 },
-    { value: 22 },
-    { value: 33 },
-    { value: 38 },
-  ];
+  const stockValue =
+    data.summaryItems.find((item) => item.label === "Stok Değeri")?.value ?? 0;
 
   return (
     <AppShell>
       <div className="space-y-5">
         <div className="grid gap-4 xl:grid-cols-[1fr_300px]">
           <main className="space-y-5">
-            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-              {reportCards.map((card) => {
-                const Icon = card.icon;
-
-                return (
+            {activeReportCard ? (
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
                   <Link
-                    key={card.title}
-                    href={card.href}
-                    className={[
-                      "group rounded-2xl border border-slate-200/80 bg-linear-to-br p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(15,23,42,0.08)]",
-                      reportColorMap[card.color as keyof typeof reportColorMap],
-                    ].join(" ")}
+                    href={buildReportsQuery({ tab: activeTab, from, to })}
+                    className="inline-flex items-center gap-2 text-[12px] font-bold text-slate-500 transition hover:text-[#0f1f4d]"
                   >
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/70 shadow-sm">
-                      <Icon size={23} strokeWidth={2.4} />
-                    </div>
-
-                    <p className="mt-4 truncate text-[14px] font-black text-[#0f1f4d]">
-                      {card.title}
-                    </p>
-
-                    <p className="mt-1 truncate text-[11px] font-semibold text-slate-500">
-                      {card.description}
-                    </p>
-
-                    <span className="mt-4 inline-flex items-center gap-1 text-[11px] font-black text-blue-600">
-                      Raporu Görüntüle
-                      <ArrowRight size={13} strokeWidth={3} />
-                    </span>
+                    <ArrowLeft size={16} />
+                    Tüm Raporlar
                   </Link>
-                );
-              })}
-            </section>
-
-            <section className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div className="flex overflow-hidden rounded-xl border border-slate-200 bg-white">
-                {tabs.map((tab, index) => (
-                  <button
-                    key={tab}
-                    type="button"
-                    className={[
-                      "h-10 min-w-[92px] border-r border-slate-100 px-4 text-[12px] font-extrabold transition last:border-r-0",
-                      index === 0
-                        ? "bg-blue-50 text-blue-600"
-                        : "text-slate-500 hover:bg-slate-50 hover:text-[#0f1f4d]",
-                    ].join(" ")}
-                  >
-                    {tab}
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <div className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-[12px] font-extrabold text-[#0f1f4d]">
-                  <CalendarDays size={16} className="text-slate-500" />
-                  <span>13.05.2026</span>
-                  <span className="text-slate-400">-</span>
-                  <span>13.05.2026</span>
-                  <ChevronDown size={15} className="text-slate-400" />
-                </div>
-
-                <button
-                  type="button"
-                  className="flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[12px] font-extrabold text-[#0f1f4d] transition hover:bg-slate-50"
-                >
-                  <Filter size={16} />
-                  Filtrele
-                  <ChevronDown size={15} className="text-slate-400" />
-                </button>
-              </div>
-            </section>
-
-            <section className="grid gap-4 lg:grid-cols-3">
-              {[
-                {
-                  title: "Toplam Gelir",
-                  value: totalIncome,
-                  color: "text-emerald-600",
-                  line: "#22c55e",
-                  previous: `${formatMoney(financeBreakdown.saleCollectionIncome)} tahsilat · ${formatMoney(financeBreakdown.manualIncome)} manuel`,
-                  change: "Nakit giriş",
-                },
-                {
-                  title: "Toplam Gider",
-                  value: totalExpenses,
-                  color: "text-rose-500",
-                  line: "#fb7185",
-                  previous: "Geçen Dönem: ₺118.900,00",
-                  change: "%20",
-                },
-                {
-                  title: "Net Kâr",
-                  value: netProfit,
-                  color: "text-blue-600",
-                  line: "#3b82f6",
-                  previous: "Geçen Dönem: ₺70.600,00",
-                  change: "%32",
-                },
-              ].map((item) => (
-                <div
-                  key={item.title}
-                  className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]"
-                >
-                  <p className="text-[12px] font-extrabold text-[#24345f]/80">
-                    {item.title}
+                  <h1 className="mt-2 text-[20px] font-black text-[#0f1f4d]">
+                    {activeReportCard.title}
+                  </h1>
+                  <p className="mt-1 text-[12px] font-medium text-slate-500">
+                    {activeReportCard.description}
                   </p>
+                </div>
+              </div>
+            ) : (
+              <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                {visibleCards.map((card) => (
+                  <ReportCardLink
+                    key={card.key}
+                    card={card}
+                    from={from}
+                    to={to}
+                    isActive={false}
+                  />
+                ))}
+              </section>
+            )}
 
-                  <div className="mt-2 flex items-end justify-between gap-3">
-                    <div>
-                      <p
-                        className={[
-                          "text-[22px] font-black tracking-[-0.04em]",
-                          item.color,
-                        ].join(" ")}
-                      >
-                        {formatMoney(item.value)}
-                      </p>
+            <ReportsPageControls
+              activeTab={activeTab}
+              activeReport={activeReport}
+              from={from}
+              to={to}
+            />
 
-                      <div className="mt-3 flex items-center gap-2">
-                        <span className="text-[11px] font-semibold text-slate-500">
-                          {item.previous}
-                        </span>
-                        <span className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-black text-emerald-600">
-                          ↑ {item.change}
-                        </span>
+            {activeReport ? (
+              <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                {visibleCards
+                  .filter((card) => card.key !== activeReport)
+                  .map((card) => (
+                    <ReportCardLink
+                      key={card.key}
+                      card={card}
+                      from={from}
+                      to={to}
+                      isActive={false}
+                    />
+                  ))}
+              </section>
+            ) : null}
+
+            {sections.showKpi ? (
+              <section className="grid gap-4 lg:grid-cols-3">
+                {data.kpiCards.map((item) => (
+                  <div
+                    key={item.title}
+                    className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]"
+                  >
+                    <p className="text-[12px] font-extrabold text-[#24345f]/80">
+                      {item.title}
+                    </p>
+
+                    <div className="mt-2 flex items-end justify-between gap-3">
+                      <div>
+                        <p
+                          className={[
+                            "text-[22px] font-black tracking-[-0.04em]",
+                            kpiColorMap[item.color],
+                          ].join(" ")}
+                        >
+                          {formatReportMoney(item.value)}
+                        </p>
+
+                        <div className="mt-3 flex items-center gap-2">
+                          <span className="text-[11px] font-semibold text-slate-500">
+                            Önceki dönem: {formatReportMoney(item.previousValue)}
+                          </span>
+                          <span
+                            className={[
+                              "rounded-full px-2 py-1 text-[10px] font-black",
+                              item.positive
+                                ? "bg-emerald-50 text-emerald-600"
+                                : "bg-rose-50 text-rose-500",
+                            ].join(" ")}
+                          >
+                            {item.positive ? "↑" : "↓"} %{Math.abs(item.changePercent)}
+                          </span>
+                        </div>
                       </div>
-                    </div>
 
-                    <ReportMiniLine data={miniLineData} color={item.line} />
-                  </div>
-                </div>
-              ))}
-            </section>
-
-            <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-              <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
-                <div className="mb-4 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-[15px] font-black text-[#0f1f4d]">
-                      Gelir - Gider Dağılımı
-                    </h3>
-                    <div className="mt-2 flex items-center gap-4 text-[11px] font-bold text-slate-500">
-                      <span className="flex items-center gap-1.5">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                        Gelir
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <span className="h-2 w-2 rounded-full bg-rose-400" />
-                        Gider
-                      </span>
+                      <ReportMiniLine
+                        data={item.miniLineData}
+                        color={item.lineColor}
+                      />
                     </div>
                   </div>
+                ))}
+              </section>
+            ) : null}
 
-                  <button className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-black text-[#0f1f4d]">
-                    Aylık
-                  </button>
-                </div>
+            {sections.showSalesSummary ? (
+              <section className="grid gap-4 md:grid-cols-3">
+                <MetricTile
+                  label="Toplam Satış Cirosu"
+                  value={formatReportMoney(data.totalSales)}
+                />
+                <MetricTile
+                  label="Satış Adedi"
+                  value={formatNumber(data.salesCount)}
+                />
+                <MetricTile
+                  label="Ortalama Sepet"
+                  value={formatReportMoney(data.averageSaleAmount)}
+                />
+              </section>
+            ) : null}
 
-                <FinanceBarChart data={monthlyFinanceData} />
-              </div>
-
-              <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
-                <div className="mb-4 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-[15px] font-black text-[#0f1f4d]">
-                      Nakit Akış Özeti
-                    </h3>
-                    <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] font-bold text-slate-500">
-                      <span className="flex items-center gap-1.5">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                        Nakit Girişi
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <span className="h-2 w-2 rounded-full bg-rose-400" />
-                        Nakit Çıkışı
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <span className="h-2 w-2 rounded-full bg-blue-600" />
-                        Net Nakit
-                      </span>
+            {(sections.showIncomeExpenseChart || sections.showCashFlowChart) && (
+              <section
+                className={[
+                  "grid gap-4",
+                  sections.showIncomeExpenseChart && sections.showCashFlowChart
+                    ? "xl:grid-cols-[0.95fr_1.05fr]"
+                    : "grid-cols-1",
+                ].join(" ")}
+              >
+                {sections.showIncomeExpenseChart ? (
+                  <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+                    <div className="mb-4">
+                      <h3 className="text-[15px] font-black text-[#0f1f4d]">
+                        Gelir - Gider Dağılımı
+                      </h3>
+                      <p className="mt-1 text-[11px] font-semibold text-slate-500">
+                        {data.periodLabel}
+                      </p>
                     </div>
+
+                    <FinanceBarChart data={data.monthlyFinanceData} />
                   </div>
+                ) : null}
 
-                  <button className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-black text-[#0f1f4d]">
-                    Aylık
-                  </button>
-                </div>
+                {sections.showCashFlowChart ? (
+                  <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+                    <div className="mb-4">
+                      <h3 className="text-[15px] font-black text-[#0f1f4d]">
+                        Nakit Akış Özeti
+                      </h3>
+                      <p className="mt-1 text-[11px] font-semibold text-slate-500">
+                        Tahsilat {formatReportMoney(data.financeBreakdown.saleCollectionIncome)} ·
+                        Manuel {formatReportMoney(data.financeBreakdown.manualIncome)}
+                      </p>
+                    </div>
 
-                <CashFlowChart data={monthlyFinanceData} />
-              </div>
-            </section>
+                    <CashFlowChart data={data.monthlyFinanceData} />
+                  </div>
+                ) : null}
+              </section>
+            )}
 
-            <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-              <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
-                <div className="mb-4 flex items-center justify-between">
+            {sections.showCashFlowBreakdown ? (
+              <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <MetricTile
+                  label="Satış Tahsilatı"
+                  value={formatReportMoney(data.financeBreakdown.saleCollectionIncome)}
+                />
+                <MetricTile
+                  label="Manuel Gelir"
+                  value={formatReportMoney(data.financeBreakdown.manualIncome)}
+                />
+                <MetricTile
+                  label="Transfer Giriş"
+                  value={formatReportMoney(data.financeBreakdown.transferInTotal)}
+                />
+                <MetricTile
+                  label="Net Nakit Akışı"
+                  value={formatReportMoney(data.netProfit)}
+                />
+              </section>
+            ) : null}
+
+            {sections.showExpenseCategories ? (
+              <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+                <div className="mb-4">
                   <h3 className="text-[15px] font-black text-[#0f1f4d]">
                     Gider Kategorileri
                   </h3>
-
-                  <button className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-black text-[#0f1f4d]">
-                    Bu Ay
-                  </button>
+                  <p className="mt-1 text-[11px] font-semibold text-slate-500">
+                    {data.periodLabel}
+                  </p>
                 </div>
 
-                <ExpenseDonutChart data={expenseCategories} total={totalExpenses} />
-              </div>
+                <ExpenseDonutChart
+                  data={data.expenseCategories}
+                  total={data.totalExpenses}
+                />
+              </section>
+            ) : null}
 
-              <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
-                <div className="mb-4 flex items-center justify-between">
+            {sections.showTopProducts ? (
+              <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-[15px] font-black text-[#0f1f4d]">
+                      {activeReport === "products"
+                        ? "Ürün Performansları"
+                        : "En Çok Satan Ürünler"}
+                    </h3>
+                    <p className="mt-1 text-[11px] font-semibold text-slate-500">
+                      {activeReport === "products"
+                        ? "Seçili dönemdeki satış adedi ve ciro"
+                        : `Satış cirosu: ${formatReportMoney(data.totalSales)}`}
+                    </p>
+                  </div>
+                </div>
+
+                <TopProductsTable data={data.topProducts} />
+              </section>
+            ) : null}
+
+            {sections.showStockSummary ? (
+              <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+                <h3 className="text-[15px] font-black text-[#0f1f4d]">
+                  Stok Özeti
+                </h3>
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <MetricTile
+                    label="Stok Değeri"
+                    value={formatReportMoney(stockValue)}
+                  />
+                  <MetricTile
+                    label="Takip Edilen Ürün"
+                    value={formatNumber(data.trackedStockCount)}
+                  />
+                  <MetricTile
+                    label="Düşük Stok"
+                    value={formatNumber(data.lowStockCount)}
+                  />
+                </div>
+              </section>
+            ) : null}
+
+            {sections.showStockTable ? (
+              <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+                <div className="mb-4">
                   <h3 className="text-[15px] font-black text-[#0f1f4d]">
-                    En Çok Satan Ürünler
+                    Stok Durum Tablosu
                   </h3>
-
-                  <button className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-black text-[#0f1f4d]">
-                    Bu Ay
-                  </button>
+                  <p className="mt-1 text-[11px] font-semibold text-slate-500">
+                    Minimum stok altındaki ürünler işaretlenir
+                  </p>
                 </div>
 
-                <TopProductsTable data={topProducts} />
-              </div>
-            </section>
+                <StockReportTable data={data.stockItems} />
+              </section>
+            ) : null}
+
+            {sections.showCustomerSummary ? (
+              <section className="space-y-4">
+                <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+                  <h3 className="text-[15px] font-black text-[#0f1f4d]">
+                    Müşteri Özeti
+                  </h3>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    {data.summaryItems
+                      .filter((item) =>
+                        [
+                          "Toplam Alacak",
+                          "Toplam Borç",
+                          "Vadesi Gelen Alacak",
+                        ].includes(item.label)
+                      )
+                      .map((item) => (
+                        <div
+                          key={item.label}
+                          className="rounded-xl border border-slate-100 bg-slate-50/70 px-4 py-3"
+                        >
+                          <p className="text-[11px] font-bold text-slate-500">
+                            {item.label}
+                          </p>
+                          <p className="mt-1 text-[18px] font-black text-[#0f1f4d]">
+                            {formatReportMoney(item.value)}
+                          </p>
+                        </div>
+                      ))}
+                    <div className="rounded-xl border border-slate-100 bg-slate-50/70 px-4 py-3">
+                      <p className="text-[11px] font-bold text-slate-500">
+                        Toplam Müşteri
+                      </p>
+                      <p className="mt-1 text-[18px] font-black text-[#0f1f4d]">
+                        {formatNumber(data.totalCustomers)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {data.customerReportItems.length > 0 ? (
+                  <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+                    <h3 className="text-[15px] font-black text-[#0f1f4d]">
+                      Bakiyesi Olan Müşteriler
+                    </h3>
+                    <div className="mt-4 overflow-hidden rounded-xl border border-slate-100">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="bg-slate-50/70 text-[11px] font-black text-[#24345f]/80">
+                            <th className="px-4 py-3">Müşteri</th>
+                            <th className="px-4 py-3">Tür</th>
+                            <th className="px-4 py-3 text-right">Tutar</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {data.customerReportItems.map((item) => (
+                            <tr
+                              key={item.id}
+                              className="text-[12px] font-semibold text-[#24345f]"
+                            >
+                              <td className="px-4 py-3 font-extrabold text-[#0f1f4d]">
+                                {item.name}
+                              </td>
+                              <td className="px-4 py-3">
+                                <span
+                                  className={[
+                                    "rounded-md px-2 py-1 text-[10px] font-black",
+                                    item.kind === "receivable"
+                                      ? "bg-emerald-50 text-emerald-700"
+                                      : "bg-rose-50 text-rose-700",
+                                  ].join(" ")}
+                                >
+                                  {item.kind === "receivable" ? "Alacak" : "Borç"}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-right font-black text-[#0f1f4d]">
+                                {formatReportMoney(item.balance)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
 
             <p className="text-center text-[11px] font-semibold text-slate-400">
-              Son güncelleme: 13.05.2026 21:45
+              Son güncelleme: {formatReportDateTime(data.lastUpdatedAt)}
             </p>
           </main>
 
@@ -600,17 +535,15 @@ export default async function ReportsPage() {
               </h3>
 
               <div className="space-y-4">
-                {summaryItems.map((item) => {
-                  const Icon = item.icon;
+                {data.summaryItems.map((item) => {
+                  const Icon = summaryIconMap[item.iconKey];
 
                   return (
                     <div key={item.label} className="flex items-center gap-3">
                       <div
                         className={[
                           "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl",
-                          summaryColorMap[
-                            item.color as keyof typeof summaryColorMap
-                          ],
+                          summaryColorMap[item.color],
                         ].join(" ")}
                       >
                         <Icon size={15} strokeWidth={2.5} />
@@ -632,7 +565,7 @@ export default async function ReportsPage() {
                                 : "text-emerald-600",
                         ].join(" ")}
                       >
-                        {item.value}
+                        {formatReportMoney(item.value)}
                       </p>
                     </div>
                   );
@@ -642,86 +575,42 @@ export default async function ReportsPage() {
 
             <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
               <h3 className="mb-4 text-[15px] font-black text-[#0f1f4d]">
-                Son Oluşturulan Raporlar
-              </h3>
-
-              <div className="space-y-3">
-                {reportCards.slice(0, 5).map((report) => {
-                  const Icon = report.icon;
-
-                  return (
-                    <div key={report.title} className="flex items-center gap-3">
-                      <div
-                        className={[
-                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br",
-                          reportColorMap[
-                            report.color as keyof typeof reportColorMap
-                          ],
-                        ].join(" ")}
-                      >
-                        <Icon size={16} strokeWidth={2.4} />
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[12px] font-black text-[#0f1f4d]">
-                          {report.title}
-                        </p>
-                        <p className="text-[10px] font-semibold text-slate-400">
-                          13.05.2026 21:30
-                        </p>
-                      </div>
-
-                      <button className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-[#24345f] hover:bg-slate-50">
-                        <Download size={14} />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <Link
-                href="/reports"
-                className="mt-4 flex h-10 items-center justify-center gap-2 rounded-xl border border-violet-100 bg-white text-[12px] font-black text-violet-600 shadow-sm"
-              >
-                Tüm Raporları Görüntüle
-                <ArrowRight size={14} strokeWidth={3} />
-              </Link>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
-              <h3 className="mb-4 text-[15px] font-black text-[#0f1f4d]">
                 Kısayollar
               </h3>
 
               <div className="grid grid-cols-2 gap-3">
+                <a
+                  href={exportHref}
+                  className="group flex min-h-[82px] flex-col items-center justify-center gap-2 rounded-2xl bg-slate-50 text-center transition hover:bg-slate-100"
+                >
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 text-rose-500">
+                    <Download size={18} strokeWidth={2.5} />
+                  </span>
+                  <span className="text-[11px] font-black text-[#24345f]">
+                    Excel İndir
+                  </span>
+                </a>
+
                 {[
                   {
-                    label: "Rapor Oluştur",
-                    icon: FileText,
-                    color: "bg-emerald-50 text-emerald-600",
-                  },
-                  {
-                    label: "Excel İndir",
-                    icon: Download,
-                    color: "bg-rose-50 text-rose-500",
-                  },
-                  {
-                    label: "PDF İndir",
-                    icon: ReceiptText,
-                    color: "bg-orange-50 text-orange-500",
-                  },
-                  {
-                    label: "E-posta Gönder",
-                    icon: Mail,
+                    label: "Personel Raporu",
+                    icon: Users,
                     color: "bg-blue-50 text-blue-600",
+                    href: "/reports/personnel-performance",
+                  },
+                  {
+                    label: "Kasa-Banka",
+                    icon: Wallet,
+                    color: "bg-emerald-50 text-emerald-600",
+                    href: "/cash-bank",
                   },
                 ].map((item) => {
                   const Icon = item.icon;
 
                   return (
-                    <button
+                    <Link
                       key={item.label}
-                      type="button"
+                      href={item.href}
                       className="group flex min-h-[82px] flex-col items-center justify-center gap-2 rounded-2xl bg-slate-50 text-center transition hover:bg-slate-100"
                     >
                       <span
@@ -732,18 +621,52 @@ export default async function ReportsPage() {
                       >
                         <Icon size={18} strokeWidth={2.5} />
                       </span>
-
                       <span className="text-[11px] font-black text-[#24345f]">
                         {item.label}
                       </span>
-                    </button>
+                    </Link>
                   );
                 })}
+
+                <button
+                  type="button"
+                  disabled
+                  className="group flex min-h-[82px] flex-col items-center justify-center gap-2 rounded-2xl bg-slate-50 text-center opacity-60"
+                >
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-orange-500">
+                    <ReceiptText size={18} strokeWidth={2.5} />
+                  </span>
+                  <span className="text-[11px] font-black text-[#24345f]">
+                    PDF (yakında)
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled
+                  className="group flex min-h-[82px] flex-col items-center justify-center gap-2 rounded-2xl bg-slate-50 text-center opacity-60"
+                >
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
+                    <Mail size={18} strokeWidth={2.5} />
+                  </span>
+                  <span className="text-[11px] font-black text-[#24345f]">
+                    E-posta (yakında)
+                  </span>
+                </button>
               </div>
             </div>
           </aside>
         </div>
       </div>
     </AppShell>
+  );
+}
+
+function MetricTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-slate-100 bg-slate-50/70 px-4 py-3">
+      <p className="text-[11px] font-bold text-slate-500">{label}</p>
+      <p className="mt-1 text-[18px] font-black text-[#0f1f4d]">{value}</p>
+    </div>
   );
 }

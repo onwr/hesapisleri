@@ -1,17 +1,12 @@
 import { NextResponse } from "next/server";
+import { requireApiModuleAccess } from "@/lib/module-access";
 import { z } from "zod";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import { db } from "@/lib/prisma";
 import {
   createProductCategory,
   getProductCategoriesWithStats,
 } from "@/lib/product-category-service";
 import { PRODUCT_CATEGORY_COLORS } from "@/lib/product-category-utils";
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
 
 const categoryColorSchema = z.enum(PRODUCT_CATEGORY_COLORS);
 
@@ -23,26 +18,13 @@ const createCategorySchema = z.object({
 
 export async function GET() {
   try {
-    const token = await getAuthToken();
+    const auth = await requireApiModuleAccess("products");
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.companyId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
-
+    const companyId = auth.companyId;
+    const userId = auth.userId;
     const { categories, summary } = await getProductCategoriesWithStats(
-      payload.companyId
+      companyId
     );
 
     return NextResponse.json({
@@ -67,24 +49,11 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const token = await getAuthToken();
+    const auth = await requireApiModuleAccess("products");
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.userId || !payload.companyId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
-
+    const companyId = auth.companyId;
+    const userId = auth.userId;
     const body = await req.json();
     const parsed = createCategorySchema.safeParse(body);
 
@@ -99,12 +68,12 @@ export async function POST(req: Request) {
       );
     }
 
-    const category = await createProductCategory(payload.companyId, parsed.data);
+    const category = await createProductCategory(companyId, parsed.data);
 
     await db.activityLog.create({
       data: {
-        companyId: payload.companyId,
-        userId: payload.userId,
+        companyId: companyId,
+        userId: userId,
         action: "CREATE",
         module: "products",
         message: `${category.name} ürün kategorisi oluşturuldu.`,

@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import {
   ArrowRight,
   BellRing,
@@ -15,12 +14,12 @@ import {
   Wallet,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
+import { guardPageModule } from "@/lib/module-access";
+
 import {
   CustomersTablePagination,
   CustomersTableToolbar,
 } from "@/components/customers/customers-table-controls";
-import { getAuthToken, verifyToken } from "@/lib/auth";
-import { db } from "@/lib/prisma";
 import { getCustomersPageData } from "@/lib/customers-page-data";
 import {
   buildCustomersExportQuery,
@@ -35,11 +34,6 @@ import {
   parseSearchQuery,
   buildSingleCustomerExportHref,
 } from "@/lib/customers-page-utils";
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
 
 type CustomersPageProps = {
   searchParams: Promise<{
@@ -106,35 +100,10 @@ function buildActionCards(exportHref: string) {
 }
 
 export default async function CustomersPage({ searchParams }: CustomersPageProps) {
+  const session = await guardPageModule("customers");
+  const company = session.company;
   const params = await searchParams;
-  const token = await getAuthToken();
-
-  if (!token) redirect("/login");
-
-  const payload = verifyToken<AuthPayload>(token);
-
-  if (!payload?.userId || !payload.companyId) redirect("/login");
-
-  const user = await db.user.findUnique({
-    where: { id: payload.userId },
-    include: {
-      companyUsers: {
-        include: {
-          company: true,
-        },
-      },
-    },
-  });
-
-  if (!user) redirect("/login");
-
-  const company =
-    user.companyUsers.find((item) => item.companyId === payload.companyId)
-      ?.company ?? user.companyUsers[0]?.company;
-
-  if (!company) redirect("/login");
-
-  const activeTab = parseCustomerTab(params.tab);
+const activeTab = parseCustomerTab(params.tab);
   const currentPage = parsePage(params.page);
   const activeGroup = parseGroupFilter(params.group);
   const searchQuery = parseSearchQuery(params.q);
@@ -305,7 +274,14 @@ export default async function CustomersPage({ searchParams }: CustomersPageProps
                       </td>
 
                       <td className="px-4 py-3 text-slate-600">
-                        {customer.taxNo || "-"}
+                        <div>
+                          <p>{customer.taxNo || "-"}</p>
+                          {customer.taxOffice ? (
+                            <p className="mt-0.5 text-[10px] font-medium text-slate-400">
+                              {customer.taxOffice}
+                            </p>
+                          ) : null}
+                        </div>
                       </td>
 
                       <td className="px-4 py-3">

@@ -1,7 +1,12 @@
 import { startOfMonth, endOfMonth } from "@/lib/dashboard-metrics";
+import {
+  calculateProductStockValue,
+  getProductPurchasePrice,
+} from "@/lib/inventory-value-utils";
 import { db } from "@/lib/prisma";
 import { DEFAULT_CATEGORY_NAME } from "@/lib/product-form-utils";
-import { formatProductMoney, isServiceProduct } from "@/lib/products-page-utils";
+import { formatProductMoney } from "@/lib/products-page-utils";
+import { isServiceProductType } from "@/lib/product-type-utils";
 
 export async function getProductDetailData(companyId: string, productId: string) {
   const product = await db.product.findFirst({
@@ -84,11 +89,12 @@ export async function getProductDetailData(companyId: string, productId: string)
     }),
   ]);
 
-  const buyPrice = Number(product.buyPrice);
+  const buyPrice = getProductPurchasePrice(product);
   const sellPrice = Number(product.sellPrice);
   const profit = sellPrice - buyPrice;
   const margin = buyPrice > 0 ? (profit / buyPrice) * 100 : sellPrice > 0 ? 100 : 0;
-  const isCriticalStock = product.stock <= product.minStock;
+  const isService = isServiceProductType(product.productType);
+  const isCriticalStock = !isService && product.stock <= product.minStock;
   const categoryName = product.category?.name ?? DEFAULT_CATEGORY_NAME;
   const monthSalesQuantity = monthSaleItems.reduce(
     (sum, item) => sum + item.quantity,
@@ -107,12 +113,13 @@ export async function getProductDetailData(companyId: string, productId: string)
       sellPrice,
       profit,
       margin,
-      stockValue: product.stock * sellPrice,
-      isService: isServiceProduct({
-        name: product.name,
-        description: product.description,
-        categoryName,
+      stockValue: calculateProductStockValue({
+        productType: product.productType,
+        stock: product.stock,
+        buyPrice,
       }),
+      isService,
+      productType: product.productType,
     },
     stockMovements,
     warehouseStocks: warehouseStocks.map((entry) => ({
@@ -145,7 +152,13 @@ export async function getProductDetailData(companyId: string, productId: string)
       buyPrice: formatProductMoney(buyPrice),
       sellPrice: formatProductMoney(sellPrice),
       profit: formatProductMoney(profit),
-      stockValue: formatProductMoney(product.stock * sellPrice),
+      stockValue: formatProductMoney(
+        calculateProductStockValue({
+          productType: product.productType,
+          stock: product.stock,
+          buyPrice,
+        })
+      ),
       monthSalesTotal: formatProductMoney(monthSalesTotal),
     },
   };

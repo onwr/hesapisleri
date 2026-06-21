@@ -53,31 +53,31 @@ async function main() {
   try {
     // A) UNPAID 10.000
     await db.$transaction(async (tx) => {
-      await applyCustomerDebtFromDocument(tx, customer.id, 10000, 0);
+      await applyCustomerDebtFromDocument(tx, company.id, customer.id, 10000, 0);
     });
     assertEqual("A - UNPAID satış sonrası", await getBalance(customer.id), 10000);
 
     // B) PAID 10.000 (ek borç yok)
     await db.$transaction(async (tx) => {
-      await applyCustomerDebtFromDocument(tx, customer.id, 10000, 10000);
+      await applyCustomerDebtFromDocument(tx, company.id, customer.id, 10000, 10000);
     });
     assertEqual("B - PAID satış sonrası", await getBalance(customer.id), 10000);
 
     // C) PARTIAL 10.000 / 4.000 tahsilat
     await db.$transaction(async (tx) => {
-      await applyCustomerDebtFromDocument(tx, customer.id, 10000, 4000);
+      await applyCustomerDebtFromDocument(tx, company.id, customer.id, 10000, 4000);
     });
     assertEqual("C - PARTIAL satış sonrası", await getBalance(customer.id), 16000);
 
     // D) 2.000 tahsilat
     await db.$transaction(async (tx) => {
-      await applyCustomerCollection(tx, customer.id, 2000);
+      await applyCustomerCollection(tx, company.id, customer.id, 2000);
     });
     assertEqual("D - kısmi tahsilat sonrası", await getBalance(customer.id), 14000);
 
     // E) 16.000 tahsilat (fazla ödeme)
     await db.$transaction(async (tx) => {
-      await applyCustomerCollection(tx, customer.id, 16000);
+      await applyCustomerCollection(tx, company.id, customer.id, 16000);
     });
     assertEqual("E - fazla tahsilat sonrası", await getBalance(customer.id), -2000);
 
@@ -89,21 +89,21 @@ async function main() {
 
     // F) UNPAID iptal simülasyonu
     await db.$transaction(async (tx) => {
-      await applyCustomerDebtFromDocument(tx, customer.id, 10000, 0);
+      await applyCustomerDebtFromDocument(tx, company.id, customer.id, 10000, 0);
     });
     assertEqual("F1 - UNPAID borç", await getBalance(customer.id), 10000);
     await db.$transaction(async (tx) => {
-      await reverseCustomerDebtFromDocument(tx, customer.id, 10000, 0);
+      await reverseCustomerDebtFromDocument(tx, company.id, customer.id, 10000, 0);
     });
     assertEqual("F2 - UNPAID iptal sonrası", await getBalance(customer.id), 0);
 
     // G) PARTIAL iptal simülasyonu
     await db.$transaction(async (tx) => {
-      await applyCustomerDebtFromDocument(tx, customer.id, 10000, 4000);
+      await applyCustomerDebtFromDocument(tx, company.id, customer.id, 10000, 4000);
     });
     assertEqual("G1 - PARTIAL kalan borç", await getBalance(customer.id), 6000);
     await db.$transaction(async (tx) => {
-      await reverseCustomerDebtFromDocument(tx, customer.id, 10000, 4000);
+      await reverseCustomerDebtFromDocument(tx, company.id, customer.id, 10000, 4000);
     });
     assertEqual("G2 - PARTIAL iptal sonrası", await getBalance(customer.id), 0);
 

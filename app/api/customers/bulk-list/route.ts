@@ -1,35 +1,17 @@
 import { NextResponse } from "next/server";
-import { getAuthToken, verifyToken } from "@/lib/auth";
+import { requireApiModuleAccess } from "@/lib/module-access";
 import {
   getBulkCustomersList,
   parseBulkFilters,
 } from "@/lib/customer-bulk-actions-service";
 
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
-
 export async function GET(req: Request) {
   try {
-    const token = await getAuthToken();
+    const auth = await requireApiModuleAccess("customers");
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.companyId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
-
+    const companyId = auth.companyId;
+    const userId = auth.userId;
     const { searchParams } = new URL(req.url);
     const filters = parseBulkFilters({
       group: searchParams.get("group"),
@@ -38,7 +20,7 @@ export async function GET(req: Request) {
       search: searchParams.get("search"),
     });
 
-    const data = await getBulkCustomersList(payload.companyId, filters);
+    const data = await getBulkCustomersList(companyId, filters);
 
     return NextResponse.json({
       success: true,

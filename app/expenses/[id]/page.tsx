@@ -14,7 +14,8 @@ import {
 } from "lucide-react";
 import { ExpenseDetailActions } from "@/components/expenses/expense-detail-actions";
 import { AppShell } from "@/components/layout/app-shell";
-import { getAuthToken, verifyToken } from "@/lib/auth";
+import { guardPageModule } from "@/lib/module-access";
+
 import { getExpenseDisplayPaymentBadge } from "@/lib/expense-utils";
 import { getExpenseDetail, getExpenseFormAccounts } from "@/lib/expense-service";
 import {
@@ -24,15 +25,8 @@ import {
   getExpenseStatusBadge,
   getCategoryBadge,
 } from "@/lib/expenses-page-utils";
-import { db } from "@/lib/prisma";
-
 type Props = {
   params: Promise<{ id: string }>;
-};
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
 };
 
 function InfoCard({
@@ -58,30 +52,9 @@ function InfoCard({
 }
 
 export default async function ExpenseDetailPage({ params }: Props) {
-  const { id } = await params;
-
-  const token = await getAuthToken();
-  if (!token) redirect("/login");
-
-  const payload = verifyToken<AuthPayload>(token);
-  if (!payload?.userId || !payload.companyId) redirect("/login");
-
-  const user = await db.user.findUnique({
-    where: { id: payload.userId },
-    include: {
-      companyUsers: {
-        include: { company: true },
-      },
-    },
-  });
-
-  if (!user) redirect("/login");
-
-  const company =
-    user.companyUsers.find((item) => item.companyId === payload.companyId)
-      ?.company ?? user.companyUsers[0]?.company;
-
-  if (!company) redirect("/login");
+  const session = await guardPageModule("expenses");
+  const company = session.company;
+const { id } = await params;
 
   const expense = await getExpenseDetail(company.id, id);
   if (!expense) notFound();

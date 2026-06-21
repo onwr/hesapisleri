@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
+import { guardPageModule } from "@/lib/module-access";
 import { EditQuoteForm } from "./edit-quote-form";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import { db } from "@/lib/prisma";
 
 type Props = {
@@ -9,24 +9,15 @@ type Props = {
   }>;
 };
 
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
-
 export default async function EditQuotePage({ params }: Props) {
+  const session = await guardPageModule("sales");
+  const company = session.company;
   const { id } = await params;
-
-  const token = await getAuthToken();
-  if (!token) redirect("/login");
-
-  const payload = verifyToken<AuthPayload>(token);
-  if (!payload?.userId || !payload.companyId) redirect("/login");
 
   const sale = await db.sale.findFirst({
     where: {
       id,
-      companyId: payload.companyId,
+      companyId: company.id,
     },
     include: {
       items: {

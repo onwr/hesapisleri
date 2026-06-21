@@ -1,8 +1,26 @@
 import Link from "next/link";
-import { Search } from "lucide-react";
-import { AdminCompanyActions } from "@/components/admin/admin-company-actions";
-import { AdminNavTabs } from "@/components/admin/admin-nav-tabs";
-import { AdminPageHeader } from "@/components/admin/admin-page-header";
+import {
+  Building2,
+  CalendarPlus,
+  CircleAlert,
+  CircleCheck,
+  PauseCircle,
+  Search,
+  TimerReset,
+} from "lucide-react";
+import { AdminCompaniesRowActions } from "@/components/admin/admin-companies-row-actions";
+import { AdminPageContainer } from "@/components/admin/layout/admin-page-container";
+import { AdminPageHeader } from "@/components/admin/layout/admin-page-header";
+import { AdminStatCard } from "@/components/admin/layout/admin-stat-card";
+import {
+  appInputClass,
+  appPanelClass,
+  appPrimaryButtonClass,
+  appSelectClass,
+  appTableClass,
+  appTableHeadClass,
+  appTableRowClass,
+} from "@/lib/admin-ui";
 import {
   formatAdminDate,
   formatAdminMoney,
@@ -11,12 +29,17 @@ import {
   getMembershipStatusClass,
   getMembershipStatusLabel,
 } from "@/lib/admin-utils";
-import type { getAdminCompanies } from "@/lib/admin-service";
+import type {
+  getAdminCompanies,
+  getAdminCompaniesSummary,
+} from "@/lib/admin-service";
 
 type CompaniesData = Awaited<ReturnType<typeof getAdminCompanies>>;
+type SummaryData = Awaited<ReturnType<typeof getAdminCompaniesSummary>>;
 
 type AdminCompaniesContentProps = {
   companies: CompaniesData;
+  summary: SummaryData;
   filters: {
     q?: string;
     status?: string;
@@ -24,26 +47,68 @@ type AdminCompaniesContentProps = {
   };
 };
 
-const cardClassName =
-  "rounded-[22px] border border-slate-200/70 bg-white p-5 shadow-[0_10px_26px_rgba(15,23,42,0.035)]";
-
 export function AdminCompaniesContent({
   companies,
+  summary,
   filters,
 }: AdminCompaniesContentProps) {
   return (
-    <div>
+    <AdminPageContainer size="full">
       <AdminPageHeader
         title="Firmalar"
-        description="Platformdaki tüm firmaları, üyelik durumlarını ve kullanım metriklerini yönetin."
+        description="Platforma kayıtlı tüm işletmeleri ve üyelik durumlarını yönetin."
       />
-      <AdminNavTabs />
 
-      <div className={cardClassName}>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        <AdminStatCard
+          title="Toplam"
+          value={String(summary.total)}
+          icon={Building2}
+          tone="blue"
+        />
+        <AdminStatCard
+          title="Aktif"
+          value={String(summary.active)}
+          icon={CircleCheck}
+          tone="green"
+          href="/admin/companies?status=ACTIVE"
+          ariaLabel="Aktif firmaları filtrele"
+        />
+        <AdminStatCard
+          title="Deneme"
+          value={String(summary.trial)}
+          icon={TimerReset}
+          tone="purple"
+        />
+        <AdminStatCard
+          title="Gecikmiş"
+          value={String(summary.pastDue)}
+          icon={CircleAlert}
+          tone="amber"
+          href="/admin/companies?membershipStatus=PAST_DUE"
+          ariaLabel="Gecikmiş üyelikleri filtrele"
+        />
+        <AdminStatCard
+          title="Askıda"
+          value={String(summary.suspended)}
+          icon={PauseCircle}
+          tone="red"
+          href="/admin/companies?status=SUSPENDED"
+          ariaLabel="Askıdaki firmaları filtrele"
+        />
+        <AdminStatCard
+          title="Bu Ay Yeni"
+          value={String(summary.newThisMonth)}
+          icon={CalendarPlus}
+          tone="blue"
+        />
+      </div>
+
+      <div className={`${appPanelClass} p-4`}>
         <form
           action="/admin/companies"
           method="get"
-          className="mb-5 grid gap-3 lg:grid-cols-[1.4fr_0.8fr_0.8fr_auto]"
+          className="mb-4 grid gap-3 lg:grid-cols-[1.4fr_0.8fr_0.8fr_auto]"
         >
           <label className="relative block">
             <Search
@@ -54,13 +119,13 @@ export function AdminCompaniesContent({
               name="q"
               defaultValue={filters.q ?? ""}
               placeholder="Firma adı, e-posta veya telefon ara..."
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 py-3 pl-10 pr-4 text-[13px] font-medium text-[#0f1f4d] outline-none transition focus:border-blue-300 focus:bg-white"
+              className={`${appInputClass} pl-10`}
             />
           </label>
           <select
             name="status"
             defaultValue={filters.status ?? "ALL"}
-            className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-[13px] font-semibold text-[#0f1f4d]"
+            className={appSelectClass}
           >
             <option value="ALL">Tüm durumlar</option>
             <option value="ACTIVE">Aktif</option>
@@ -70,43 +135,37 @@ export function AdminCompaniesContent({
           <select
             name="membershipStatus"
             defaultValue={filters.membershipStatus ?? "ALL"}
-            className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-[13px] font-semibold text-[#0f1f4d]"
+            className={appSelectClass}
           >
             <option value="ALL">Tüm üyelikler</option>
             <option value="ACTIVE">Aktif üyelik</option>
             <option value="PAST_DUE">Gecikmiş</option>
             <option value="CANCELLED">İptal</option>
           </select>
-          <button
-            type="submit"
-            className="rounded-2xl bg-[#0f1f4d] px-5 py-3 text-[13px] font-bold text-white"
-          >
+          <button type="submit" className={appPrimaryButtonClass}>
             Filtrele
           </button>
         </form>
 
         <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-[13px]">
+          <table className={appTableClass}>
             <thead>
-              <tr className="border-b border-slate-100 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+              <tr className={appTableHeadClass}>
                 <th className="px-3 py-2">Firma</th>
                 <th className="px-3 py-2">Sahip</th>
-                <th className="px-3 py-2">İletişim</th>
-                <th className="px-3 py-2">Üyelik</th>
-                <th className="px-3 py-2">Ödeme</th>
+                <th className="px-3 py-2">Plan</th>
+                <th className="px-3 py-2">Üyelik Durumu</th>
+                <th className="px-3 py-2">Sonraki Ödeme</th>
                 <th className="px-3 py-2">Kullanıcı</th>
-                <th className="px-3 py-2">Satış</th>
                 <th className="px-3 py-2">Oluşturulma</th>
+                <th className="px-3 py-2">Firma Durumu</th>
                 <th className="px-3 py-2">İşlemler</th>
               </tr>
             </thead>
             <tbody>
               {companies.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={9}
-                    className="px-3 py-10 text-center text-slate-500"
-                  >
+                  <td colSpan={9} className="px-3 py-10 text-center text-slate-500">
                     Filtreye uygun firma bulunamadı.
                   </td>
                 </tr>
@@ -114,7 +173,7 @@ export function AdminCompaniesContent({
                 companies.map((company) => (
                   <tr
                     key={company.id}
-                    className="border-b border-slate-50 align-top last:border-0"
+                    className={`${appTableRowClass} align-top`}
                   >
                     <td className="px-3 py-3">
                       <Link
@@ -123,66 +182,48 @@ export function AdminCompaniesContent({
                       >
                         {company.name}
                       </Link>
-                      <div className="mt-1">
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${getCompanyStatusClass(company.status)}`}
-                        >
-                          {getCompanyStatusLabel(company.status)}
-                        </span>
-                      </div>
                     </td>
-                    <td className="px-3 py-3">
-                      <p className="font-semibold text-[#0f1f4d]">
-                        {company.ownerName}
-                      </p>
-                      <p className="text-[12px] text-slate-500">
-                        {company.ownerEmail ?? "—"}
+                    <td className="px-3 py-3 text-slate-600">
+                      <p>{company.ownerName}</p>
+                      <p className="text-[11px] text-slate-400">
+                        {company.ownerEmail}
                       </p>
                     </td>
                     <td className="px-3 py-3 text-slate-600">
-                      <p>{company.phone ?? "—"}</p>
-                      <p>{company.email ?? "—"}</p>
+                      {company.planName ?? "—"}
+                      {company.billingInterval ? (
+                        <p className="text-[11px] text-slate-400">
+                          {company.billingInterval}
+                        </p>
+                      ) : null}
                     </td>
                     <td className="px-3 py-3">
                       <span
-                        className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${getMembershipStatusClass(company.membershipStatus)}`}
+                        className={`rounded-md px-2 py-0.5 text-[11px] font-bold ${getMembershipStatusClass(company.membershipStatus)}`}
                       >
                         {getMembershipStatusLabel(company.membershipStatus)}
                       </span>
-                      <p className="mt-1 text-[12px] text-slate-500">
-                        {formatAdminMoney(company.monthlyFee)}/ay
-                      </p>
                     </td>
-                    <td className="px-3 py-3 text-slate-600">
-                      <p>Son: {formatAdminDate(company.lastPaymentDate)}</p>
-                      <p>Sonraki: {formatAdminDate(company.nextPaymentDate)}</p>
+                    <td className="px-3 py-3 text-slate-500">
+                      {formatAdminDate(company.nextPaymentDate)}
                     </td>
-                    <td className="px-3 py-3 font-bold text-[#0f1f4d]">
-                      {company.userCount}
-                    </td>
-                    <td className="px-3 py-3 font-bold text-[#0f1f4d]">
-                      {company.salesCount}
-                    </td>
+                    <td className="px-3 py-3 text-slate-600">{company.userCount}</td>
                     <td className="px-3 py-3 text-slate-500">
                       {formatAdminDate(company.createdAt)}
                     </td>
                     <td className="px-3 py-3">
-                      <div className="flex flex-col gap-2">
-                        <Link
-                          href={`/admin/companies/${company.id}`}
-                          className="text-[12px] font-bold text-blue-600 hover:underline"
-                        >
-                          Detay
-                        </Link>
-                        <AdminCompanyActions
-                          companyId={company.id}
-                          companyName={company.name}
-                          status={company.status}
-                          membershipStatus={company.membershipStatus}
-                          nextPaymentDate={company.nextPaymentDate}
-                          monthlyFee={company.monthlyFee}
-                        />
-                      </div>
+                      <span
+                        className={`rounded-md px-2 py-0.5 text-[11px] font-bold ${getCompanyStatusClass(company.status)}`}
+                      >
+                        {getCompanyStatusLabel(company.status)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3">
+                      <AdminCompaniesRowActions
+                        companyId={company.id}
+                        companyName={company.name}
+                        status={company.status}
+                      />
                     </td>
                   </tr>
                 ))
@@ -191,6 +232,6 @@ export function AdminCompaniesContent({
           </table>
         </div>
       </div>
-    </div>
+    </AdminPageContainer>
   );
 }

@@ -6,12 +6,28 @@ import {
   TRIAL_DAYS,
   createCompanyForUser,
 } from "@/lib/create-company-service";
+import {
+  createPartnerSignupConversion,
+  resolvePartnerFromAttribution,
+} from "@/lib/partner-conversion-service";
+import { readPartnerAttributionFromCookies } from "@/lib/partner-auth";
+import {
+  buildKvkkAcknowledgmentRecord,
+  KVKK_AYDINLATMA_VERSION,
+  MARKETING_CONSENT_TEXT,
+  MARKETING_CONSENT_VERSION,
+} from "@/lib/legal/kvkk-consent";
+import { getTrustedClientIp } from "@/lib/payments/trusted-client-ip";
 
 const registerSchema = z.object({
   name: z.string().min(2, "Ad soyad en az 2 karakter olmalıdır."),
   email: z.string().email("Geçerli bir e-posta girin."),
   phone: z.string().optional(),
   password: z.string().min(6, "Şifre en az 6 karakter olmalıdır."),
+  kvkkInformed: z.literal(true, {
+    message: "KVKK aydınlatma metnini okuduğunuzu ve bilgilendirildiğinizi onaylamalısınız.",
+  }),
+  marketingConsent: z.boolean().optional(),
 
   wantsCompanyInfo: z.boolean().optional(),
 
@@ -62,6 +78,8 @@ export async function POST(req: Request) {
     }
 
     const hashedPassword = await hashPassword(password);
+    const clientIp = getTrustedClientIp(req);
+    const userAgent = req.headers.get("user-agent");
 
     const result = await db.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -73,6 +91,30 @@ export async function POST(req: Request) {
           status: "ACTIVE",
         },
       });
+
+      await tx.userConsent.create({
+        data: {
+          userId: user.id,
+          type: "KVKK",
+          version: KVKK_AYDINLATMA_VERSION,
+          consentText: buildKvkkAcknowledgmentRecord(),
+          ip: clientIp,
+          userAgent: userAgent?.slice(0, 500) ?? null,
+        },
+      });
+
+      if (parsed.data.marketingConsent === true) {
+        await tx.userConsent.create({
+          data: {
+            userId: user.id,
+            type: "MARKETING_ELECTRONIC",
+            version: MARKETING_CONSENT_VERSION,
+            consentText: MARKETING_CONSENT_TEXT,
+            ip: clientIp,
+            userAgent: userAgent?.slice(0, 500) ?? null,
+          },
+        });
+      }
 
       const finalCompanyName =
         wantsCompanyInfo && companyName?.trim()
@@ -94,6 +136,22 @@ export async function POST(req: Request) {
 
       return { user, company };
     });
+
+    const attribution = await readPartnerAttributionFromCookies();
+    const partner = await resolvePartnerFromAttribution({
+      referralCode: attribution.referralCode,
+    });
+
+    if (partner && attribution.referralCode) {
+      await createPartnerSignupConversion({
+        companyId: result.company.id,
+        userId: result.user.id,
+        partnerId: partner.id,
+        referralCode: attribution.referralCode,
+        clickId: attribution.clickId,
+        source: "COOKIE",
+      });
+    }
 
     const token = signToken({
       userId: result.user.id,

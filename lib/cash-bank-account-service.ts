@@ -1,5 +1,8 @@
 import { z } from "zod";
 import { db } from "@/lib/prisma";
+import { buildTransferActivityMessage } from "@/lib/activity-log-utils";
+import { invalidateDashboardCache } from "@/lib/dashboard-cache-invalidation";
+import { getActiveAccountOptions } from "@/lib/account-read-service";
 import {
   attachRunningBalances,
   computeAccountMetrics,
@@ -88,27 +91,7 @@ function mapTransactionRow(
 }
 
 export async function getCompanyAccounts(companyId: string) {
-  const accounts = await db.account.findMany({
-    where: { companyId, status: "ACTIVE" },
-    orderBy: [{ type: "asc" }, { name: "asc" }],
-    select: {
-      id: true,
-      name: true,
-      type: true,
-      bankName: true,
-      balance: true,
-      currency: true,
-    },
-  });
-
-  return accounts.map((account) => ({
-    id: account.id,
-    name: account.name,
-    type: account.type,
-    bankName: account.bankName,
-    balance: Number(account.balance),
-    currency: account.currency,
-  }));
+  return getActiveAccountOptions(companyId);
 }
 
 export async function getAccountDetailData(companyId: string, accountId: string) {
@@ -204,7 +187,7 @@ export async function applyManualAccountTransaction(input: {
   const amount = roundCashMoney(input.data.amount);
   const note = input.data.note?.trim() || null;
 
-  return db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     const account = await tx.account.findFirst({
       where: {
         id: input.accountId,
@@ -261,6 +244,12 @@ export async function applyManualAccountTransaction(input: {
       },
     };
   });
+
+  if (result.ok) {
+    invalidateDashboardCache(input.companyId, "cash-bank-manual-transaction");
+  }
+
+  return result;
 }
 
 export async function applyAccountTransfer(input: {
@@ -286,7 +275,7 @@ export async function applyAccountTransfer(input: {
   const note = input.data.note?.trim() || null;
   const transferDate = new Date();
 
-  return db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     const [fromAccount, toAccount] = await Promise.all([
       tx.account.findFirst({
         where: {
@@ -351,9 +340,13 @@ export async function applyAccountTransfer(input: {
       data: {
         companyId: input.companyId,
         userId: input.userId,
-        action: "UPDATE",
+        action: "TRANSFER",
         module: "cash-bank",
-        message: `${fromAccount.name} hesabından ${toAccount.name} hesabına ${amount} TRY transfer edildi.`,
+        message: buildTransferActivityMessage(
+          fromAccount.name,
+          toAccount.name,
+          amount
+        ),
       },
     });
 
@@ -368,6 +361,12 @@ export async function applyAccountTransfer(input: {
       },
     };
   });
+
+  if (result.ok) {
+    invalidateDashboardCache(input.companyId, "account-transfer");
+  }
+
+  return result;
 }
 
 export async function assertAccountBelongsToCompany(

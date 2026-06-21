@@ -3,7 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { IntegrationSummary } from "@/lib/marketplace/marketplace-integration-service";
+import type { EDocumentIntegrationSummary } from "@/lib/e-document/e-document-integration-service";
 import { MarketplaceIntegrationCard } from "@/components/settings/integrations/marketplace-integration-card";
+import { EDocumentIntegrationCard } from "@/components/settings/integrations/e-document-integration-card";
 import { MarketplaceSyncRunsTable } from "@/components/settings/integrations/marketplace-sync-runs-table";
 import { IntegrationHelpPanel } from "@/components/settings/integrations/integration-help-panel";
 import { IntegrationSkuMappingGuide } from "@/components/settings/integrations/integration-sku-mapping-guide";
@@ -25,6 +27,7 @@ type SyncRunRow = {
 type IntegrationsCenterProps = {
   initialTrendyol: IntegrationSummary | null;
   initialHepsiburada: IntegrationSummary | null;
+  initialEDocument: EDocumentIntegrationSummary;
   initialRuns: SyncRunRow[];
   warehouses: Array<{ id: string; name: string }>;
 };
@@ -32,20 +35,24 @@ type IntegrationsCenterProps = {
 export function IntegrationsCenter({
   initialTrendyol,
   initialHepsiburada,
+  initialEDocument,
   initialRuns,
   warehouses,
 }: IntegrationsCenterProps) {
   const router = useRouter();
   const [trendyol, setTrendyol] = useState(initialTrendyol);
   const [hepsiburada, setHepsiburada] = useState(initialHepsiburada);
+  const [eDocument, setEDocument] = useState(initialEDocument);
   const [runs, setRuns] = useState(initialRuns);
 
   async function refetch() {
-    const [integrationRes, runsRes] = await Promise.all([
+    const [integrationRes, eDocumentRes, runsRes] = await Promise.all([
       fetch("/api/integrations", { cache: "no-store" }),
+      fetch("/api/integrations/e-document", { cache: "no-store" }),
       fetch("/api/integrations/sync-runs?limit=20", { cache: "no-store" }),
     ]);
     const integrationData = await integrationRes.json();
+    const eDocumentData = await eDocumentRes.json();
     const runsData = await runsRes.json();
     if (integrationRes.ok && integrationData.success) {
       const rows = integrationData.data as IntegrationSummary[];
@@ -53,6 +60,9 @@ export function IntegrationsCenter({
       setHepsiburada(
         rows.find((item) => item.channel === "HEPSIBURADA") ?? null
       );
+    }
+    if (eDocumentRes.ok && eDocumentData.success) {
+      setEDocument(eDocumentData.data as EDocumentIntegrationSummary);
     }
     if (runsRes.ok && runsData.success) {
       setRuns(runsData.data as SyncRunRow[]);
@@ -76,6 +86,7 @@ export function IntegrationsCenter({
             warehouses={warehouses}
             onRefetch={refetch}
           />
+          <EDocumentIntegrationCard integration={eDocument} onRefetch={refetch} />
         </div>
         <IntegrationSkuMappingGuide variant="page" />
         <MarketplaceSyncRunsTable runs={runs} onRefresh={refetch} />

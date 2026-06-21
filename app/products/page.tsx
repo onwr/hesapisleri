@@ -1,23 +1,17 @@
-import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
+import { guardPageModule } from "@/lib/module-access";
+
 import { ProductsFilters } from "@/components/products/products-filters";
 import { ProductsSelectableTable } from "@/components/products/products-selectable-table";
 import { ProductsShell } from "@/components/products/products-shell";
 import { ProductsTablePagination } from "@/components/products/products-table-controls";
 import { PRODUCT_CARD_CLASS } from "@/components/products/product-ui-tokens";
-import { getAuthToken, verifyToken } from "@/lib/auth";
-import { db } from "@/lib/prisma";
-import { resolveEffectiveRole } from "@/lib/permission-utils";
+import { resolveEffectiveRole, canAccessModule, canManageProducts, canManageWarehouses } from "@/lib/permission-utils";
 import {
   buildProductsExportQuery,
   getProductsPageData,
   parseProductsListOptions,
 } from "@/lib/products-page-data";
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
 
 type ProductsPageProps = {
   searchParams: Promise<{
@@ -31,49 +25,25 @@ type ProductsPageProps = {
 };
 
 export default async function ProductsPage({ searchParams }: ProductsPageProps) {
+  const session = await guardPageModule("products");
+  const company = session.company;
   const params = await searchParams;
-  const token = await getAuthToken();
+  const membership = session.companyUser;
+  const effectiveRole = session.effectiveRole;
 
-  if (!token) redirect("/login");
-
-  const payload = verifyToken<AuthPayload>(token);
-
-  if (!payload?.userId || !payload.companyId) redirect("/login");
-
-  const user = await db.user.findUnique({
-    where: { id: payload.userId },
-    include: {
-      companyUsers: {
-        include: {
-          company: true,
-        },
-      },
-    },
-  });
-
-  if (!user) redirect("/login");
-
-  const company =
-    user.companyUsers.find((item) => item.companyId === payload.companyId)
-      ?.company ?? user.companyUsers[0]?.company;
-
-  if (!company) redirect("/login");
-
-  const membership =
-    user.companyUsers.find((item) => item.companyId === company.id) ??
-    user.companyUsers[0];
-
-  const effectiveRole = membership
-    ? resolveEffectiveRole({
-        role: membership.role,
-        isOwner: membership.isOwner,
-      })
-    : "STAFF";
 
   const canSyncStock =
     Boolean(membership?.isOwner) ||
     effectiveRole === "OWNER" ||
     effectiveRole === "ADMIN";
+
+  const isOwner = Boolean(membership?.isOwner);
+  const permissions = {
+    canCreateProduct: canManageProducts(effectiveRole, isOwner),
+    canManageStocks: canAccessModule(effectiveRole, "stocks", isOwner),
+    canManageWarehouses: canManageWarehouses(effectiveRole, isOwner),
+    canManageProducts: canManageProducts(effectiveRole, isOwner),
+  };
 
   const listOptions = parseProductsListOptions(params);
 
@@ -98,7 +68,7 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
 
   return (
     <AppShell>
-      <ProductsShell stats={stats} canSyncStock={canSyncStock}>
+      <ProductsShell stats={stats} canSyncStock={canSyncStock} permissions={permissions}>
         <ProductsFilters
           activeTab={listOptions.tab}
           activeCategory={listOptions.category}

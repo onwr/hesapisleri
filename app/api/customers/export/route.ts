@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuthToken, verifyToken } from "@/lib/auth";
+import { requireApiModuleAccess } from "@/lib/module-access";
 import {
   getCustomersExportRows,
   parseCustomerTab,
@@ -12,37 +12,19 @@ import {
   CUSTOMER_LIST_CSV_HEADER,
 } from "@/lib/customer-export-utils";
 
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
-
 export async function GET(request: Request) {
   try {
-    const token = await getAuthToken();
+    const auth = await requireApiModuleAccess("customers");
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.companyId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
-
+    const companyId = auth.companyId;
+    const userId = auth.userId;
     const { searchParams } = new URL(request.url);
     const tab = parseCustomerTab(searchParams.get("tab"));
     const group = parseGroupFilter(searchParams.get("group"));
     const q = parseSearchQuery(searchParams.get("q"));
 
-    const customers = await getCustomersExportRows(payload.companyId, {
+    const customers = await getCustomersExportRows(companyId, {
       tab,
       group,
       q,

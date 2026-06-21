@@ -1,34 +1,34 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import type { ReactNode } from "react";
-import {
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  Loader2,
-  Plus,
-  Receipt,
-  UserRound,
-  Wallet,
-  X,
-} from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Loader2, X } from "lucide-react";
+import { CalendarEventDetails } from "@/components/calendar/calendar-event-details";
 import { CalendarEventForm } from "@/components/calendar/calendar-event-form";
 import type { CalendarEventFormValues } from "@/components/calendar/calendar-event-form";
-import { CalendarEventList } from "@/components/calendar/calendar-event-list";
 import { CalendarFilters } from "@/components/calendar/calendar-filters";
 import { CalendarListView } from "@/components/calendar/calendar-list-view";
-import { CalendarView, toDateKey } from "@/components/calendar/calendar-view";
+import { CalendarMobileDayView } from "@/components/calendar/calendar-mobile-day-view";
+import { CalendarPageHeader } from "@/components/calendar/calendar-page-header";
+import { CalendarSidePanel } from "@/components/calendar/calendar-side-panel";
+import { CalendarSummaryCards } from "@/components/calendar/calendar-summary-cards";
 import {
-  CALENDAR_CARD_CLASS,
-  CALENDAR_STATS_BAR_CLASS,
-} from "@/components/calendar/calendar-ui-tokens";
-import { Button } from "@/components/ui/button";
+  CalendarToolbar,
+  type CalendarViewMode,
+} from "@/components/calendar/calendar-toolbar";
+import { CalendarView, toDateKey } from "@/components/calendar/calendar-view";
+import { CALENDAR_CARD_CLASS } from "@/components/calendar/calendar-ui-tokens";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   computeCalendarStats,
   DEFAULT_CALENDAR_EXTENDED_FILTERS,
   filterCalendarEvents,
+  isCalendarEventCritical,
   type CalendarExtendedFilterState,
 } from "@/lib/calendar-ui-utils";
 import {
@@ -42,7 +42,12 @@ type CalendarShellProps = {
   onClose?: () => void;
 };
 
-type ViewMode = "month" | "week" | "list";
+const VIEW_STORAGE_KEY = "hesapisleri.calendar.view";
+
+function parseViewMode(value: string | null): CalendarViewMode | null {
+  if (value === "month" || value === "week" || value === "list") return value;
+  return null;
+}
 
 function buildFetchParams(from: Date, to: Date, filters: CalendarExtendedFilterState) {
   const types: string[] = [];
@@ -75,136 +80,51 @@ function formValuesToPayload(values: CalendarEventFormValues) {
   };
 }
 
-function ViewToggle({
-  viewMode,
-  onChange,
-  compact = false,
-}: {
-  viewMode: ViewMode;
-  onChange: (mode: ViewMode) => void;
-  compact?: boolean;
-}) {
-  const items: Array<{ mode: ViewMode; label: string }> = [
-    { mode: "month", label: "Ay" },
-    { mode: "week", label: "Hafta" },
-    { mode: "list", label: "Liste" },
-  ];
-
-  return (
-    <div
-      className={[
-        "inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5",
-        compact ? "text-[11px]" : "text-[12px]",
-      ].join(" ")}
-    >
-      {items.map((item) => (
-        <button
-          key={item.mode}
-          type="button"
-          onClick={() => onChange(item.mode)}
-          className={[
-            "rounded-md px-2.5 py-1.5 font-black transition",
-            viewMode === item.mode
-              ? "bg-white text-[#0f1f4d] shadow-sm"
-              : "text-slate-500 hover:text-[#0f1f4d]",
-          ].join(" ")}
-        >
-          {item.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function ToolbarButton({
-  children,
-  primary = false,
-  onClick,
-}: {
-  children: ReactNode;
-  primary?: boolean;
-  onClick?: () => void;
-}) {
-  if (primary) {
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#0f1f4d] px-3 text-[12px] font-black text-white transition hover:bg-[#162a5c]"
-      >
-        {children}
-      </button>
-    );
+function countActiveFilters(filters: CalendarExtendedFilterState) {
+  let count = 0;
+  if (!filters.showPayments || !filters.showAppointments || !filters.showReminders) {
+    count += 1;
   }
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-black text-[#0f1f4d] transition hover:bg-slate-50"
-    >
-      {children}
-    </button>
-  );
+  if (filters.sourceFilter !== "ALL") count += 1;
+  if (filters.statusFilter !== "ALL") count += 1;
+  if (filters.moduleFilter !== "ALL") count += 1;
+  if (filters.dateFrom || filters.dateTo) count += 1;
+  if (!filters.showSystem) count += 1;
+  if (filters.searchQuery.trim()) count += 1;
+  return count;
 }
 
-function ToolbarLink({
-  href,
-  children,
-}: {
-  href: string;
-  children: ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-black text-[#0f1f4d] transition hover:bg-slate-50"
-    >
-      {children}
-    </Link>
-  );
-}
+function useCompactViewport() {
+  const [compact, setCompact] = useState(false);
 
-function StatPill({
-  label,
-  value,
-  tone = "slate",
-}: {
-  label: string;
-  value: string;
-  tone?: "slate" | "amber" | "rose" | "blue" | "violet";
-}) {
-  const toneClass =
-    tone === "amber"
-      ? "bg-amber-50 text-amber-700"
-      : tone === "rose"
-        ? "bg-rose-50 text-rose-700"
-        : tone === "blue"
-          ? "bg-blue-50 text-blue-700"
-          : tone === "violet"
-            ? "bg-violet-50 text-violet-700"
-            : "bg-slate-50 text-slate-700";
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 1023px)");
+    const update = () => setCompact(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
 
-  return (
-    <div className={`rounded-lg px-2.5 py-1.5 ${toneClass}`}>
-      <span className="text-[10px] font-bold uppercase tracking-wide opacity-80">
-        {label}
-      </span>
-      <p className="text-[13px] font-black leading-tight">{value}</p>
-    </div>
-  );
+  return compact;
 }
 
 export function CalendarShell({ mode = "page", onClose }: CalendarShellProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const compactViewport = useCompactViewport();
   const today = new Date();
   const [anchorDate, setAnchorDate] = useState(
     () => new Date(today.getFullYear(), today.getMonth(), 1)
   );
-  const [viewMode, setViewMode] = useState<ViewMode>("month");
+  const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
   const [selectedDateKey, setSelectedDateKey] = useState(toDateKey(today));
+  const [detailEvent, setDetailEvent] = useState<NormalizedCalendarEvent | null>(
+    null
+  );
   const [filters, setFilters] = useState<CalendarExtendedFilterState>(
     DEFAULT_CALENDAR_EXTENDED_FILTERS
   );
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [events, setEvents] = useState<NormalizedCalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -213,6 +133,35 @@ export function CalendarShell({ mode = "page", onClose }: CalendarShellProps) {
     useState<CalendarEventFormValues["type"]>("APPOINTMENT");
   const [editingEvent, setEditingEvent] =
     useState<NormalizedCalendarEvent | null>(null);
+
+  useEffect(() => {
+    const fromUrl = parseViewMode(searchParams.get("view"));
+    if (fromUrl) {
+      setViewMode(fromUrl);
+      return;
+    }
+
+    try {
+      const stored = window.localStorage.getItem(VIEW_STORAGE_KEY);
+      const fromStorage = parseViewMode(stored);
+      if (fromStorage) setViewMode(fromStorage);
+    } catch {
+      // ignore storage errors
+    }
+  }, [searchParams]);
+
+  function updateViewMode(next: CalendarViewMode) {
+    setViewMode(next);
+    try {
+      window.localStorage.setItem(VIEW_STORAGE_KEY, next);
+    } catch {
+      // ignore storage errors
+    }
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("view", next);
+    router.replace(`?${params.toString()}`, { scroll: false });
+  }
 
   const range = useMemo(() => {
     if (viewMode === "week") {
@@ -263,12 +212,31 @@ export function CalendarShell({ mode = "page", onClose }: CalendarShellProps) {
     [filteredEvents]
   );
 
-  const selectedDayEvents = useMemo(
+  const todayKey = toDateKey(new Date());
+  const todayEvents = useMemo(
     () =>
       filteredEvents.filter(
-        (event) => toDateKey(new Date(event.startAt)) === selectedDateKey
+        (event) => toDateKey(new Date(event.startAt)) === todayKey
       ),
-    [filteredEvents, selectedDateKey]
+    [filteredEvents, todayKey]
+  );
+
+  const upcomingEvents = useMemo(() => {
+    const now = Date.now();
+    return filteredEvents
+      .filter((event) => {
+        const time = new Date(event.startAt).getTime();
+        return time >= now && !isCalendarEventCritical(event);
+      })
+      .sort(
+        (left, right) =>
+          new Date(left.startAt).getTime() - new Date(right.startAt).getTime()
+      );
+  }, [filteredEvents]);
+
+  const overdueEvents = useMemo(
+    () => filteredEvents.filter(isCalendarEventCritical),
+    [filteredEvents]
   );
 
   const periodLabel = useMemo(() => {
@@ -293,7 +261,7 @@ export function CalendarShell({ mode = "page", onClose }: CalendarShellProps) {
 
   function shiftAnchor(delta: number) {
     setAnchorDate((prev) => {
-      if (viewMode === "week") {
+      if (viewMode === "week" || compactViewport) {
         const next = new Date(prev);
         next.setDate(prev.getDate() + delta * 7);
         return next;
@@ -357,85 +325,57 @@ export function CalendarShell({ mode = "page", onClose }: CalendarShellProps) {
     }
   }
 
+  async function handleComplete(event: NormalizedCalendarEvent) {
+    if (event.readOnly) return;
+
+    const res = await fetch(`/api/calendar/events/${event.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "COMPLETED" }),
+    });
+
+    const json = await res.json();
+    if (res.ok && json.success) {
+      setDetailEvent(null);
+      await loadEvents();
+    }
+  }
+
   const selectedDate = useMemo(() => {
     const [year, month, day] = selectedDateKey.split("-").map(Number);
     return new Date(year, month - 1, day);
   }, [selectedDateKey]);
 
+  const showMobileDayView =
+    mode === "page" && compactViewport && viewMode !== "list";
+
   return (
     <div className={mode === "page" ? "space-y-3" : "space-y-4"}>
       {mode === "page" ? (
         <>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <h1 className="text-xl font-extrabold tracking-[-0.02em] text-[#0f1f4d]">
-                Takvim
-              </h1>
-              <p className="text-[12px] font-medium text-slate-500">
-                Ödemeler, izinler, bordrolar ve iş takipleri
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <ViewToggle viewMode={viewMode} onChange={setViewMode} compact />
-              <ToolbarButton primary onClick={() => openNewForm()}>
-                <Plus size={14} />
-                Etkinlik Ekle
-              </ToolbarButton>
-              <ToolbarLink href="/cash-bank">
-                <Wallet size={14} />
-                Kasa & Banka
-              </ToolbarLink>
-              <ToolbarLink href="/team">
-                <UserRound size={14} />
-                Çalışanlar
-              </ToolbarLink>
-              <ToolbarLink href="/team/payroll">
-                <Receipt size={14} />
-                Bordro
-              </ToolbarLink>
-            </div>
-          </div>
-
-          <section className={CALENDAR_STATS_BAR_CLASS}>
-            <StatPill label="Bugün" value={String(stats.todayCount)} tone="blue" />
-            <StatPill label="Bu Hafta" value={String(stats.weekCount)} tone="violet" />
-            <StatPill
-              label="Yaklaşan Ödeme"
-              value={String(stats.upcomingPaymentCount)}
-              tone="amber"
-            />
-            <StatPill
-              label="İzin / Personel"
-              value={String(stats.staffCount)}
-              tone="violet"
-            />
-            <StatPill
-              label="Geciken"
-              value={String(stats.criticalCount)}
-              tone={stats.criticalCount > 0 ? "rose" : "slate"}
-            />
-          </section>
+          <CalendarPageHeader />
+          <CalendarSummaryCards
+            todayCount={stats.todayCount}
+            weekCount={stats.weekCount}
+            overdueCount={stats.criticalCount}
+            upcomingPaymentCount={stats.upcomingPaymentCount}
+          />
         </>
       ) : (
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <CalendarDays className="text-blue-600" size={20} />
-            <h2 className="text-lg font-black text-[#0f1f4d]">Takvim</h2>
-          </div>
+          <h2 className="text-lg font-black text-[#0f1f4d]">Takvim</h2>
           {onClose ? (
             <button
               type="button"
               onClick={onClose}
               className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 text-slate-500 transition hover:bg-slate-50"
+              aria-label="Kapat"
             >
               <X size={16} />
             </button>
           ) : null}
         </div>
       )}
-
-      <CalendarFilters filters={filters} onChange={setFilters} />
 
       {loading ? (
         <div
@@ -444,194 +384,92 @@ export function CalendarShell({ mode = "page", onClose }: CalendarShellProps) {
           <Loader2 className="size-8 animate-spin text-blue-600" />
         </div>
       ) : (
-        <div
-          className={[
-            "grid gap-6",
-            mode === "page" && viewMode !== "list"
-              ? "xl:grid-cols-[1.45fr_0.85fr]"
-              : "",
-          ].join(" ")}
-        >
-          <div className="space-y-4">
-            {viewMode !== "list" ? (
-              <div className={`${CALENDAR_CARD_CLASS} p-4 sm:p-5`}>
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-base font-extrabold capitalize text-[#0f1f4d] sm:text-lg">
-                      {periodLabel}
-                    </h2>
-                    <p className="text-[11px] font-medium text-slate-500">
-                      {viewMode === "month" ? "Aylık görünüm" : "Haftalık görünüm"}
-                    </p>
-                  </div>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="min-w-0 space-y-3">
+            <CalendarToolbar
+              periodLabel={periodLabel}
+              viewMode={viewMode}
+              onViewChange={updateViewMode}
+              onPrevious={() => shiftAnchor(-1)}
+              onToday={goToday}
+              onNext={() => shiftAnchor(1)}
+              onOpenFilters={
+                mode === "page" ? () => setFiltersOpen(true) : undefined
+              }
+              onCreate={mode === "page" ? () => openNewForm() : undefined}
+              activeFilterCount={countActiveFilters(filters)}
+            />
 
-                  <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => shiftAnchor(-1)}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
-                        aria-label="Önceki dönem"
-                      >
-                        <ChevronLeft size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={goToday}
-                        className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 px-3 text-[11px] font-black text-[#0f1f4d] transition hover:bg-slate-50"
-                      >
-                        Bugün
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => shiftAnchor(1)}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
-                        aria-label="Sonraki dönem"
-                      >
-                        <ChevronRight size={16} />
-                      </button>
-                    {mode !== "page" ? (
-                      <ViewToggle
-                        viewMode={viewMode}
-                        onChange={setViewMode}
-                        compact
-                      />
-                    ) : null}
-                  </div>
-                </div>
-
+            {showMobileDayView ? (
+              <CalendarMobileDayView
+                anchorDate={anchorDate}
+                selectedDateKey={selectedDateKey}
+                events={filteredEvents}
+                onSelectDate={setSelectedDateKey}
+                onPrevious={() => shiftAnchor(-1)}
+                onNext={() => shiftAnchor(1)}
+                onEventClick={(event) => setDetailEvent(event)}
+                onAddEvent={() => openNewForm()}
+              />
+            ) : viewMode === "list" ? (
+              <CalendarListView
+                events={filteredEvents}
+                onAddEvent={() => openNewForm()}
+                onEventClick={(event) => setDetailEvent(event)}
+              />
+            ) : (
+              <div className={`${CALENDAR_CARD_CLASS} hidden p-3 sm:p-4 xl:block`}>
                 <CalendarView
                   viewMode={viewMode}
                   anchorDate={anchorDate}
                   events={filteredEvents}
                   selectedDateKey={selectedDateKey}
                   onSelectDate={setSelectedDateKey}
+                  onEventClick={(event) => setDetailEvent(event)}
                   compact={mode === "modal"}
                   embedded
                 />
               </div>
-            ) : (
-              <>
-                <div className={`${CALENDAR_CARD_CLASS} p-4 sm:p-5`}>
-                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <h2 className="text-base font-extrabold capitalize text-[#0f1f4d] sm:text-lg">
-                        {periodLabel}
-                      </h2>
-                      <p className="text-[11px] font-medium text-slate-500">
-                        Liste görünümü
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => shiftAnchor(-1)}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-blue-50"
-                      >
-                        <ChevronLeft size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={goToday}
-                        className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 px-3 text-[11px] font-black text-[#0f1f4d]"
-                      >
-                        Bugün
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => shiftAnchor(1)}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-blue-50"
-                      >
-                        <ChevronRight size={16} />
-                      </button>
-                      {mode !== "page" ? (
-                        <ViewToggle
-                          viewMode={viewMode}
-                          onChange={setViewMode}
-                          compact
-                        />
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-                <CalendarListView events={filteredEvents} />
-              </>
             )}
           </div>
 
-          {viewMode !== "list" ? (
-            <aside
-              className={[
-                mode === "page" ? "xl:sticky xl:top-24 xl:self-start" : "",
-              ].join(" ")}
-            >
-              <div className={`${CALENDAR_CARD_CLASS} p-5`}>
-                <div className="mb-4 flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
-                      Seçili Gün
-                    </p>
-                    <h3 className="mt-1 text-lg font-extrabold capitalize text-[#0f1f4d]">
-                      {new Intl.DateTimeFormat("tr-TR", {
-                        day: "numeric",
-                        month: "long",
-                        weekday: "long",
-                      }).format(selectedDate)}
-                    </h3>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {selectedDayEvents.length} etkinlik
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-black text-blue-700">
-                    {selectedDayEvents.length}
-                  </span>
-                </div>
-
-                {mode === "page" ? (
-                  <div className="mb-4 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => openNewForm("REMINDER")}
-                      className="rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-1.5 text-[11px] font-bold text-[#0f1f4d] transition hover:bg-white"
-                    >
-                      + Hatırlatma
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openNewForm("PAYMENT")}
-                      className="rounded-xl border border-orange-200/80 bg-orange-50/60 px-3 py-1.5 text-[11px] font-bold text-orange-700"
-                    >
-                      + Ödeme
-                    </button>
-                  </div>
-                ) : null}
-
-                <CalendarEventList
-                  events={selectedDayEvents}
-                  onEdit={(event) => {
-                    setEditingEvent(event);
-                    setFormOpen(true);
-                  }}
-                  onDelete={(event) => void handleDelete(event)}
-                  onAddEvent={mode === "modal" ? () => openNewForm() : undefined}
-                  emptyMessage="Bu gün için etkinlik bulunmuyor."
-                  emptyDescription={
-                    mode === "page"
-                      ? "Üstteki Etkinlik Ekle butonunu kullanabilir veya başka bir gün seçebilirsiniz."
-                      : "Manuel etkinlik ekleyebilir veya başka bir gün seçebilirsiniz."
-                  }
-                  compact={mode === "modal"}
-                />
-              </div>
-
-              {mode === "modal" ? (
-                <Button asChild className="mt-4 w-full rounded-2xl">
-                  <Link href="/calendar">Tam Takvimi Aç</Link>
-                </Button>
-              ) : null}
-            </aside>
+          {mode === "page" ? (
+            <div className="hidden xl:block">
+              <CalendarSidePanel
+                todayEvents={todayEvents}
+                upcomingEvents={upcomingEvents}
+                overdueEvents={overdueEvents}
+                onEventClick={(event) => setDetailEvent(event)}
+                onCreate={() => openNewForm()}
+                onComplete={(event) => void handleComplete(event)}
+              />
+            </div>
           ) : null}
         </div>
       )}
+
+      <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>Takvim Filtreleri</SheetTitle>
+          </SheetHeader>
+          <div className="mt-4">
+            <CalendarFilters filters={filters} onChange={setFilters} embedded />
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <CalendarEventDetails
+        event={detailEvent}
+        onClose={() => setDetailEvent(null)}
+        onEdit={(event) => {
+          setDetailEvent(null);
+          setEditingEvent(event);
+          setFormOpen(true);
+        }}
+        onDelete={(event) => void handleDelete(event)}
+        onComplete={(event) => void handleComplete(event)}
+      />
 
       {formOpen ? (
         <div className="fixed inset-0 z-[110] flex items-end justify-center bg-slate-950/45 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">

@@ -1,6 +1,6 @@
 import { AdminUsersContent } from "@/components/admin/admin-users-content";
 import { getSuperAdminSession } from "@/lib/admin-auth";
-import { getAdminUsers } from "@/lib/admin-service";
+import { getAdminUsers, getAdminUsersSummary } from "@/lib/admin-service";
 
 type PageProps = {
   searchParams: Promise<{
@@ -16,15 +16,19 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
     searchParams,
   ]);
 
-  const users = await getAdminUsers({
-    q: params.q,
-    status: params.status,
-    role: params.role,
-  });
+  const [users, summary] = await Promise.all([
+    getAdminUsers({
+      q: params.q,
+      status: params.status,
+      role: params.role,
+    }),
+    getAdminUsersSummary(),
+  ]);
 
   return (
     <AdminUsersContent
       users={users}
+      summary={summary}
       filters={{
         q: params.q,
         status: params.status,

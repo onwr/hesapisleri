@@ -91,7 +91,7 @@ export async function assertUniqueProductIdentifiers(
       return {
         ok: false as const,
         field: "barcode" as const,
-        message: "Bu barkod bu firmada zaten kullanılıyor.",
+        message: "Bu barkod başka bir üründe kullanılıyor.",
       };
     }
   }
@@ -99,23 +99,45 @@ export async function assertUniqueProductIdentifiers(
   return { ok: true as const };
 }
 
-export async function generateUniqueProductIdentifiers(companyId: string) {
+export async function generateUniqueProductSku(companyId: string) {
   const maxAttempts = 12;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const sku = generateProductSku();
+    const uniqueCheck = await assertUniqueProductIdentifiers(companyId, { sku });
+
+    if (uniqueCheck.ok) {
+      return sku;
+    }
+  }
+
+  throw new Error("Benzersiz SKU üretilemedi.");
+}
+
+export async function generateUniqueProductBarcode(companyId: string) {
+  const maxAttempts = 12;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const barcode = generateProductBarcode();
     const uniqueCheck = await assertUniqueProductIdentifiers(companyId, {
-      sku,
       barcode,
     });
 
     if (uniqueCheck.ok) {
-      return { sku, barcode };
+      return barcode;
     }
   }
 
-  throw new Error("Benzersiz SKU ve barkod üretilemedi.");
+  throw new Error("Benzersiz barkod üretilemedi.");
+}
+
+export async function generateUniqueProductIdentifiers(companyId: string) {
+  const [sku, barcode] = await Promise.all([
+    generateUniqueProductSku(companyId),
+    generateUniqueProductBarcode(companyId),
+  ]);
+
+  return { sku, barcode };
 }
 
 export async function deleteProduct(

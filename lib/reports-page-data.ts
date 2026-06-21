@@ -1,3 +1,4 @@
+import { calculateInventoryValue } from "@/lib/inventory-value-utils";
 import { db } from "@/lib/prisma";
 import { endOfMonth, startOfMonth } from "@/lib/dashboard-metrics";
 import {
@@ -23,19 +24,27 @@ import {
 import { getInvoiceRemainingAmount } from "@/lib/invoice-payment-utils";
 import { activeSaleStatusFilter } from "@/lib/sale-query-utils";
 
-export type {
-  ExpenseCategoryPoint,
-  MonthlyFinancePoint,
-  ReportCardItem,
-  ReportKpiCard,
-  ReportSummaryItem,
-  ReportTabKey,
-  TopProductPoint,
-} from "@/lib/reports-page-utils";
+export type StockReportItem = {
+  id: string;
+  name: string;
+  stock: number;
+  minStock: number;
+  buyPrice: number;
+  stockValue: number;
+  isLowStock: boolean;
+};
+
+export type CustomerReportItem = {
+  id: string;
+  name: string;
+  balance: number;
+  kind: "receivable" | "payable";
+};
 
 export {
   REPORT_CARDS,
   REPORT_TAB_LABELS,
+  buildReportCardHref,
   buildReportsExportQuery,
   buildReportsQuery,
   filterReportCards,
@@ -43,13 +52,28 @@ export {
   formatDateInputValue,
   formatReportDateTime,
   formatReportMoney,
+  getReportCardByKey,
   normalizeDateRange,
   parseDateParam,
   parseReportTab,
+  parseReportView,
+  resolveReportSections,
   tabShowsCustomer,
   tabShowsFinancial,
   tabShowsSales,
   tabShowsStock,
+} from "@/lib/reports-page-utils";
+
+export type {
+  ExpenseCategoryPoint,
+  MonthlyFinancePoint,
+  ReportCardItem,
+  ReportKpiCard,
+  ReportSections,
+  ReportSummaryItem,
+  ReportTabKey,
+  ReportViewKey,
+  TopProductPoint,
 } from "@/lib/reports-page-utils";
 
 export async function getReportsPageData(
@@ -238,12 +262,52 @@ export async function getReportsPageData(
     })
     .filter((item) => item.soldQty > 0 || item.revenue > 0)
     .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 5);
+    .slice(0, 10);
 
-  const stockValue = products.reduce(
-    (sum, product) => sum + product.stock * Number(product.sellPrice),
-    0
-  );
+  const stockItems: StockReportItem[] = products
+    .filter((product) => product.productType === "STOCK")
+    .map((product) => {
+      const buyPrice = Number(product.buyPrice);
+      const stock = product.stock;
+
+      return {
+        id: product.id,
+        name: product.name,
+        stock,
+        minStock: product.minStock,
+        buyPrice,
+        stockValue: stock * buyPrice,
+        isLowStock: stock <= product.minStock,
+      };
+    })
+    .sort((a, b) => a.stock - b.stock);
+
+  const lowStockCount = stockItems.filter((item) => item.isLowStock).length;
+  const trackedStockCount = stockItems.length;
+  const salesCount = periodSales.length;
+  const averageSaleAmount =
+    salesCount > 0 ? totalSalesAccrual / salesCount : 0;
+
+  const customerReportItems: CustomerReportItem[] = customers
+    .map((customer) => {
+      const balance = Number(customer.balance);
+
+      if (balance === 0) {
+        return null;
+      }
+
+      return {
+        id: customer.id,
+        name: customer.name,
+        balance: Math.abs(balance),
+        kind: balance < 0 ? "receivable" : "payable",
+      } as CustomerReportItem;
+    })
+    .filter((item): item is CustomerReportItem => item !== null)
+    .sort((a, b) => b.balance - a.balance)
+    .slice(0, 10);
+
+  const stockValue = calculateInventoryValue(products);
 
   const customerDebt = customers
     .filter((customer) => Number(customer.balance) > 0)
@@ -338,6 +402,13 @@ export async function getReportsPageData(
     monthlyFinanceData,
     expenseCategories,
     topProducts,
+    stockItems,
+    lowStockCount,
+    trackedStockCount,
+    salesCount,
+    averageSaleAmount,
+    customerReportItems,
+    totalCustomers: customers.length,
     summaryItems,
     totalSales: totalSalesAccrual,
     totalIncome,

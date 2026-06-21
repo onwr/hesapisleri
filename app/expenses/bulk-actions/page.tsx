@@ -1,20 +1,13 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { ArrowLeft, Repeat } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
+import { guardPageModule } from "@/lib/module-access";
+
 import { ExpenseBulkActionsCenter } from "@/components/expenses/expense-bulk-actions-center";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import {
   getExpenseBulkActionsPageData,
   parseBulkExpenseFilters,
 } from "@/lib/expense-bulk-actions-data";
-import { db } from "@/lib/prisma";
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
-
 type BulkActionsPageProps = {
   searchParams: Promise<{
     q?: string;
@@ -26,33 +19,11 @@ type BulkActionsPageProps = {
   }>;
 };
 
-export default async function ExpenseBulkActionsPage({
-  searchParams,
+export default async function ExpenseBulkActionsPage({ searchParams,
 }: BulkActionsPageProps) {
-  const params = await searchParams;
-  const token = await getAuthToken();
-  if (!token) redirect("/login");
-
-  const payload = verifyToken<AuthPayload>(token);
-  if (!payload?.userId || !payload.companyId) redirect("/login");
-
-  const user = await db.user.findUnique({
-    where: { id: payload.userId },
-    include: {
-      companyUsers: {
-        include: { company: true },
-      },
-    },
-  });
-
-  if (!user) redirect("/login");
-
-  const company =
-    user.companyUsers.find((item) => item.companyId === payload.companyId)
-      ?.company ?? user.companyUsers[0]?.company;
-
-  if (!company) redirect("/login");
-
+  const session = await guardPageModule("expenses");
+  const company = session.company;
+const params = await searchParams;
   const filters = parseBulkExpenseFilters(params);
   const { categories, accounts, expenses, summary } =
     await getExpenseBulkActionsPageData(company.id, filters);

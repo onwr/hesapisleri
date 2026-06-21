@@ -1,9 +1,7 @@
 "use client";
 
-import {
-  POS_QUICK_FILTER_LABELS,
-  type PosQuickFilter,
-} from "@/lib/pos-page-utils";
+import { buildPosFilterChips } from "@/lib/pos-page-ui-utils";
+import type { PosQuickFilter } from "@/lib/pos-page-utils";
 
 type CategoryOption = {
   id: string;
@@ -25,27 +23,29 @@ export function PosCategoryFilter({
   onSelectCategory,
   onQuickFilterChange,
 }: PosCategoryFilterProps) {
+  const chips = buildPosFilterChips();
+
   return (
     <div className="flex flex-wrap gap-2">
-      {(Object.keys(POS_QUICK_FILTER_LABELS) as PosQuickFilter[]).map((key) => {
-        const active = !selectedCategoryId && quickFilter === key;
+      {chips.map((chip) => {
+        const Icon = chip.icon;
+        const active = !selectedCategoryId && quickFilter === chip.key;
 
         return (
           <button
-            key={key}
+            key={chip.key}
             type="button"
             onClick={() => {
               onSelectCategory("");
-              onQuickFilterChange(key);
+              onQuickFilterChange(chip.key);
             }}
             className={[
-              "h-10 rounded-2xl px-3.5 text-xs font-bold transition",
-              active
-                ? "bg-[#0f1f4d] text-white shadow-sm"
-                : "border border-slate-200/80 bg-white text-slate-600 hover:bg-slate-50",
+              "inline-flex h-10 items-center gap-1.5 rounded-full px-3.5 text-xs font-bold transition",
+              active ? chip.activeClass : chip.idleClass,
             ].join(" ")}
           >
-            {POS_QUICK_FILTER_LABELS[key]}
+            <Icon size={14} strokeWidth={2.4} />
+            {chip.label}
           </button>
         );
       })}
@@ -59,10 +59,10 @@ export function PosCategoryFilter({
             type="button"
             onClick={() => onSelectCategory(category.id)}
             className={[
-              "h-10 rounded-2xl px-3.5 text-xs font-bold transition",
+              "h-10 rounded-full px-3.5 text-xs font-bold transition",
               active
-                ? "bg-blue-600 text-white shadow-sm"
-                : "border border-slate-200/80 bg-white text-slate-600 hover:bg-slate-50",
+                ? "bg-violet-600 text-white shadow-sm"
+                : "border border-violet-100 bg-violet-50/60 text-violet-700 hover:bg-violet-50",
             ].join(" ")}
           >
             {category.name}

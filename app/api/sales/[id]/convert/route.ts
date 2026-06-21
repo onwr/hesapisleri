@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
+import { requireApiModuleAccess } from "@/lib/module-access";
 import { z } from "zod";
 import { createNotification } from "@/lib/notification-service";
 import { db } from "@/lib/prisma";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import {
   applyCustomerDebtFromDocument,
 } from "@/lib/customer-balance-utils";
@@ -20,11 +20,6 @@ import {
 import { isQuoteSaleStatus } from "@/lib/sale-query-utils";
 import { resolveWarehouseId } from "@/lib/warehouse-service";
 
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
-
 type Props = {
   params: Promise<{
     id: string;
@@ -41,24 +36,11 @@ const convertSchema = z.object({
 export async function POST(req: Request, { params }: Props) {
   try {
     const { id } = await params;
-    const token = await getAuthToken();
+    const auth = await requireApiModuleAccess("sales");
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.userId || !payload.companyId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
-
+    const companyId = auth.companyId;
+    const userId = auth.userId;
     const body = await req.json();
     const parsed = convertSchema.safeParse(body);
 
@@ -74,7 +56,7 @@ export async function POST(req: Request, { params }: Props) {
     const sale = await db.sale.findFirst({
       where: {
         id,
-        companyId: payload.companyId,
+        companyId: companyId,
       },
       include: {
         items: true,
@@ -129,16 +111,18 @@ export async function POST(req: Request, { params }: Props) {
 
     const { warehouseId } = parsed.data;
 
+    let stockWarnings: Awaited<ReturnType<typeof validateSaleItemsStock>> = [];
+
     const updatedSale = await db.$transaction(async (tx) => {
       const resolvedWarehouseId = await resolveWarehouseId(
-        payload.companyId!,
+        companyId!,
         warehouseId,
         tx
       );
 
-      await validateSaleItemsStock(
+      stockWarnings = await validateSaleItemsStock(
         tx,
-        payload.companyId!,
+        companyId!,
         stockItems,
         resolvedWarehouseId
       );
@@ -169,7 +153,7 @@ export async function POST(req: Request, { params }: Props) {
 
       await applySaleStockDecrement(
         tx,
-        payload.companyId!,
+        companyId!,
         newSaleNo,
         sale.items,
         resolvedWarehouseId
@@ -177,7 +161,7 @@ export async function POST(req: Request, { params }: Props) {
 
       if (payment.paidAmount > 0) {
         await recordSaleCollection(tx, {
-          companyId: payload.companyId!,
+          companyId: companyId!,
           saleNo: newSaleNo,
           amount: payment.paidAmount,
           paymentMethod: paymentMethod as SalePaymentMethod,
@@ -190,6 +174,7 @@ export async function POST(req: Request, { params }: Props) {
 
       await applyCustomerDebtFromDocument(
         tx,
+        companyId!,
         sale.customerId,
         total,
         payment.paidAmount
@@ -197,8 +182,8 @@ export async function POST(req: Request, { params }: Props) {
 
       await tx.activityLog.create({
         data: {
-          companyId: payload.companyId!,
-          userId: payload.userId,
+          companyId: companyId!,
+          userId: userId,
           action: "UPDATE",
           module: "sales",
           message: `${sale.saleNo} numaralı teklif ${newSaleNo} numaralı satışa dönüştürüldü.`,
@@ -207,8 +192,8 @@ export async function POST(req: Request, { params }: Props) {
 
       await createNotification(
         {
-          companyId: payload.companyId!,
-          userId: payload.userId,
+          companyId: companyId!,
+          userId: userId,
           type: "SUCCESS",
           category: "SALES",
           module: "sales",
@@ -227,6 +212,12 @@ export async function POST(req: Request, { params }: Props) {
     return NextResponse.json({
       success: true,
       message: "Teklif başarıyla satışa dönüştürüldü.",
+      ...(stockWarnings.length > 0
+        ? {
+            warning: stockWarnings[0]?.message,
+            negativeStockItems: stockWarnings,
+          }
+        : {}),
       data: { id: updatedSale.id, saleNo: updatedSale.saleNo },
     });
   } catch (error) {

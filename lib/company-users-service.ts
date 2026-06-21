@@ -14,9 +14,14 @@ import {
   validateRoleChange,
   type AssignableInviteRole,
 } from "@/lib/company-users-utils";
+import {
+  USER_PASSWORD_MIN_LENGTH,
+  validateAssignableRole,
+  type AssignableCompanyUserRole,
+} from "@/lib/company-user-from-employee-utils";
 import { resolveInvitePreviewMode } from "@/lib/invite-preview-utils";
 import { getUserRoleLabel } from "@/lib/settings-utils";
-import { SettingsAccessError } from "@/lib/settings-service";
+import { SettingsAccessError } from "@/lib/company-access";
 
 export class CompanyUsersError extends Error {
   status: number;
@@ -68,7 +73,16 @@ async function getCompanyUserInCompany(companyUserId: string, companyId: string)
   return companyUser;
 }
 
-function serializeCompanyUser(entry: CompanyUser & { user: { name: string; email: string } }) {
+function serializeCompanyUser(
+  entry: CompanyUser & {
+    user: { name: string; email: string; updatedAt?: Date };
+    employee?: {
+      id: string;
+      firstName: string;
+      lastName: string;
+    } | null;
+  }
+) {
   return {
     id: entry.id,
     userId: entry.userId,
@@ -81,6 +95,13 @@ function serializeCompanyUser(entry: CompanyUser & { user: { name: string; email
     isOwner: entry.isOwner,
     joinedAt: entry.createdAt.toISOString(),
     updatedAt: entry.updatedAt.toISOString(),
+    lastLoginAt: entry.user.updatedAt?.toISOString() ?? null,
+    employee: entry.employee
+      ? {
+          id: entry.employee.id,
+          name: `${entry.employee.firstName} ${entry.employee.lastName}`.trim(),
+        }
+      : null,
   };
 }
 
@@ -107,7 +128,10 @@ export async function getCompanyUsersAndInvites(input: {
   const [companyUsers, invites, actor] = await Promise.all([
     db.companyUser.findMany({
       where: { companyId: input.companyId },
-      include: { user: true },
+      include: {
+        user: { select: { name: true, email: true, updatedAt: true } },
+        employee: { select: { id: true, firstName: true, lastName: true } },
+      },
       orderBy: { createdAt: "desc" },
     }),
     db.companyInvite.findMany({
@@ -174,6 +198,19 @@ export async function createCompanyInvite(input: {
 
   if (!emailCheck.ok) {
     throw new CompanyUsersError(emailCheck.message, 400);
+  }
+
+  const { requireCompanyLimit } = await import(
+    "@/lib/billing/entitlements/entitlement-enforcement-service"
+  );
+  try {
+    await requireCompanyLimit(input.companyId, "MAX_USERS", { incrementBy: 1 });
+  } catch (error) {
+    const { EntitlementError } = await import("@/lib/billing/entitlements/entitlement-errors");
+    if (error instanceof EntitlementError) {
+      throw new CompanyUsersError(error.message, error.status);
+    }
+    throw error;
   }
 
   const normalizedEmail = emailCheck.email;
@@ -308,7 +345,10 @@ export async function updateCompanyUserRole(input: {
     const companyUser = await tx.companyUser.update({
       where: { id: target.id },
       data: { role: input.role as UserRole },
-      include: { user: true },
+      include: {
+        user: { select: { name: true, email: true, updatedAt: true } },
+        employee: { select: { id: true, firstName: true, lastName: true } },
+      },
     });
 
     await tx.activityLog.create({
@@ -473,6 +513,21 @@ export async function acceptCompanyInvite(input: {
     throw new CompanyUsersError("Bu kullanıcı zaten şirkette aktif.", 400);
   }
 
+  {
+    const { requireCompanyLimit } = await import(
+      "@/lib/billing/entitlements/entitlement-enforcement-service"
+    );
+    const { EntitlementError } = await import("@/lib/billing/entitlements/entitlement-errors");
+    try {
+      await requireCompanyLimit(invite.companyId, "MAX_USERS", { incrementBy: 1 });
+    } catch (error) {
+      if (error instanceof EntitlementError) {
+        throw new CompanyUsersError(error.message, error.status);
+      }
+      throw error;
+    }
+  }
+
   const result = await db.$transaction(async (tx) => {
     const companyUser = existingMembership
       ? await tx.companyUser.update({
@@ -633,4 +688,357 @@ export async function getInvitePreview(
     canAccept,
     mode,
   };
+}
+
+function formatEmployeeName(employee: {
+  firstName: string;
+  lastName: string;
+}) {
+  return `${employee.firstName} ${employee.lastName}`.trim();
+}
+
+export async function getEmployeesForUserCreation(input: {
+  companyId: string;
+  userId: string;
+}) {
+  const actor = await getActiveCompanyUser(input.userId, input.companyId);
+
+  const permission = validateActorCanManageUsers({
+    actorRole: actor.role,
+    actorIsOwner: actor.isOwner,
+  });
+
+  if (!permission.ok) {
+    throw new CompanyUsersError(permission.message, 403);
+  }
+
+  const employees = await db.employee.findMany({
+    where: {
+      companyId: input.companyId,
+      status: "ACTIVE",
+    },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      companyUserId: true,
+    },
+    orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+  });
+
+  return employees.map((employee) => ({
+    id: employee.id,
+    name: formatEmployeeName(employee),
+    email: employee.email,
+    hasUserAccount: Boolean(employee.companyUserId),
+  }));
+}
+
+export async function createCompanyUserFromEmployee(input: {
+  companyId: string;
+  userId: string;
+  employeeId: string;
+  email: string;
+  password: string;
+  role: AssignableCompanyUserRole;
+  status?: "ACTIVE" | "PASSIVE";
+}) {
+  const actor = await getActiveCompanyUser(input.userId, input.companyId);
+
+  const permission = validateActorCanManageUsers({
+    actorRole: actor.role,
+    actorIsOwner: actor.isOwner,
+  });
+
+  if (!permission.ok) {
+    throw new CompanyUsersError(permission.message, 403);
+  }
+
+  const roleCheck = validateAssignableRole(input.role);
+  if (!roleCheck.ok) {
+    throw new CompanyUsersError(roleCheck.message, 400);
+  }
+
+  if (input.password.length < USER_PASSWORD_MIN_LENGTH) {
+    throw new CompanyUsersError(
+      `Şifre en az ${USER_PASSWORD_MIN_LENGTH} karakter olmalıdır.`,
+      400
+    );
+  }
+
+  const employee = await db.employee.findFirst({
+    where: {
+      id: input.employeeId,
+      companyId: input.companyId,
+    },
+  });
+
+  if (!employee) {
+    throw new CompanyUsersError("Personel bulunamadı.", 404);
+  }
+
+  if (employee.status !== "ACTIVE") {
+    throw new CompanyUsersError(
+      "Pasif çalışan için kullanıcı oluşturulamaz.",
+      400
+    );
+  }
+
+  if (employee.companyUserId) {
+    throw new CompanyUsersError(
+      "Bu personele ait kullanıcı hesabı zaten var.",
+      409
+    );
+  }
+
+  const normalizedEmail = normalizeInviteEmail(input.email);
+  if (!normalizedEmail) {
+    throw new CompanyUsersError("E-posta zorunludur.", 400);
+  }
+
+  const displayName = formatEmployeeName(employee) || employee.firstName;
+  const hashedPassword = await hashPassword(input.password);
+  const targetStatus = input.status ?? "ACTIVE";
+
+  const existingUser = await db.user.findUnique({
+    where: { email: normalizedEmail },
+  });
+
+  if (existingUser) {
+    const membership = await db.companyUser.findUnique({
+      where: {
+        companyId_userId: {
+          companyId: input.companyId,
+          userId: existingUser.id,
+        },
+      },
+    });
+
+    if (
+      membership &&
+      (membership.status === "ACTIVE" || membership.status === "INVITED")
+    ) {
+      throw new CompanyUsersError("Bu e-posta adresi zaten kullanılıyor.", 400);
+    }
+
+    if (membership) {
+      const linkedEmployee = await db.employee.findFirst({
+        where: {
+          companyId: input.companyId,
+          companyUserId: membership.id,
+          id: { not: employee.id },
+        },
+      });
+
+      if (linkedEmployee) {
+        throw new CompanyUsersError(
+          "Bu e-posta adresi zaten kullanılıyor.",
+          400
+        );
+      }
+    }
+  }
+
+  const result = await db.$transaction(async (tx) => {
+    let user = existingUser;
+
+    if (!user) {
+      user = await tx.user.create({
+        data: {
+          name: displayName,
+          email: normalizedEmail,
+          password: hashedPassword,
+          role: "STAFF",
+          status: "ACTIVE",
+        },
+      });
+    } else {
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          password: hashedPassword,
+          name: displayName,
+        },
+      });
+    }
+
+    const existingMembership = await tx.companyUser.findUnique({
+      where: {
+        companyId_userId: {
+          companyId: input.companyId,
+          userId: user.id,
+        },
+      },
+    });
+
+    const companyUser = existingMembership
+      ? await tx.companyUser.update({
+          where: { id: existingMembership.id },
+          data: {
+            role: roleCheck.role,
+            status: targetStatus,
+            isOwner: false,
+          },
+        })
+      : await tx.companyUser.create({
+          data: {
+            companyId: input.companyId,
+            userId: user.id,
+            role: roleCheck.role,
+            status: targetStatus,
+            isOwner: false,
+          },
+        });
+
+    await tx.employee.update({
+      where: { id: employee.id },
+      data: {
+        companyUserId: companyUser.id,
+        email: normalizedEmail,
+      },
+    });
+
+    await tx.activityLog.create({
+      data: {
+        companyId: input.companyId,
+        userId: input.userId,
+        action: "CREATE",
+        module: "settings",
+        message: `Kullanıcı oluşturuldu: ${displayName}`,
+      },
+    });
+
+    return tx.companyUser.findUniqueOrThrow({
+      where: { id: companyUser.id },
+      include: {
+        user: { select: { name: true, email: true, updatedAt: true } },
+        employee: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+  });
+
+  return serializeCompanyUser(result);
+}
+
+export async function updateCompanyUserPassword(input: {
+  companyId: string;
+  userId: string;
+  companyUserId: string;
+  password: string;
+}) {
+  const actor = await getActiveCompanyUser(input.userId, input.companyId);
+
+  const permission = validateActorCanManageUsers({
+    actorRole: actor.role,
+    actorIsOwner: actor.isOwner,
+  });
+
+  if (!permission.ok) {
+    throw new CompanyUsersError(permission.message, 403);
+  }
+
+  if (input.password.length < USER_PASSWORD_MIN_LENGTH) {
+    throw new CompanyUsersError(
+      `Şifre en az ${USER_PASSWORD_MIN_LENGTH} karakter olmalıdır.`,
+      400
+    );
+  }
+
+  const target = await db.companyUser.findFirst({
+    where: {
+      id: input.companyUserId,
+      companyId: input.companyId,
+    },
+    include: {
+      user: true,
+      employee: { select: { firstName: true, lastName: true } },
+    },
+  });
+
+  if (!target) {
+    throw new CompanyUsersError("Kullanıcı bulunamadı.", 404);
+  }
+
+  if (target.isOwner || target.role === "OWNER") {
+    throw new CompanyUsersError("Firma sahibinin şifresi buradan değiştirilemez.", 403);
+  }
+
+  const hashedPassword = await hashPassword(input.password);
+  const displayName = target.employee
+    ? formatEmployeeName(target.employee)
+    : target.user.name;
+
+  await db.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: target.userId },
+      data: { password: hashedPassword },
+    });
+
+    await tx.activityLog.create({
+      data: {
+        companyId: input.companyId,
+        userId: input.userId,
+        action: "UPDATE",
+        module: "settings",
+        message: `Kullanıcı şifresi güncellendi: ${displayName}`,
+      },
+    });
+  });
+
+  return { success: true };
+}
+
+export async function updateCompanyUserStatus(input: {
+  companyId: string;
+  userId: string;
+  companyUserId: string;
+  status: "ACTIVE" | "PASSIVE";
+}) {
+  const actor = await getActiveCompanyUser(input.userId, input.companyId);
+  const target = await getCompanyUserInCompany(input.companyUserId, input.companyId);
+
+  const permission = validateActorCanManageUsers({
+    actorRole: actor.role,
+    actorIsOwner: actor.isOwner,
+  });
+
+  if (!permission.ok) {
+    throw new CompanyUsersError(permission.message, 403);
+  }
+
+  if (target.isOwner || target.role === "OWNER") {
+    throw new CompanyUsersError("Firma sahibinin durumu değiştirilemez.", 403);
+  }
+
+  if (target.userId === input.userId && input.status === "PASSIVE") {
+    throw new CompanyUsersError("Kendi hesabınızı pasif yapamazsınız.", 403);
+  }
+
+  const updated = await db.$transaction(async (tx) => {
+    const companyUser = await tx.companyUser.update({
+      where: { id: target.id },
+      data: { status: input.status },
+      include: {
+        user: { select: { name: true, email: true, updatedAt: true } },
+        employee: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+
+    await tx.activityLog.create({
+      data: {
+        companyId: input.companyId,
+        userId: input.userId,
+        action: "UPDATE",
+        module: "settings",
+        message: `${companyUser.user.email} kullanıcısı ${
+          input.status === "ACTIVE" ? "aktif" : "pasif"
+        } yapıldı.`,
+      },
+    });
+
+    return companyUser;
+  });
+
+  return serializeCompanyUser(updated);
 }

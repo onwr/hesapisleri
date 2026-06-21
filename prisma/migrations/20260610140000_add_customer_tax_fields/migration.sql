@@ -1,0 +1,5 @@
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "taxOffice" TEXT;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "taxCertificateUrl" TEXT;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "taxCertificateFileName" TEXT;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "taxCertificateMimeType" TEXT;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "taxCertificateSize" INTEGER;

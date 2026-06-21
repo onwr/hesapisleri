@@ -44,6 +44,7 @@ export function MarketplaceLogo({
         src={logo}
         alt={getMarketplaceName(channel)}
         fill
+        sizes="32px"
         className="object-cover"
         onError={() => setFailed(true)}
       />

@@ -1,40 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireApiModuleAccess } from "@/lib/module-access";
 import { db } from "@/lib/prisma";
-import { getAuthToken, verifyToken } from "@/lib/auth";
+import { buildProductTypePrismaFilter, parseProductTypeFilter } from "@/lib/product-type-utils";
 import { getWarehouseStockByProductIds } from "@/lib/warehouse-options";
 import { resolveWarehouseId } from "@/lib/warehouse-service";
 
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
-
 export async function GET(req: NextRequest) {
   try {
-    const token = await getAuthToken();
+    const auth = await requireApiModuleAccess("products");
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.userId || !payload.companyId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
-
+    const companyId = auth.companyId;
+    const userId = auth.userId;
     const warehouseIdParam = req.nextUrl.searchParams.get("warehouseId");
+    const typeFilter = parseProductTypeFilter(req.nextUrl.searchParams.get("type"));
 
     const products = await db.product.findMany({
       where: {
-        companyId: payload.companyId,
+        companyId: companyId,
         status: "ACTIVE",
+        ...buildProductTypePrismaFilter(typeFilter),
       },
       include: {
         category: true,
@@ -48,12 +33,12 @@ export async function GET(req: NextRequest) {
 
     if (warehouseIdParam) {
       const resolvedWarehouseId = await resolveWarehouseId(
-        payload.companyId,
+        companyId,
         warehouseIdParam
       );
 
       warehouseStockByProductId = await getWarehouseStockByProductIds(
-        payload.companyId,
+        companyId,
         resolvedWarehouseId,
         products.map((product) => product.id)
       );

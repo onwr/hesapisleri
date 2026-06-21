@@ -277,6 +277,64 @@ export async function getNotificationSummary(input: {
   };
 }
 
+const priorityWeight: Record<string, number> = {
+  CRITICAL: 4,
+  HIGH: 3,
+  NORMAL: 2,
+  LOW: 1,
+};
+
+export async function getDashboardActionNotifications(input: {
+  companyId: string;
+  userId: string;
+  limit?: number;
+}) {
+  const limit = input.limit ?? 8;
+  const scope = baseCompanyScope(input.companyId, input.userId);
+
+  const rows = await db.notification.findMany({
+    where: scope,
+    orderBy: { createdAt: "desc" },
+    take: 24,
+    select: {
+      id: true,
+      title: true,
+      message: true,
+      type: true,
+      category: true,
+      priority: true,
+      actionUrl: true,
+      readAt: true,
+      createdAt: true,
+    },
+  });
+
+  return rows
+    .sort((a, b) => {
+      const aUnread = a.readAt ? 0 : 1;
+      const bUnread = b.readAt ? 0 : 1;
+      if (aUnread !== bUnread) return bUnread - aUnread;
+
+      const priorityDiff =
+        (priorityWeight[b.priority] ?? 0) - (priorityWeight[a.priority] ?? 0);
+      if (priorityDiff !== 0) return priorityDiff;
+
+      return b.createdAt.getTime() - a.createdAt.getTime();
+    })
+    .slice(0, limit)
+    .map((row) => ({
+      id: row.id,
+      title: row.title,
+      message: row.message,
+      type: row.type,
+      category: row.category,
+      priority: row.priority,
+      actionUrl: row.actionUrl,
+      readAt: row.readAt?.toISOString() ?? null,
+      createdAt: row.createdAt.toISOString(),
+    }));
+}
+
 export async function markAsRead(input: {
   companyId: string;
   userId: string;

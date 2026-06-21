@@ -2,51 +2,24 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AlertTriangle, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
+import { guardPageModule } from "@/lib/module-access";
+
 import { ProductDetailView } from "@/components/products/product-detail-view";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import { getProductDetailData } from "@/lib/product-detail-data";
 import {
   PRODUCT_UNIT_LABELS,
   type ProductUnitType,
 } from "@/lib/product-form-utils";
-import { db } from "@/lib/prisma";
-
 type Props = {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ created?: string; updated?: string; stockUpdated?: string }>;
 };
 
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
-
 export default async function ProductDetailPage({ params, searchParams }: Props) {
-  const { id } = await params;
+  const session = await guardPageModule("products");
+  const company = session.company;
+const { id } = await params;
   const query = await searchParams;
-
-  const token = await getAuthToken();
-  if (!token) redirect("/login");
-
-  const payload = verifyToken<AuthPayload>(token);
-  if (!payload?.userId || !payload.companyId) redirect("/login");
-
-  const user = await db.user.findUnique({
-    where: { id: payload.userId },
-    include: {
-      companyUsers: {
-        include: { company: true },
-      },
-    },
-  });
-
-  if (!user) redirect("/login");
-
-  const company =
-    user.companyUsers.find((item) => item.companyId === payload.companyId)
-      ?.company ?? user.companyUsers[0]?.company;
-
-  if (!company) redirect("/login");
 
   const detail = await getProductDetailData(company.id, id);
   if (!detail) notFound();
@@ -126,6 +99,7 @@ export default async function ProductDetailPage({ params, searchParams }: Props)
             createdAt: product.createdAt.toISOString(),
             updatedAt: product.updatedAt.toISOString(),
             isService: product.isService,
+            productType: product.productType,
           }}
           formatted={formatted}
           monthSalesQuantity={monthSalesQuantity}

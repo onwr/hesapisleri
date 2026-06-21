@@ -1,30 +1,35 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
   Bell,
   Building2,
   ChevronDown,
-  PlugZap,
   CreditCard,
   Database,
+  Download,
   FileText,
   ImagePlus,
   Loader2,
   Mail,
   MapPin,
   Phone,
+  PlugZap,
   Save,
   ShieldCheck,
   Users,
   Wallet,
   X,
 } from "lucide-react";
+import { ActionCard } from "@/components/cards/action-card";
+import { StatCard } from "@/components/cards/stat-card";
 import { SettingsUsersPanel } from "@/components/settings/settings-users-panel";
 import { TeamSettingsBanner } from "@/components/settings/team-settings-banner";
+import { TeamActionButton } from "@/components/team/team-action-button";
 import type { SerializedSettingsBundle } from "@/lib/settings-service";
-import { formatMoney } from "@/lib/format-utils";
+import { formatMoney, formatNumber } from "@/lib/format-utils";
 import { getInvoiceTypeLabel } from "@/lib/settings-utils";
 import { uploadImageToCdn } from "@/lib/storage/upload-client";
 
@@ -88,8 +93,8 @@ const MENU_ITEMS: Array<{
   },
   {
     id: "membership",
-    label: "Üyelik",
-    description: "Ödeme ve plan",
+    label: "Üyelik ve Ödeme",
+    description: "Paket ve ödeme",
     icon: <CreditCard size={18} />,
   },
 ];
@@ -98,21 +103,19 @@ type SettingsCenterProps = {
   initialData: SerializedSettingsBundle;
   canManageUsers?: boolean;
   canManageSettings?: boolean;
+  canManageMembership?: boolean;
 };
-
-function formatDate(value: string | null) {
-  if (!value) return "—";
-  return new Intl.DateTimeFormat("tr-TR").format(new Date(value));
-}
 
 export function SettingsCenter({
   initialData,
   canManageUsers = false,
   canManageSettings = true,
+  canManageMembership = false,
 }: SettingsCenterProps) {
   const visibleMenuItems = useMemo(() => {
     return MENU_ITEMS.filter((item) => {
       if (item.id === "users") return canManageUsers;
+      if (item.id === "membership") return canManageMembership;
       if (
         !canManageSettings &&
         (item.id === "invoice" || item.id === "cash-bank")
@@ -121,7 +124,7 @@ export function SettingsCenter({
       }
       return true;
     });
-  }, [canManageUsers, canManageSettings]);
+  }, [canManageUsers, canManageSettings, canManageMembership]);
 
   const [activeSection, setActiveSection] = useState<SettingsSection>(
     visibleMenuItems[0]?.id ?? "company"
@@ -180,6 +183,28 @@ export function SettingsCenter({
   const activeMenu =
     visibleMenuItems.find((item) => item.id === activeSection) ??
     visibleMenuItems[0]!;
+
+  const activeUserCount = useMemo(
+    () => bundle.users.filter((user) => user.status === "ACTIVE").length,
+    [bundle.users]
+  );
+
+  const activeAccountCount = useMemo(
+    () => bundle.accounts.filter((account) => account.status === "ACTIVE").length,
+    [bundle.accounts]
+  );
+
+  const activeNotificationCount = useMemo(
+    () =>
+      [
+        notificationForm.notifyLowStock,
+        notificationForm.notifyDueInvoices,
+        notificationForm.notifyLateCollections,
+        notificationForm.notifyDailySummary,
+        notificationForm.notifyEmployeePayments,
+      ].filter(Boolean).length,
+    [notificationForm]
+  );
 
   async function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -298,7 +323,7 @@ export function SettingsCenter({
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <label className="inline-flex h-11 cursor-pointer items-center gap-2 rounded-2xl bg-blue-600 px-4 text-sm font-black text-white">
+              <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl bg-[#0f1f4d] px-4 text-[12px] font-black text-white transition hover:bg-[#16285f]">
                 {logoUploading ? (
                   <Loader2 className="animate-spin" size={16} />
                 ) : (
@@ -319,7 +344,7 @@ export function SettingsCenter({
                   onClick={() =>
                     setCompanyForm((prev) => ({ ...prev, logoUrl: "" }))
                   }
-                  className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 px-4 text-sm font-black text-slate-600"
+                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 px-4 text-[12px] font-black text-slate-600"
                 >
                   <X size={16} />
                   Kaldır
@@ -572,18 +597,20 @@ export function SettingsCenter({
 
     if (activeSection === "integrations") {
       return (
-        <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-          <p className="font-black text-slate-950">Pazaryeri Entegrasyonları</p>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
+        <div className="rounded-2xl border border-slate-200/80 bg-slate-50/60 p-5">
+          <p className="text-[14px] font-black text-[#0f1f4d]">
+            Pazaryeri Entegrasyonları
+          </p>
+          <p className="mt-2 text-[12px] leading-6 text-slate-500">
             Trendyol bağlantısı, bağlantı testi ve manuel senkronizasyon ayarlarını
             yönetmek için Entegrasyonlar sayfasına gidin.
           </p>
-          <a
+          <Link
             href="/settings/integrations"
-            className="mt-4 inline-flex h-11 items-center justify-center rounded-2xl bg-blue-600 px-4 text-sm font-black text-white"
+            className="mt-4 inline-flex h-10 items-center justify-center rounded-xl bg-[#0f1f4d] px-4 text-[12px] font-black text-white transition hover:bg-[#16285f]"
           >
             Entegrasyonlar Sayfasını Aç
-          </a>
+          </Link>
         </div>
       );
     }
@@ -664,22 +691,23 @@ export function SettingsCenter({
       ];
 
       return (
-        <div className="space-y-5">
+        <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             {exports.map((item) => (
               <a
                 key={item.href}
                 href={item.href}
-                className="flex h-14 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-sm font-black text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                className="flex h-14 items-center justify-center gap-2 rounded-2xl border border-slate-200/80 bg-white text-[12px] font-black text-[#0f1f4d] shadow-[0_8px_20px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50/50 hover:text-blue-700"
               >
+                <Download size={16} />
                 {item.label} İndir
               </a>
             ))}
           </div>
 
-          <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-5">
-            <p className="font-black text-slate-950">Tüm veriyi indir</p>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 p-5">
+            <p className="text-[13px] font-black text-[#0f1f4d]">Tüm veriyi indir</p>
+            <p className="mt-2 text-[12px] leading-6 text-slate-500">
               Tam yedekleme paketi (müşteri, ürün, satış, fatura, gider) bir
               sonraki sürümde tek arşiv olarak sunulacaktır.
             </p>
@@ -688,55 +716,127 @@ export function SettingsCenter({
       );
     }
 
-    return (
-      <div className="space-y-5">
-        <div className="grid gap-4 md:grid-cols-2">
-          <InfoCard
-            label="Üyelik Durumu"
-            value={bundle.membership.statusLabel}
-          />
-          <InfoCard
-            label="Son Ödeme"
-            value={
-              bundle.membership.amount
-                ? `${formatMoney(bundle.membership.amount)} · ${formatDate(bundle.membership.lastPaymentDate)}`
-                : "Henüz ödeme kaydı yok"
-            }
-          />
-          <InfoCard
-            label="Sonraki Ödeme"
-            value={formatDate(bundle.membership.nextPaymentDate)}
-          />
-          <InfoCard label="Paket Sistemi" value="Yok · Tek sürüm" />
-        </div>
-
-        <div className="rounded-3xl border border-dashed border-green-200 bg-green-50 p-5">
-          <p className="font-black text-slate-950">Ödeme geçmişi</p>
-          <p className="mt-2 text-sm leading-6 text-green-700">
-            Üyelik ödeme geçmişi ve fatura indirme özelliği yakında bu bölümden
-            yönetilebilecek.
+    if (activeSection === "membership") {
+      return (
+        <div className="rounded-2xl border border-blue-100 bg-linear-to-br from-blue-50 to-violet-50 p-5">
+          <p className="text-[14px] font-black text-[#0f1f4d]">
+            Üyelik ve ödeme yönetimi
           </p>
+          <p className="mt-2 text-[12px] leading-6 text-slate-600">
+            Aylık, 3 aylık, 6 aylık veya yıllık paket seçerek üyeliğinizi
+            uzatabilir, ödeme geçmişinizi görüntüleyebilirsiniz.
+          </p>
+          <Link
+            href="/settings/billing"
+            className="mt-4 inline-flex h-10 items-center justify-center rounded-xl bg-[#0f1f4d] px-5 text-[12px] font-black text-white transition hover:bg-[#16285f]"
+          >
+            Üyelik ve Ödeme Sayfasına Git
+          </Link>
         </div>
-      </div>
-    );
+      );
+    }
+
+    return null;
   }
 
   return (
-    <div className="space-y-6">
-      <section>
-        <h1 className="text-3xl font-black text-slate-950">Ayarlar Merkezi</h1>
-        <p className="mt-2 text-slate-500">
-          Firma, kullanıcı, fatura, kasa ve sistem tercihlerinizi tek yerden
-          yönetin.
-        </p>
+    <div className="space-y-5">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <TeamActionButton
+          title="Firma Bilgileri"
+          description="Logo, vergi ve iletişim"
+          onClick={() => selectSection("company")}
+          icon={<Building2 size={22} strokeWidth={2.4} />}
+          gradient="bg-linear-to-br from-[#0f1f4d] to-[#1e3a8a]"
+        />
+
+        <ActionCard
+          title="Entegrasyonlar"
+          description="Pazaryeri bağlantıları"
+          href="/settings/integrations"
+          icon={<PlugZap size={22} strokeWidth={2.4} />}
+          gradient="bg-linear-to-br from-violet-500 to-purple-600"
+        />
+
+        {canManageMembership ? (
+          <ActionCard
+            title="Üyelik & Ödeme"
+            description="Paket ve faturalandırma"
+            href="/settings/billing"
+            icon={<CreditCard size={22} strokeWidth={2.4} />}
+            gradient="bg-linear-to-br from-emerald-500 to-green-600"
+          />
+        ) : (
+          <TeamActionButton
+            title="Bildirimler"
+            description="Uyarı tercihlerini düzenle"
+            onClick={() => selectSection("notifications")}
+            icon={<Bell size={22} strokeWidth={2.4} />}
+            gradient="bg-linear-to-br from-orange-500 to-amber-600"
+          />
+        )}
+
+        <ActionCard
+          title="Çalışanlar"
+          description="Personel ve ekip yönetimi"
+          href="/team"
+          icon={<Users size={22} strokeWidth={2.4} />}
+          gradient="bg-linear-to-br from-blue-500 to-blue-600"
+        />
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          title="Aktif Kullanıcı"
+          value={formatNumber(activeUserCount)}
+          subtitle={`${formatNumber(bundle.users.length)} toplam kullanıcı`}
+          icon={<Users size={18} />}
+          color="blue"
+        />
+        <StatCard
+          title="Aktif Hesap"
+          value={formatNumber(activeAccountCount)}
+          subtitle="Kasa ve banka hesapları"
+          icon={<Wallet size={18} />}
+          color="green"
+        />
+        <StatCard
+          title="Para Birimi"
+          value={companyForm.currency}
+          subtitle={`Varsayılan KDV %${companyForm.defaultVatRate}`}
+          icon={<Building2 size={18} />}
+          color="purple"
+        />
+        {canManageMembership ? (
+          <StatCard
+            title="Üyelik Durumu"
+            value={bundle.membership.statusLabel}
+            subtitle={
+              bundle.membership.nextPaymentDate
+                ? `Sonraki: ${formatShortDate(bundle.membership.nextPaymentDate)}`
+                : "Ödeme bilgisi yok"
+            }
+            icon={<CreditCard size={18} />}
+            color="orange"
+            href="/settings/billing"
+          />
+        ) : (
+          <StatCard
+            title="Fatura Tipi"
+            value={getInvoiceTypeLabel(bundle.settings.defaultInvoiceType)}
+            subtitle={`Ön ek: ${bundle.settings.invoiceNumberPrefix}`}
+            icon={<FileText size={18} />}
+            color="orange"
+          />
+        )}
+      </section>
+
+      <div className="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)_280px]">
         <aside className="xl:sticky xl:top-6 xl:self-start">
           <button
             type="button"
             onClick={() => setMobileMenuOpen((prev) => !prev)}
-            className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left font-black text-slate-950 xl:hidden"
+            className="flex w-full items-center justify-between rounded-2xl border border-slate-200/80 bg-white px-4 py-3 text-left text-[13px] font-black text-[#0f1f4d] shadow-[0_8px_20px_rgba(15,23,42,0.04)] xl:hidden"
           >
             <span>{activeMenu.label}</span>
             <ChevronDown
@@ -747,7 +847,7 @@ export function SettingsCenter({
 
           <nav
             className={[
-              "space-y-2 rounded-[2rem] border border-slate-200 bg-white p-3 shadow-sm",
+              "space-y-1 rounded-2xl border border-slate-200/80 bg-white p-2 shadow-[0_10px_28px_rgba(15,23,42,0.04)]",
               mobileMenuOpen ? "mt-3 block" : "mt-3 hidden xl:block",
               "xl:mt-0 xl:block",
             ].join(" ")}
@@ -758,15 +858,15 @@ export function SettingsCenter({
                 type="button"
                 onClick={() => selectSection(item.id)}
                 className={[
-                  "flex w-full items-start gap-3 rounded-2xl px-4 py-3 text-left transition",
+                  "flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition",
                   activeSection === item.id
-                    ? "bg-slate-950 text-white"
+                    ? "bg-[#0f1f4d] text-white shadow-[0_8px_20px_rgba(15,31,77,0.2)]"
                     : "text-slate-600 hover:bg-slate-50",
                 ].join(" ")}
               >
                 <span
                   className={[
-                    "mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl",
+                    "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
                     activeSection === item.id
                       ? "bg-white/10 text-white"
                       : "bg-slate-100 text-slate-600",
@@ -774,13 +874,13 @@ export function SettingsCenter({
                 >
                   {item.icon}
                 </span>
-                <span>
-                  <span className="block text-sm font-black">{item.label}</span>
+                <span className="min-w-0">
+                  <span className="block text-[12px] font-black">{item.label}</span>
                   <span
                     className={[
-                      "mt-0.5 block text-xs",
+                      "mt-0.5 block truncate text-[10px] font-medium",
                       activeSection === item.id
-                        ? "text-slate-300"
+                        ? "text-white/70"
                         : "text-slate-400",
                     ].join(" ")}
                   >
@@ -792,50 +892,93 @@ export function SettingsCenter({
           </nav>
         </aside>
 
-        <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm lg:p-8">
-          <div className="mb-6 flex items-start gap-4 border-b border-slate-100 pb-5">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
-              {activeMenu.icon}
-            </div>
-            <div>
-              <h2 className="text-xl font-black text-slate-950">
-                {activeMenu.label}
-              </h2>
-              <p className="text-sm text-slate-500">{activeMenu.description}</p>
-              {activeSection === "invoice" ? (
-                <p className="mt-1 text-xs font-semibold text-blue-600">
-                  Aktif tip:{" "}
-                  {getInvoiceTypeLabel(bundle.settings.defaultInvoiceType)}
+        <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+          <div className="border-b border-slate-100 p-4 sm:p-5">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                {activeMenu.icon}
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-base font-black text-[#0f1f4d]">
+                  {activeMenu.label}
+                </h2>
+                <p className="mt-0.5 text-[12px] font-medium text-slate-500">
+                  {activeMenu.description}
                 </p>
+                {activeSection === "invoice" ? (
+                  <p className="mt-1 text-[11px] font-bold text-blue-600">
+                    Aktif tip:{" "}
+                    {getInvoiceTypeLabel(bundle.settings.defaultInvoiceType)}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 sm:p-5">
+            {error ? (
+              <div className="mb-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-[12px] font-semibold text-red-700">
+                {error}
+              </div>
+            ) : null}
+
+            {success ? (
+              <div className="mb-4 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-[12px] font-semibold text-emerald-700">
+                {success}
+              </div>
+            ) : null}
+
+            {renderSectionContent()}
+          </div>
+        </section>
+
+        <aside className="space-y-4 xl:sticky xl:top-6 xl:self-start">
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+            <p className="text-[12px] font-extrabold text-[#24345f]/80">
+              Firma Özeti
+            </p>
+            <p className="mt-1 truncate text-[14px] font-black text-[#0f1f4d]">
+              {bundle.company.name}
+            </p>
+
+            <div className="mt-4 space-y-3">
+              <SummaryRow
+                label="Kullanıcı"
+                value={formatNumber(bundle.users.length)}
+              />
+              <SummaryRow
+                label="Hesap"
+                value={formatNumber(bundle.accounts.length)}
+              />
+              <SummaryRow
+                label="Bildirim"
+                value={`${activeNotificationCount}/5 aktif`}
+                tone="blue"
+              />
+              {canManageMembership && bundle.membership.amount != null ? (
+                <SummaryRow
+                  label="Son ödeme"
+                  value={formatMoney(bundle.membership.amount)}
+                  tone="emerald"
+                />
               ) : null}
             </div>
           </div>
 
-          {error ? (
-            <div className="mb-4 rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-              {error}
+          <div className="rounded-2xl border border-slate-200/80 bg-linear-to-br from-[#0f1f4d] to-[#1e3a8a] p-4 text-white shadow-[0_14px_30px_rgba(15,23,42,0.16)]">
+            <div className="flex items-start gap-2">
+              <ShieldCheck size={18} className="mt-0.5 shrink-0 text-emerald-300" />
+              <div>
+                <p className="text-[13px] font-black">Güvenli ayar alanı</p>
+                <p className="mt-2 text-[11px] leading-5 text-white/75">
+                  Tüm ayarlar yalnızca oturum açtığınız firmaya özeldir. Başka
+                  bir şirketin ayarlarına erişim engellenir.
+                </p>
+              </div>
             </div>
-          ) : null}
-
-          {success ? (
-            <div className="mb-4 rounded-2xl bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
-              {success}
-            </div>
-          ) : null}
-
-          {renderSectionContent()}
-        </section>
+          </div>
+        </aside>
       </div>
-
-      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex items-start gap-3">
-          <ShieldCheck className="text-green-600" size={22} />
-          <p className="text-sm leading-6 text-slate-500">
-            Tüm ayarlar yalnızca oturum açtığınız firmaya özeldir. Başka bir
-            şirketin ayarlarına erişim engellenir.
-          </p>
-        </div>
-      </section>
     </div>
   );
 }
@@ -852,23 +995,46 @@ function SaveButton({
       type="button"
       onClick={onClick}
       disabled={saving}
-      className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 text-sm font-black text-white transition hover:bg-blue-700 disabled:opacity-50"
+      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#0f1f4d] px-5 text-[12px] font-black text-white transition hover:bg-[#16285f] disabled:opacity-50"
     >
-      {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+      {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
       Kaydet
     </button>
   );
 }
 
-function InfoCard({ label, value }: { label: string; value: string }) {
+function SummaryRow({
+  label,
+  value,
+  tone = "slate",
+}: {
+  label: string;
+  value: string;
+  tone?: "slate" | "blue" | "emerald";
+}) {
+  const valueClass =
+    tone === "blue"
+      ? "text-blue-600"
+      : tone === "emerald"
+        ? "text-emerald-600"
+        : "text-[#0f1f4d]";
+
   return (
-    <div className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
-      <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
-        {label}
-      </p>
-      <p className="mt-2 font-black text-slate-950">{value}</p>
+    <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 last:border-b-0 last:pb-0">
+      <span className="text-[12px] font-semibold text-slate-500">{label}</span>
+      <span className={["text-[13px] font-black", valueClass].join(" ")}>
+        {value}
+      </span>
     </div>
   );
+}
+
+function formatShortDate(value: string) {
+  return new Intl.DateTimeFormat("tr-TR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
 }
 
 function ToggleRow({
@@ -883,16 +1049,16 @@ function ToggleRow({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className="flex cursor-pointer items-start justify-between gap-4 rounded-3xl border border-slate-100 bg-slate-50 p-4">
+    <label className="flex cursor-pointer items-start justify-between gap-4 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_4px_14px_rgba(15,23,42,0.03)] transition hover:border-slate-300">
       <span>
-        <span className="block font-black text-slate-950">{label}</span>
-        <span className="mt-1 block text-sm text-slate-500">{description}</span>
+        <span className="block text-[13px] font-black text-[#0f1f4d]">{label}</span>
+        <span className="mt-1 block text-[12px] text-slate-500">{description}</span>
       </span>
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="mt-1 h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+        className="mt-1 h-5 w-5 rounded border-slate-300 text-[#0f1f4d] focus:ring-blue-200"
       />
     </label>
   );
@@ -920,11 +1086,11 @@ function Field({
   placeholder?: string;
 }) {
   const inputClass =
-    "h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100";
+    "h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[12px] font-semibold text-[#0f1f4d] outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100";
 
   return (
     <label className="block">
-      <span className="mb-2 block text-sm font-semibold text-slate-700">
+      <span className="mb-1.5 block text-[11px] font-bold text-slate-500">
         {label}
       </span>
       {asSelect ? (
@@ -944,12 +1110,12 @@ function Field({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="min-h-24 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+          className="min-h-24 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[12px] font-semibold text-[#0f1f4d] outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
         />
       ) : (
         <div className="relative">
           {icon ? (
-            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
               {icon}
             </span>
           ) : null}
@@ -958,7 +1124,7 @@ function Field({
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
-            className={[inputClass, icon ? "pl-11" : ""].join(" ")}
+            className={[inputClass, icon ? "pl-10" : ""].join(" ")}
           />
         </div>
       )}

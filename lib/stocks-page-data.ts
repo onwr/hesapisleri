@@ -142,12 +142,13 @@ export async function getStocksPageData(
     from: Date;
     to: Date;
     q?: string | null;
+    productId?: string | null;
   }
 ) {
   const [productsRaw, movementsRaw, transfersRaw, warehousesRaw] =
     await Promise.all([
       db.product.findMany({
-        where: { companyId },
+        where: { companyId, productType: "STOCK" },
         include: { category: true },
         orderBy: { createdAt: "desc" },
       }),
@@ -167,6 +168,7 @@ export async function getStocksPageData(
           product: { select: { id: true, name: true } },
           fromWarehouse: { select: { name: true } },
           toWarehouse: { select: { name: true } },
+          items: { select: { productId: true, quantity: true } },
         },
         orderBy: { createdAt: "desc" },
       }),
@@ -177,7 +179,8 @@ export async function getStocksPageData(
             include: {
               product: {
                 select: {
-                  sellPrice: true,
+                  buyPrice: true,
+                  productType: true,
                   minStock: true,
                   stock: true,
                 },
@@ -244,6 +247,18 @@ export async function getStocksPageData(
   let filteredTransfers = periodTransfers;
   let filteredWarehouses = allWarehouses;
 
+  if (options.productId) {
+    filteredProducts = filteredProducts.filter(
+      (row) => row.id === options.productId
+    );
+    filteredMovements = filteredMovements.filter(
+      (row) => row.productId === options.productId
+    );
+    filteredTransfers = filteredTransfers.filter(
+      (row) => row.productId === options.productId
+    );
+  }
+
   if (options.q) {
     if (movementMode) {
       filteredMovements = filteredMovements.filter((row) =>
@@ -298,6 +313,7 @@ export async function getStocksPageData(
     from: options.from,
     to: options.to,
     q: options.q,
+    productId: options.productId,
   });
 
   const stockInTotal = periodMovements
@@ -349,6 +365,7 @@ export async function getStocksExportRows(
         product: { select: { id: true, name: true } },
         fromWarehouse: { select: { name: true } },
         toWarehouse: { select: { name: true } },
+        items: { select: { productId: true, quantity: true } },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -398,7 +415,7 @@ export async function getStocksExportRows(
   }
 
   const productsRaw = await db.product.findMany({
-    where: { companyId },
+    where: { companyId, productType: "STOCK" },
     include: {
       category: true,
       warehouseStocks: {
@@ -441,7 +458,7 @@ export async function getStocksExportRows(
 export async function getStockFormOptions(companyId: string) {
   const [products, warehouses] = await Promise.all([
     db.product.findMany({
-      where: { companyId, status: "ACTIVE" },
+      where: { companyId, status: "ACTIVE", productType: "STOCK" },
       select: {
         id: true,
         name: true,

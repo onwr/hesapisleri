@@ -7,6 +7,7 @@ import {
   normalizeOptionalText,
   productUpdateSchema,
 } from "@/lib/product-form-utils";
+import { isServiceProductType } from "@/lib/product-type-utils";
 import {
   assertUniqueProductIdentifiers,
   deleteProduct,
@@ -96,8 +97,15 @@ export async function PATCH(req: Request, { params }: Props) {
     }
 
     const data = parsed.data;
+    const isService = isServiceProductType(existing.productType);
     const sku = normalizeOptionalText(data.sku);
-    const barcode = normalizeOptionalText(data.barcode);
+    const hasBarcodeField =
+      !isService && Object.prototype.hasOwnProperty.call(body, "barcode");
+    const barcode = hasBarcodeField
+      ? normalizeOptionalText(data.barcode ?? null)
+      : isService
+        ? null
+        : existing.barcode;
 
     const uniqueCheck = await assertUniqueProductIdentifiers(companyId, {
       sku,
@@ -112,7 +120,7 @@ export async function PATCH(req: Request, { params }: Props) {
           message: uniqueCheck.message,
           errors: { [uniqueCheck.field]: [uniqueCheck.message] },
         },
-        { status: 400 }
+        { status: uniqueCheck.field === "barcode" ? 409 : 400 }
       );
     }
 
@@ -121,23 +129,41 @@ export async function PATCH(req: Request, { params }: Props) {
       data.categoryName
     );
 
-    const product = await db.product.update({
-      where: { id },
-      data: {
-        categoryId,
-        name: data.name,
-        sku,
-        barcode,
-        description: normalizeOptionalText(data.description),
-        imageUrl: normalizeImageUrl(data.imageUrl),
-        minStock: data.minStock,
-        unitType: data.unitType,
-        warehouseLocation: normalizeOptionalText(data.warehouseLocation),
-        buyPrice: data.buyPrice,
-        sellPrice: data.sellPrice,
-        vatRate: data.vatRate,
-        status: data.status,
-      },
+    const updateData: Parameters<typeof db.product.update>[0]["data"] = {
+      categoryId,
+      name: data.name,
+      sku,
+      description: normalizeOptionalText(data.description),
+      imageUrl: normalizeImageUrl(data.imageUrl),
+      minStock: isService ? 0 : data.minStock,
+      unitType: data.unitType,
+      warehouseLocation: isService
+        ? null
+        : normalizeOptionalText(data.warehouseLocation),
+      buyPrice: data.buyPrice,
+      sellPrice: data.sellPrice,
+      vatRate: data.vatRate,
+      status: data.status,
+    };
+
+    if (hasBarcodeField) {
+      updateData.barcode = barcode;
+    }
+
+    const updateResult = await db.product.updateMany({
+      where: { id, companyId },
+      data: updateData,
+    });
+
+    if (updateResult.count === 0) {
+      return NextResponse.json(
+        { success: false, message: "Ürün bulunamadı." },
+        { status: 404 }
+      );
+    }
+
+    const product = await db.product.findFirstOrThrow({
+      where: { id, companyId },
       include: {
         category: true,
       },

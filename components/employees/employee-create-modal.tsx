@@ -35,6 +35,10 @@ export function EmployeeCreateModal({
   const [startDate, setStartDate] = useState("");
   const [salaryAmount, setSalaryAmount] = useState("");
   const [salaryPeriod, setSalaryPeriod] = useState("MONTHLY");
+  const [grossSalaryAmount, setGrossSalaryAmount] = useState("");
+  const [paymentDay, setPaymentDay] = useState("");
+  const [iban, setIban] = useState("");
+  const [bankName, setBankName] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
 
@@ -53,6 +57,10 @@ export function EmployeeCreateModal({
     setStartDate("");
     setSalaryAmount("");
     setSalaryPeriod("MONTHLY");
+    setGrossSalaryAmount("");
+    setPaymentDay("");
+    setIban("");
+    setBankName("");
     setUploadError("");
     onClose();
   }
@@ -89,8 +97,12 @@ export function EmployeeCreateModal({
     if (salaryAmount && Number(salaryAmount) > 0) {
       payload.salary = {
         amount: Number(salaryAmount),
+        grossAmount: grossSalaryAmount ? Number(grossSalaryAmount) : undefined,
         period: salaryPeriod,
         currency: "TRY",
+        paymentDay: paymentDay ? Number(paymentDay) : undefined,
+        iban: iban || undefined,
+        bankName: bankName || undefined,
       };
     }
 
@@ -260,7 +272,7 @@ export function EmployeeCreateModal({
               </p>
               <label className="block space-y-1">
                 <span className="text-xs font-bold text-slate-500">
-                  Maaş tutarı (TRY)
+                  Net maaş (TRY)
                 </span>
                 <input
                   type="number"
@@ -273,7 +285,21 @@ export function EmployeeCreateModal({
                 />
               </label>
               <label className="block space-y-1">
-                <span className="text-xs font-bold text-slate-500">Periyot</span>
+                <span className="text-xs font-bold text-slate-500">
+                  Brüt maaş (TRY)
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={grossSalaryAmount}
+                  onChange={(e) => setGrossSalaryAmount(e.target.value)}
+                  className={inputClass}
+                  placeholder="Opsiyonel"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs font-bold text-slate-500">Maaş tipi</span>
                 <select
                   value={salaryPeriod}
                   onChange={(e) => setSalaryPeriod(e.target.value)}
@@ -284,6 +310,36 @@ export function EmployeeCreateModal({
                   <option value="DAILY">Günlük</option>
                   <option value="HOURLY">Saatlik</option>
                 </select>
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs font-bold text-slate-500">
+                  Maaş ödeme günü
+                </span>
+                <input
+                  type="number"
+                  min="1"
+                  max="31"
+                  value={paymentDay}
+                  onChange={(e) => setPaymentDay(e.target.value)}
+                  className={inputClass}
+                  placeholder="1-31"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs font-bold text-slate-500">IBAN</span>
+                <input
+                  value={iban}
+                  onChange={(e) => setIban(e.target.value)}
+                  className={inputClass}
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs font-bold text-slate-500">Banka</span>
+                <input
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                  className={inputClass}
+                />
               </label>
             </>
           ) : null}

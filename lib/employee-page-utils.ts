@@ -1,4 +1,5 @@
 import type { SerializedEmployee } from "@/lib/employee-page-types";
+import { formatEmployeeLedgerBalanceLabel } from "@/lib/employee-ledger-utils";
 import {
   parseEmployeeSort,
   parseEmployeeTab,
@@ -182,12 +183,22 @@ export function formatEmployeeDate(value?: string | null) {
 }
 
 export function formatEmployeePaymentSummary(employee: SerializedEmployee) {
-  if (employee.paymentSummary.pendingCount > 0) {
-    return `${employee.paymentSummary.pendingCount} bekleyen · ${employee.paymentSummary.netPayable.toLocaleString("tr-TR")} ₺`;
-  }
-  return employee.paymentSummary.netPayable > 0
-    ? `${employee.paymentSummary.netPayable.toLocaleString("tr-TR")} ₺`
+  const salary = employee.activeSalary
+    ? `Net ${employee.activeSalary.amount.toLocaleString("tr-TR")} ₺`
+    : "Maaş yok";
+  const balance = employee.currentBalance ?? 0;
+  const balanceLabel = formatEmployeeLedgerBalanceLabel(balance);
+  return `${salary} · Cari ${balanceLabel}`;
+}
+
+export function formatEmployeeSalarySummary(employee: SerializedEmployee) {
+  return employee.activeSalary
+    ? `${employee.activeSalary.amount.toLocaleString("tr-TR")} ₺`
     : "—";
+}
+
+export function formatEmployeeLedgerSummary(employee: SerializedEmployee) {
+  return formatEmployeeLedgerBalanceLabel(employee.currentBalance ?? 0);
 }
 
 export function formatEmployeePerformanceSummary(employee: SerializedEmployee) {

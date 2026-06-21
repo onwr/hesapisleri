@@ -195,8 +195,21 @@ export function buildExpenseSystemEvents(
     );
 }
 
+type MembershipCalendarPayment = Pick<
+  MembershipPayment,
+  | "id"
+  | "companyId"
+  | "periodEnd"
+  | "amount"
+  | "currency"
+  | "status"
+  | "provider"
+  | "paymentRef"
+> &
+  Record<string, unknown>;
+
 export function buildMembershipSystemEvents(
-  memberships: MembershipPayment[],
+  memberships: MembershipCalendarPayment[],
   from: Date,
   to: Date
 ): NormalizedCalendarEvent[] {

@@ -24,6 +24,10 @@ export function buildEmployeePaymentTransactionTitle(employeeName: string) {
   return `Çalışan ödemesi: ${employeeName.trim()}`;
 }
 
+export function buildEmployeeAdvanceTransactionTitle(employeeName: string) {
+  return `Çalışan avansı: ${employeeName.trim()}`;
+}
+
 export function buildEmployeePaymentsActionUrl(employeeId: string) {
   return `/team/${employeeId}?tab=payments`;
 }

@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import {
   ArrowRight,
   Download,
@@ -16,14 +15,14 @@ import {
   Wallet,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
+import { guardPageModule } from "@/lib/module-access";
+
 import {
   ExpensesTablePagination,
   ExpensesTableToolbar,
 } from "@/components/expenses/expenses-table-controls";
 import { ExpensesSidebarWidgets } from "@/components/expenses/expenses-sidebar-widgets";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import { endOfMonth, startOfMonth } from "@/lib/dashboard-metrics";
-import { db } from "@/lib/prisma";
 import { getExpenseDisplayPaymentBadge } from "@/lib/expense-utils";
 import { getActiveExpenseCategoryNames } from "@/lib/expense-category-service";
 import {
@@ -43,11 +42,6 @@ import {
   parsePage,
   parseSearchQuery,
 } from "@/lib/expenses-page-utils";
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
 
 type ExpensesPageProps = {
   searchParams: Promise<{
@@ -109,35 +103,10 @@ function buildActionCards() {
 }
 
 export default async function ExpensesPage({ searchParams }: ExpensesPageProps) {
+  const session = await guardPageModule("expenses");
+  const company = session.company;
   const params = await searchParams;
-  const token = await getAuthToken();
-
-  if (!token) redirect("/login");
-
-  const payload = verifyToken<AuthPayload>(token);
-
-  if (!payload?.userId || !payload.companyId) redirect("/login");
-
-  const user = await db.user.findUnique({
-    where: { id: payload.userId },
-    include: {
-      companyUsers: {
-        include: {
-          company: true,
-        },
-      },
-    },
-  });
-
-  if (!user) redirect("/login");
-
-  const company =
-    user.companyUsers.find((item) => item.companyId === payload.companyId)
-      ?.company ?? user.companyUsers[0]?.company;
-
-  if (!company) redirect("/login");
-
-  const now = new Date();
+const now = new Date();
   const activeTab = parseExpenseTab(params.tab);
   const currentPage = parsePage(params.page);
   const searchQuery = parseSearchQuery(params.q);

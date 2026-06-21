@@ -10,6 +10,8 @@ import {
   CheckCircle2,
   Download,
   Edit3,
+  ExternalLink,
+  FileText,
   Mail,
   MapPin,
   Phone,
@@ -20,10 +22,11 @@ import {
   Wallet,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
+import { guardPageModule } from "@/lib/module-access";
+
 import { CustomerCollectPanel } from "@/components/customers/customer-collect-panel";
 import { CustomerLedgerTable } from "@/components/customers/customer-ledger-table";
 import { db } from "@/lib/prisma";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import { getCustomerDetailLedgerData } from "@/lib/customer-detail-data";
 import { getCustomerGroupColorMap } from "@/lib/customer-group-service";
 import { normalizeGroupName } from "@/lib/customer-group-utils";
@@ -34,6 +37,7 @@ import {
   getGroupBadge,
   getInitials,
 } from "@/lib/customers-page-utils";
+import { hasCustomerTaxCertificate } from "@/lib/customer-form-utils";
 
 type Props = {
   params: Promise<{
@@ -43,11 +47,6 @@ type Props = {
     created?: string;
     updated?: string;
   }>;
-};
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
 };
 
 function formatDate(date: Date) {
@@ -106,35 +105,13 @@ function SummaryLine({
   );
 }
 
-export default async function CustomerDetailPage({
-  params,
+export default async function CustomerDetailPage({ params,
   searchParams,
 }: Props) {
-  const { id } = await params;
+  const session = await guardPageModule("customers");
+  const company = session.company;
+const { id } = await params;
   const query = await searchParams;
-
-  const token = await getAuthToken();
-  if (!token) redirect("/login");
-
-  const payload = verifyToken<AuthPayload>(token);
-  if (!payload?.userId || !payload.companyId) redirect("/login");
-
-  const user = await db.user.findUnique({
-    where: { id: payload.userId },
-    include: {
-      companyUsers: {
-        include: { company: true },
-      },
-    },
-  });
-
-  if (!user) redirect("/login");
-
-  const company =
-    user.companyUsers.find((item) => item.companyId === payload.companyId)
-      ?.company ?? user.companyUsers[0]?.company;
-
-  if (!company) redirect("/login");
 
   const customer = await db.customer.findFirst({
     where: {
@@ -271,7 +248,7 @@ export default async function CustomerDetailPage({
 
             <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
               <h2 className="mb-4 text-[16px] font-black text-[#0f1f4d]">
-                İletişim ve Vergi Bilgileri
+                İletişim Bilgileri
               </h2>
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -286,18 +263,80 @@ export default async function CustomerDetailPage({
                   icon={<Mail size={18} />}
                 />
                 <InfoCard
-                  label="Vergi No / T.C."
-                  value={customer.taxNo || "Belirtilmedi"}
-                  icon={<Building2 size={18} />}
-                />
-                <InfoCard
                   label="Müşteri Grubu"
                   value={customerGroupName}
                   icon={<Users size={18} />}
                 />
               </div>
+            </section>
+
+            <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+              <h2 className="mb-4 text-[16px] font-black text-[#0f1f4d]">
+                Vergi Bilgileri
+              </h2>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <InfoCard
+                  label="Vergi No / TCKN"
+                  value={customer.taxNo || "Belirtilmedi"}
+                  icon={<Building2 size={18} />}
+                />
+                <InfoCard
+                  label="Vergi Dairesi"
+                  value={customer.taxOffice || "Belirtilmedi"}
+                  icon={<ReceiptText size={18} />}
+                />
+              </div>
 
               <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+                <div className="mb-3 flex items-center gap-2 text-slate-500">
+                  <FileText size={16} />
+                  <p className="text-[11px] font-black uppercase tracking-wide">
+                    Vergi Levhası
+                  </p>
+                </div>
+
+                {hasCustomerTaxCertificate(customer) ? (
+                  <div className="space-y-3">
+                    <p className="text-[14px] font-semibold text-[#24345f]">
+                      {customer.taxCertificateFileName || "Vergi levhası dosyası"}
+                    </p>
+
+                    <div className="flex flex-wrap gap-2">
+                      <a
+                        href={customer.taxCertificateUrl!}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex h-9 items-center gap-1 rounded-xl bg-blue-600 px-3 text-[11px] font-black text-white transition hover:opacity-95"
+                      >
+                        <ExternalLink size={14} />
+                        Vergi Levhasını Görüntüle
+                      </a>
+
+                      <a
+                        href={customer.taxCertificateUrl!}
+                        download={customer.taxCertificateFileName || undefined}
+                        className="inline-flex h-9 items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-black text-[#24345f] transition hover:bg-slate-50"
+                      >
+                        <Download size={14} />
+                        İndir
+                      </a>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[14px] font-semibold text-slate-500">
+                    Vergi levhası eklenmemiş.
+                  </p>
+                )}
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+              <h2 className="mb-4 text-[16px] font-black text-[#0f1f4d]">
+                Adres
+              </h2>
+
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
                 <div className="mb-3 flex items-center gap-2 text-slate-500">
                   <MapPin size={16} />
                   <p className="text-[11px] font-black uppercase tracking-wide">

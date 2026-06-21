@@ -1,10 +1,12 @@
 import { db } from "@/lib/prisma";
+import { invalidateDashboardCache } from "@/lib/dashboard-cache-invalidation";
 import { createNotification } from "@/lib/notification-service";
 import { applyCustomerDebtFromDocument } from "@/lib/customer-balance-utils";
 import {
   recordSaleCollection,
   resolveSalePayment,
 } from "@/lib/sale-payment-utils";
+import type { StockWarningItem } from "@/lib/stock-policy";
 import {
   SaleStockValidationError,
   applySaleStockDecrement,
@@ -19,6 +21,9 @@ import {
   mapPosPaymentMethodToCollectionMethod,
   type PosCheckoutInput,
 } from "@/lib/pos-checkout-utils";
+import { validateSaleLineItems } from "@/lib/sale-calculation-utils";
+import { assertOptionalTenantCustomer } from "@/lib/tenant/tenant-resource";
+import { TenantNotFoundError } from "@/lib/tenant/tenant-errors";
 
 export { SaleStockValidationError };
 
@@ -28,6 +33,12 @@ export async function executePosCheckout(input: {
   data: PosCheckoutInput;
 }) {
   const { companyId, userId, data } = input;
+
+  const lineError = validateSaleLineItems(data.items);
+  if (lineError) {
+    throw new Error(lineError);
+  }
+
   const totals = calculatePosTotals(data.items, data.discount);
 
   const payment = resolveSalePayment({
@@ -36,6 +47,10 @@ export async function executePosCheckout(input: {
     collectedAmount: data.collectedAmount,
   });
 
+  let stockWarnings: StockWarningItem[] = [];
+
+  await assertOptionalTenantCustomer(db, companyId, data.customerId);
+
   const sale = await db.$transaction(async (tx) => {
     const resolvedWarehouseId = await resolveWarehouseId(
       companyId,
@@ -43,7 +58,12 @@ export async function executePosCheckout(input: {
       tx
     );
 
-    await validateSaleItemsStock(tx, companyId, data.items, resolvedWarehouseId);
+    stockWarnings = await validateSaleItemsStock(
+      tx,
+      companyId,
+      data.items,
+      resolvedWarehouseId
+    );
 
     const createdSale = await tx.sale.create({
       data: {
@@ -111,10 +131,16 @@ export async function executePosCheckout(input: {
 
     await applyCustomerDebtFromDocument(
       tx,
+      companyId,
       data.customerId || null,
       totals.total,
       payment.paidAmount
     );
+
+    const stockWarningNote =
+      stockWarnings.length > 0
+        ? ` (${stockWarnings.length} kalemde stok uyarısı)`
+        : "";
 
     await tx.activityLog.create({
       data: {
@@ -122,7 +148,7 @@ export async function executePosCheckout(input: {
         userId,
         action: "CREATE",
         module: "pos",
-        message: `${createdSale.saleNo} numaralı POS satışı oluşturuldu.`,
+        message: `${createdSale.saleNo} numaralı POS satışı oluşturuldu.${stockWarningNote}`,
       },
     });
 
@@ -145,5 +171,7 @@ export async function executePosCheckout(input: {
     return createdSale;
   });
 
-  return sale;
+  invalidateDashboardCache(companyId, "pos-checkout");
+
+  return { sale, stockWarnings };
 }

@@ -8,6 +8,27 @@ import { endOfMonth, percentChange, startOfDay, startOfMonth } from "@/lib/dashb
 
 export type ReportTabKey = "all" | "financial" | "sales" | "stock" | "customer";
 
+export type ReportViewKey =
+  | "income-expense"
+  | "cash-flow"
+  | "sales"
+  | "products"
+  | "customers"
+  | "stock";
+
+export type ReportSections = {
+  showKpi: boolean;
+  showIncomeExpenseChart: boolean;
+  showCashFlowChart: boolean;
+  showCashFlowBreakdown: boolean;
+  showExpenseCategories: boolean;
+  showSalesSummary: boolean;
+  showTopProducts: boolean;
+  showStockSummary: boolean;
+  showStockTable: boolean;
+  showCustomerSummary: boolean;
+};
+
 export type MonthlyFinancePoint = {
   month: string;
   income: number;
@@ -50,6 +71,7 @@ export type ReportCardItem = {
   title: string;
   description: string;
   tab: ReportTabKey;
+  href?: string;
   iconKey:
     | "trendingUp"
     | "wallet"
@@ -122,6 +144,7 @@ export const REPORT_CARDS: ReportCardItem[] = [
     title: "Personel Performansı",
     description: "Çalışan satış ve verimlilik analizi",
     tab: "all",
+    href: "/reports/personnel-performance",
     iconKey: "users",
     color: "blue",
   },
@@ -138,6 +161,140 @@ export function parseReportTab(value?: string | null): ReportTabKey {
   }
 
   return "all";
+}
+
+const REPORT_VIEW_KEYS = new Set<ReportViewKey>([
+  "income-expense",
+  "cash-flow",
+  "sales",
+  "products",
+  "customers",
+  "stock",
+]);
+
+export function parseReportView(value?: string | null): ReportViewKey | null {
+  if (!value || !REPORT_VIEW_KEYS.has(value as ReportViewKey)) {
+    return null;
+  }
+
+  return value as ReportViewKey;
+}
+
+export function getReportCardByKey(key: string) {
+  return REPORT_CARDS.find((card) => card.key === key);
+}
+
+export function resolveReportSections(
+  activeReport: ReportViewKey | null,
+  activeTab: ReportTabKey
+): ReportSections {
+  if (activeReport === "income-expense") {
+    return {
+      showKpi: true,
+      showIncomeExpenseChart: true,
+      showCashFlowChart: false,
+      showCashFlowBreakdown: false,
+      showExpenseCategories: true,
+      showSalesSummary: false,
+      showTopProducts: false,
+      showStockSummary: false,
+      showStockTable: false,
+      showCustomerSummary: false,
+    };
+  }
+
+  if (activeReport === "cash-flow") {
+    return {
+      showKpi: true,
+      showIncomeExpenseChart: false,
+      showCashFlowChart: true,
+      showCashFlowBreakdown: true,
+      showExpenseCategories: false,
+      showSalesSummary: false,
+      showTopProducts: false,
+      showStockSummary: false,
+      showStockTable: false,
+      showCustomerSummary: false,
+    };
+  }
+
+  if (activeReport === "sales") {
+    return {
+      showKpi: false,
+      showIncomeExpenseChart: false,
+      showCashFlowChart: false,
+      showCashFlowBreakdown: false,
+      showExpenseCategories: false,
+      showSalesSummary: true,
+      showTopProducts: true,
+      showStockSummary: false,
+      showStockTable: false,
+      showCustomerSummary: false,
+    };
+  }
+
+  if (activeReport === "products") {
+    return {
+      showKpi: false,
+      showIncomeExpenseChart: false,
+      showCashFlowChart: false,
+      showCashFlowBreakdown: false,
+      showExpenseCategories: false,
+      showSalesSummary: false,
+      showTopProducts: true,
+      showStockSummary: false,
+      showStockTable: false,
+      showCustomerSummary: false,
+    };
+  }
+
+  if (activeReport === "customers") {
+    return {
+      showKpi: false,
+      showIncomeExpenseChart: false,
+      showCashFlowChart: false,
+      showCashFlowBreakdown: false,
+      showExpenseCategories: false,
+      showSalesSummary: false,
+      showTopProducts: false,
+      showStockSummary: false,
+      showStockTable: false,
+      showCustomerSummary: true,
+    };
+  }
+
+  if (activeReport === "stock") {
+    return {
+      showKpi: false,
+      showIncomeExpenseChart: false,
+      showCashFlowChart: false,
+      showCashFlowBreakdown: false,
+      showExpenseCategories: false,
+      showSalesSummary: false,
+      showTopProducts: false,
+      showStockSummary: true,
+      showStockTable: true,
+      showCustomerSummary: false,
+    };
+  }
+
+  const showFinancial = tabShowsFinancial(activeTab);
+  const showSales = tabShowsSales(activeTab);
+  const showStock = tabShowsStock(activeTab);
+  const showCustomer = tabShowsCustomer(activeTab);
+
+  return {
+    showKpi: showFinancial,
+    showIncomeExpenseChart: showFinancial,
+    showCashFlowChart: showFinancial,
+    showCashFlowBreakdown: showFinancial,
+    showExpenseCategories: showFinancial,
+    showSalesSummary: showSales,
+    showTopProducts: showSales,
+    showStockSummary: showStock,
+    showStockTable: showStock,
+    showCustomerSummary: showCustomer,
+  };
 }
 
 export function endOfDay(date: Date) {
@@ -299,12 +456,15 @@ export function buildReportKpiCards(
 
 export function buildReportsQuery(params: {
   tab?: ReportTabKey;
+  report?: ReportViewKey | null;
   from?: Date | string;
   to?: Date | string;
 }) {
   const search = new URLSearchParams();
 
-  if (params.tab && params.tab !== "all") {
+  if (params.report) {
+    search.set("report", params.report);
+  } else if (params.tab && params.tab !== "all") {
     search.set("tab", params.tab);
   }
 
@@ -330,12 +490,15 @@ export function buildReportsQuery(params: {
 
 export function buildReportsExportQuery(params: {
   tab?: ReportTabKey;
+  report?: ReportViewKey | null;
   from?: Date | string;
   to?: Date | string;
 }) {
   const search = new URLSearchParams();
 
-  if (params.tab && params.tab !== "all") {
+  if (params.report) {
+    search.set("report", params.report);
+  } else if (params.tab && params.tab !== "all") {
     search.set("tab", params.tab);
   }
 
@@ -375,12 +538,35 @@ export function tabShowsCustomer(tab: ReportTabKey) {
   return tab === "all" || tab === "customer";
 }
 
-export function filterReportCards(tab: ReportTabKey) {
+export function filterReportCards(
+  tab: ReportTabKey,
+  activeReport?: ReportViewKey | null
+) {
+  if (activeReport) {
+    return REPORT_CARDS;
+  }
+
   if (tab === "all") {
     return REPORT_CARDS;
   }
 
   return REPORT_CARDS.filter((card) => card.tab === tab);
+}
+
+export function buildReportCardHref(
+  card: ReportCardItem,
+  from: Date,
+  to: Date
+) {
+  if (card.href) {
+    return card.href;
+  }
+
+  return buildReportsQuery({
+    report: card.key as ReportViewKey,
+    from,
+    to,
+  });
 }
 
 export {

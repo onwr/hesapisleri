@@ -37,7 +37,7 @@ export function WarehouseCreateModal({ open, onClose }: WarehouseCreateModalProp
     setError("");
 
     try {
-      const response = await fetch("/api/stocks/warehouses", {
+      const response = await fetch("/api/products/stocks/warehouses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

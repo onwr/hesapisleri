@@ -51,7 +51,9 @@ export function StatCard({
           {icon}
         </div>
 
-        <ChevronRight size={16} className="text-[#0f1f4d]/70" />
+        {href ? (
+          <ChevronRight size={16} className="text-[#0f1f4d]/70" />
+        ) : null}
       </div>
 
       <p className="mt-4 text-[12px] font-bold text-[#24345f]/80">{title}</p>

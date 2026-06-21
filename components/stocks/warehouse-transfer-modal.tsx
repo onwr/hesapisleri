@@ -2,13 +2,22 @@
 
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, X } from "lucide-react";
 import type {
   StockFormProduct,
   StockFormWarehouse,
 } from "@/components/stocks/stock-movement-modal";
 import { toDateTimeLocalValue } from "@/lib/stock-movement-utils";
+import { TRANSFER_FAILED_MESSAGE } from "@/lib/warehouse-transfer-utils";
+
+function createIdempotencyKey() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `transfer-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
 
 type WarehouseTransferModalProps = {
   open: boolean;
@@ -30,6 +39,7 @@ export function WarehouseTransferModal({
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const idempotencyKeyRef = useRef(createIdempotencyKey());
   const [productId, setProductId] = useState(defaultProductId ?? "");
   const [fromWarehouseId, setFromWarehouseId] = useState(
     defaultFromWarehouseId ?? ""
@@ -52,8 +62,13 @@ export function WarehouseTransferModal({
       setNote("");
       setTransferDate(toDateTimeLocalValue());
       setError("");
+      idempotencyKeyRef.current = createIdempotencyKey();
     }
   }, [open, defaultProductId, defaultFromWarehouseId, products, warehouses]);
+
+  useEffect(() => {
+    idempotencyKeyRef.current = createIdempotencyKey();
+  }, [productId, fromWarehouseId, toWarehouseId, quantity]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -91,16 +106,18 @@ export function WarehouseTransferModal({
           quantity: parsedQuantity,
           note: note.trim() || undefined,
           transferDate,
+          idempotencyKey: idempotencyKeyRef.current,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok || !data.success) {
-        setError(data.message || "Transfer tamamlanamadı.");
+        setError(data.message || TRANSFER_FAILED_MESSAGE);
         return;
       }
 
+      idempotencyKeyRef.current = createIdempotencyKey();
       onClose();
       router.refresh();
     } catch {

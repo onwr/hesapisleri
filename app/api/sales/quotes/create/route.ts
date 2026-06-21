@@ -1,13 +1,8 @@
 import { NextResponse } from "next/server";
+import { requireApiModuleAccess } from "@/lib/module-access";
 import { z } from "zod";
 import { db } from "@/lib/prisma";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import { generateQuoteNo } from "@/lib/sale-number-utils";
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
 
 const saleItemSchema = z.object({
   productId: z.string().optional(),
@@ -25,24 +20,11 @@ const createQuoteSchema = z.object({
 
 export async function POST(req: Request) {
   try {
-    const token = await getAuthToken();
+    const auth = await requireApiModuleAccess("sales");
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.userId || !payload.companyId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
-
+    const companyId = auth.companyId;
+    const userId = auth.userId;
     const body = await req.json();
     const parsed = createQuoteSchema.safeParse(body);
 
@@ -74,9 +56,9 @@ export async function POST(req: Request) {
     const quote = await db.$transaction(async (tx) => {
       const createdQuote = await tx.sale.create({
         data: {
-          companyId: payload.companyId!,
+          companyId: companyId!,
           customerId: customerId || null,
-          userId: payload.userId,
+          userId: userId,
           saleNo: generateQuoteNo(),
           subtotal,
           vatTotal,
@@ -103,8 +85,8 @@ export async function POST(req: Request) {
 
       await tx.activityLog.create({
         data: {
-          companyId: payload.companyId!,
-          userId: payload.userId,
+          companyId: companyId!,
+          userId: userId,
           action: "CREATE",
           module: "sales",
           message: `${createdQuote.saleNo} numaralı teklif oluşturuldu.`,

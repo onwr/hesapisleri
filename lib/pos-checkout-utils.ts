@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { roundMoney } from "@/lib/sale-payment-utils";
 import type { SalePaymentMethod } from "@/lib/sale-payment-utils";
+import {
+  calculateSaleTotals,
+  type SaleLineItemInput,
+} from "@/lib/sale-calculation-utils";
 
 export type PosPaymentMethod = "CASH" | "CARD" | "BANK_TRANSFER";
 export type PosPaymentStatus = "PAID" | "UNPAID" | "PARTIAL";
@@ -10,7 +14,7 @@ export const posItemSchema = z.object({
   name: z.string(),
   quantity: z.number().min(1),
   unitPrice: z.number().min(0),
-  vatRate: z.number().min(0).default(20),
+  vatRate: z.number().min(0).max(100).default(20),
 });
 
 export const posCheckoutSchema = z.object({
@@ -27,11 +31,7 @@ export const posCheckoutSchema = z.object({
 
 export type PosCheckoutInput = z.infer<typeof posCheckoutSchema>;
 
-export type PosCartItemInput = {
-  quantity: number;
-  unitPrice: number;
-  vatRate: number;
-};
+export type PosCartItemInput = SaleLineItemInput;
 
 export type PosTotals = {
   subtotal: number;
@@ -50,26 +50,16 @@ export function calculatePosTotals(
   items: PosCartItemInput[],
   discountInput = 0
 ): PosTotals {
-  const subtotal = roundMoney(
-    items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
-  );
-
-  const vatTotal = roundMoney(
-    items.reduce((sum, item) => {
-      const itemTotal = item.quantity * item.unitPrice;
-      return sum + (itemTotal * item.vatRate) / 100;
-    }, 0)
-  );
-
-  const gross = roundMoney(subtotal + vatTotal);
-  const discount = roundMoney(Math.min(discountInput, gross));
-  const total = roundMoney(gross - discount);
+  const totals = calculateSaleTotals(items, {
+    type: "AMOUNT",
+    value: discountInput,
+  });
 
   return {
-    subtotal,
-    vatTotal,
-    discount,
-    total,
+    subtotal: totals.subtotal,
+    vatTotal: totals.vatTotal,
+    discount: totals.discount,
+    total: totals.total,
   };
 }
 

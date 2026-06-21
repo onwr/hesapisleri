@@ -4,19 +4,30 @@ export type CashAccountRow = {
   id: string;
   name: string;
   type: string;
+  bankName: string | null;
+  branchName: string | null;
+  iban: string | null;
+  accountNumber: string | null;
   balance: number;
   currency: string;
   status: string;
+  isDefault: boolean;
+  description: string | null;
 };
 
 export type BankAccountRow = {
   id: string;
   name: string;
+  type: string;
   bankName: string | null;
+  branchName: string | null;
   iban: string | null;
+  accountNumber: string | null;
   balance: number;
   currency: string;
   status: string;
+  isDefault: boolean;
+  description: string | null;
 };
 
 export type TransactionRow = {
@@ -96,9 +107,16 @@ export function formatCashDate(date: Date) {
 }
 
 export function getAccountTypeText(type: string) {
-  if (type === "CASH") return "Kasa";
-  if (type === "BANK") return "Banka";
-  return type;
+  const labels: Record<string, string> = {
+    CASH: "Kasa",
+    BANK: "Banka",
+    CREDIT_CARD: "Kredi Kartı",
+    POS: "POS Hesabı",
+    OTHER: "Diğer",
+    STATIC: "Diğer",
+  };
+
+  return labels[type] ?? type;
 }
 
 export function getAccountStatusBadge(status: string) {

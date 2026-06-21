@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import {
   AlertTriangle,
   ArrowRight,
@@ -11,16 +10,16 @@ import {
   ReceiptText,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
+import { guardPageModule } from "@/lib/module-access";
+
 import { InvoicesRowActions } from "@/components/invoices/invoices-row-actions";
 import {
   InvoicesTablePagination,
   InvoicesTableToolbar,
 } from "@/components/invoices/invoices-table-controls";
 import { InvoicesSidebarWidgets } from "@/components/invoices/invoices-sidebar-widgets";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import { endOfMonth, startOfMonth } from "@/lib/dashboard-metrics";
 import { getInvoiceCollectionAccounts } from "@/lib/invoice-service";
-import { db } from "@/lib/prisma";
 import { getInvoicesPageData } from "@/lib/invoices-page-data";
 import {
   buildInvoicesQuery,
@@ -36,11 +35,6 @@ import {
   parsePage,
   parseSearchQuery,
 } from "@/lib/invoices-page-utils";
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
 
 type InvoicesPageProps = {
   searchParams: Promise<{
@@ -77,35 +71,10 @@ const colorClassMap = {
 };
 
 export default async function InvoicesPage({ searchParams }: InvoicesPageProps) {
+  const session = await guardPageModule("invoices");
+  const company = session.company;
   const params = await searchParams;
-  const token = await getAuthToken();
-
-  if (!token) redirect("/login");
-
-  const payload = verifyToken<AuthPayload>(token);
-
-  if (!payload?.userId || !payload.companyId) redirect("/login");
-
-  const user = await db.user.findUnique({
-    where: { id: payload.userId },
-    include: {
-      companyUsers: {
-        include: {
-          company: true,
-        },
-      },
-    },
-  });
-
-  if (!user) redirect("/login");
-
-  const company =
-    user.companyUsers.find((item) => item.companyId === payload.companyId)
-      ?.company ?? user.companyUsers[0]?.company;
-
-  if (!company) redirect("/login");
-
-  const now = new Date();
+const now = new Date();
   const activeTab = parseInvoiceTab(params.tab);
   const currentPage = parsePage(params.page);
   const searchQuery = parseSearchQuery(params.q);

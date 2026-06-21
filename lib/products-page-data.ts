@@ -1,5 +1,6 @@
 import type { MarketplaceChannel } from "@prisma/client";
 import { db } from "@/lib/prisma";
+import { calculateInventoryValue } from "@/lib/inventory-value-utils";
 import {
   matchesProductStockFilter,
   parseProductSort,
@@ -39,9 +40,12 @@ export {
 
 export type ProductPageStats = {
   totalProducts: number;
+  stockProducts: number;
+  serviceProducts: number;
   activeProducts: number;
   lowStockProducts: number;
   outOfStockProducts: number;
+  lowOrNegativeStock: number;
   totalStockValue: number;
 };
 
@@ -56,6 +60,7 @@ type ProductRecord = {
   imageUrl: string | null;
   stock: number;
   minStock: number;
+  productType: "STOCK" | "SERVICE";
   buyPrice: unknown;
   sellPrice: unknown;
   status: string;
@@ -85,11 +90,8 @@ function withMeta(product: ProductRecord) {
     categoryName,
     buyPrice: Number(product.buyPrice),
     sellPrice: Number(product.sellPrice),
-    isService: isServiceProduct({
-      name: product.name,
-      description: product.description,
-      categoryName,
-    }),
+    isService: product.productType === "SERVICE",
+    productType: product.productType,
   };
 }
 
@@ -134,6 +136,7 @@ function toTableRow(
     status: product.status,
     imageUrl: product.imageUrl,
     isService: product.isService,
+    productType: product.productType,
     mappedChannels: channelMap.get(product.id) ?? [],
   };
 }
@@ -181,29 +184,29 @@ export async function getProductsPageData(
     .filter((name) => name !== "Genel")
     .sort((a, b) => a.localeCompare(b, "tr-TR"));
 
+  const stockProducts = enrichedProducts.filter((product) => !product.isService);
+  const serviceProducts = enrichedProducts.filter((product) => product.isService);
   const activeProducts = enrichedProducts.filter(
     (product) => product.status === "ACTIVE"
   );
-  const lowStockProducts = enrichedProducts.filter(
-    (product) =>
-      !product.isService &&
-      product.stock > 0 &&
-      product.stock <= product.minStock
+  const lowStockProducts = stockProducts.filter(
+    (product) => product.stock > 0 && product.stock <= product.minStock
   );
-  const outOfStockProducts = enrichedProducts.filter(
-    (product) => !product.isService && product.stock <= 0
+  const outOfStockProducts = stockProducts.filter(
+    (product) => product.stock <= 0
   );
 
-  const totalStockValue = enrichedProducts.reduce(
-    (sum, product) => sum + product.stock * product.sellPrice,
-    0
-  );
+  const totalStockValue = calculateInventoryValue(enrichedProducts);
 
   const stats: ProductPageStats = {
     totalProducts: enrichedProducts.length,
+    stockProducts: stockProducts.length,
+    serviceProducts: serviceProducts.length,
     activeProducts: activeProducts.length,
     lowStockProducts: lowStockProducts.length,
     outOfStockProducts: outOfStockProducts.length,
+    lowOrNegativeStock:
+      lowStockProducts.length + outOfStockProducts.length,
     totalStockValue,
   };
 

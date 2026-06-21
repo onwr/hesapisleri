@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { getAppSession } from "@/lib/app-session";
+import { getSidebarMembershipSummary } from "@/lib/membership-service";
 import { AppShellClient } from "./app-shell-client";
 
 type AppShellProps = {
@@ -8,6 +9,7 @@ type AppShellProps = {
 
 export async function AppShell({ children }: AppShellProps) {
   const session = await getAppSession();
+  const membershipSummary = await getSidebarMembershipSummary(session.company.id);
 
   return (
     <AppShellClient
@@ -16,6 +18,7 @@ export async function AppShell({ children }: AppShellProps) {
       companyRole={session.effectiveRole}
       isSuperAdmin={session.isSuperAdmin}
       isOwner={session.companyUser.isOwner}
+      membershipSummary={membershipSummary}
     >
       {children}
     </AppShellClient>

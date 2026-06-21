@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createActivityLog } from "@/lib/activity-log-utils";
 import { db } from "@/lib/prisma";
 import { requireApiModuleAccess } from "@/lib/module-access";
 import {
@@ -7,10 +8,13 @@ import {
   normalizeOptionalText,
   productFormSchema,
 } from "@/lib/product-form-utils";
+import { normalizeServiceProductFields } from "@/lib/product-type-utils";
 import {
   assertUniqueProductIdentifiers,
   resolveProductCategoryId,
 } from "@/lib/product-service";
+import { requireCompanyLimit } from "@/lib/billing/entitlements/entitlement-enforcement-service";
+import { EntitlementError } from "@/lib/billing/entitlements/entitlement-errors";
 import { applyWarehouseStockMovement } from "@/lib/warehouse-service";
 
 export async function POST(req: Request) {
@@ -34,9 +38,14 @@ export async function POST(req: Request) {
       );
     }
 
-    const data = parsed.data;
+    const data = normalizeServiceProductFields(parsed.data);
+    const isService = data.productType === "SERVICE";
     const sku = normalizeOptionalText(data.sku);
-    const barcode = normalizeOptionalText(data.barcode);
+    const hasBarcodeField = Object.prototype.hasOwnProperty.call(body, "barcode");
+    const barcode =
+      isService || !hasBarcodeField
+        ? null
+        : normalizeOptionalText(data.barcode ?? null);
 
     const uniqueCheck = await assertUniqueProductIdentifiers(companyId, {
       sku,
@@ -50,7 +59,7 @@ export async function POST(req: Request) {
           message: uniqueCheck.message,
           errors: { [uniqueCheck.field]: [uniqueCheck.message] },
         },
-        { status: 400 }
+        { status: uniqueCheck.field === "barcode" ? 409 : 400 }
       );
     }
 
@@ -59,19 +68,34 @@ export async function POST(req: Request) {
       data.categoryName
     );
 
+    try {
+      await requireCompanyLimit(companyId, "MAX_PRODUCTS", { incrementBy: 1 });
+    } catch (error) {
+      if (error instanceof EntitlementError) {
+        return NextResponse.json(
+          { success: false, message: error.message },
+          { status: error.status }
+        );
+      }
+      throw error;
+    }
+
     const product = await db.product.create({
       data: {
         companyId: companyId,
         categoryId,
+        productType: data.productType,
         name: data.name,
         sku,
         barcode,
         description: normalizeOptionalText(data.description),
         imageUrl: normalizeImageUrl(data.imageUrl),
-        stock: data.stock,
-        minStock: data.minStock,
+        stock: isService ? 0 : data.stock,
+        minStock: isService ? 0 : data.minStock,
         unitType: data.unitType,
-        warehouseLocation: normalizeOptionalText(data.warehouseLocation),
+        warehouseLocation: isService
+          ? null
+          : normalizeOptionalText(data.warehouseLocation),
         buyPrice: data.buyPrice,
         sellPrice: data.sellPrice,
         vatRate: data.vatRate,
@@ -79,7 +103,7 @@ export async function POST(req: Request) {
       },
     });
 
-    if (data.stock > 0) {
+    if (!isService && data.stock > 0) {
       await applyWarehouseStockMovement({
         companyId,
         userId,
@@ -92,19 +116,21 @@ export async function POST(req: Request) {
       });
     }
 
-    await db.activityLog.create({
-      data: {
-        companyId: companyId,
-        userId: userId,
-        action: "CREATE",
-        module: "products",
-        message: `${product.name} ürünü oluşturuldu.`,
-      },
+    await createActivityLog({
+      companyId,
+      userId,
+      action: "CREATE",
+      module: "products",
+      message: isService
+        ? `Hizmet oluşturuldu: ${product.name}`
+        : `Ürün oluşturuldu: ${product.name}`,
     });
 
     return NextResponse.json({
       success: true,
-      message: "Ürün başarıyla oluşturuldu.",
+      message: isService
+        ? "Hizmet başarıyla oluşturuldu."
+        : "Ürün başarıyla oluşturuldu.",
       data: product,
     });
   } catch (error) {

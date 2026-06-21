@@ -24,6 +24,11 @@ import {
 import { AppLoadingScreen } from "@/components/layout/app-loading-screen";
 import { CustomerGroupSelect } from "@/components/customers/customer-group-select";
 import {
+  CustomerTaxCertificateField,
+  createEmptyTaxCertificateValue,
+  type TaxCertificateFormValue,
+} from "@/components/customers/customer-tax-certificate-field";
+import {
   buildCustomerPayload,
   getFirstCustomerErrorMessage,
   mapCustomerFieldErrors,
@@ -41,14 +46,23 @@ export default function NewCustomerPage() {
     phone: "",
     email: "",
     taxNo: "",
+    taxOffice: "",
     address: "",
     group: "Genel",
+    ...createEmptyTaxCertificateValue(),
   });
 
-  function updateForm(key: keyof typeof form, value: string) {
+  function updateForm(key: keyof typeof form, value: string | number | null) {
     setForm((prev) => ({
       ...prev,
       [key]: value,
+    }));
+  }
+
+  function updateTaxCertificate(value: TaxCertificateFormValue) {
+    setForm((prev) => ({
+      ...prev,
+      ...value,
     }));
   }
 
@@ -197,6 +211,33 @@ export default function NewCustomerPage() {
                   />
                 </div>
 
+                <CustomerGroupSelect
+                  value={form.group}
+                  onChange={(value) => updateForm("group", value)}
+                  error={fieldErrors.group}
+                />
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+              <div className="border-b border-slate-100 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                    <Phone size={20} strokeWidth={2.4} />
+                  </div>
+
+                  <div>
+                    <h2 className="text-[16px] font-black text-[#0f1f4d]">
+                      İletişim
+                    </h2>
+                    <p className="text-[12px] font-medium text-slate-500">
+                      Telefon ve e-posta bilgileri.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 p-4 md:grid-cols-2">
                 <InputField
                   label="Telefon"
                   icon={<Phone size={18} />}
@@ -222,15 +263,15 @@ export default function NewCustomerPage() {
               <div className="border-b border-slate-100 p-4">
                 <div className="flex items-center gap-3">
                   <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-50 text-violet-600">
-                    <Building2 size={20} strokeWidth={2.4} />
+                    <ReceiptText size={20} strokeWidth={2.4} />
                   </div>
 
                   <div>
                     <h2 className="text-[16px] font-black text-[#0f1f4d]">
-                      Vergi ve Grup Bilgileri
+                      Vergi Bilgileri
                     </h2>
                     <p className="text-[12px] font-medium text-slate-500">
-                      Kurumsal müşteri takibi için ek bilgiler.
+                      Vergi numarası, vergi dairesi ve vergi levhası.
                     </p>
                   </div>
                 </div>
@@ -238,7 +279,7 @@ export default function NewCustomerPage() {
 
               <div className="grid gap-4 p-4 md:grid-cols-2">
                 <InputField
-                  label="Vergi No / T.C."
+                  label="Vergi No / TCKN"
                   icon={<Building2 size={18} />}
                   value={form.taxNo}
                   onChange={(value) => updateForm("taxNo", value)}
@@ -246,11 +287,27 @@ export default function NewCustomerPage() {
                   error={fieldErrors.taxNo}
                 />
 
-                <CustomerGroupSelect
-                  value={form.group}
-                  onChange={(value) => updateForm("group", value)}
-                  error={fieldErrors.group}
+                <InputField
+                  label="Vergi Dairesi"
+                  icon={<Building2 size={18} />}
+                  value={form.taxOffice}
+                  onChange={(value) => updateForm("taxOffice", value)}
+                  placeholder="Örn. Battalgazi Vergi Dairesi"
+                  error={fieldErrors.taxOffice}
                 />
+
+                <div className="md:col-span-2">
+                  <CustomerTaxCertificateField
+                    value={{
+                      taxCertificateUrl: form.taxCertificateUrl,
+                      taxCertificateFileName: form.taxCertificateFileName,
+                      taxCertificateMimeType: form.taxCertificateMimeType,
+                      taxCertificateSize: form.taxCertificateSize,
+                    }}
+                    onChange={updateTaxCertificate}
+                    error={fieldErrors.taxCertificateUrl}
+                  />
+                </div>
               </div>
             </section>
 
@@ -263,7 +320,7 @@ export default function NewCustomerPage() {
 
                   <div>
                     <h2 className="text-[16px] font-black text-[#0f1f4d]">
-                      Adres Bilgisi
+                      Adres / Notlar
                     </h2>
                     <p className="text-[12px] font-medium text-slate-500">
                       Fatura ve teslimat süreçlerinde kullanılabilir.
@@ -380,6 +437,18 @@ export default function NewCustomerPage() {
                     <SummaryLine
                       label="Vergi / T.C."
                       value={form.taxNo || "Belirtilmedi"}
+                    />
+                    <SummaryLine
+                      label="Vergi Dairesi"
+                      value={form.taxOffice || "Belirtilmedi"}
+                    />
+                    <SummaryLine
+                      label="Vergi Levhası"
+                      value={
+                        form.taxCertificateUrl
+                          ? form.taxCertificateFileName || "Yüklendi"
+                          : "Belirtilmedi"
+                      }
                     />
                     <SummaryLine
                       label="Adres"

@@ -1,17 +1,12 @@
 import { NextResponse } from "next/server";
+import { requireApiModuleAccess } from "@/lib/module-access";
 import { z } from "zod";
 import { createNotification } from "@/lib/notification-service";
 import { db } from "@/lib/prisma";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import { cancelSaleById } from "@/lib/sale-cancel-service";
 import { parseNormalInvoiceMeta } from "@/lib/normal-invoice-meta";
 import { reverseCustomerDebtFromDocument, getInvoiceEffectivePaidAmount } from "@/lib/customer-balance-utils";
 import { validateInvoiceCancelEligibility } from "@/lib/invoice-service";
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
 
 type Props = {
   params: Promise<{
@@ -26,31 +21,21 @@ const patchSchema = z.object({
 export async function GET(_req: Request, { params }: Props) {
   try {
     const { id } = await params;
-    const token = await getAuthToken();
+    const auth = await requireApiModuleAccess("invoices");
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.userId || !payload.companyId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
-
+    const companyId = auth.companyId;
+    const userId = auth.userId;
     const invoice = await db.invoice.findFirst({
       where: {
         id,
-        companyId: payload.companyId,
+        companyId: companyId,
       },
       include: {
         customer: true,
+        items: {
+          orderBy: { lineIndex: "asc" },
+        },
       },
     });
 
@@ -68,8 +53,24 @@ export async function GET(_req: Request, { params }: Props) {
       data: {
         ...invoice,
         total: Number(invoice.total),
+        subtotal: Number(invoice.subtotal),
+        totalDiscount: Number(invoice.totalDiscount),
+        taxableAmount: Number(invoice.taxableAmount),
+        totalVat: Number(invoice.totalVat),
         gibMessage: displayMessage,
         meta,
+        items: invoice.items.map((item) => ({
+          id: item.id,
+          productId: item.productId,
+          name: item.productName,
+          quantity: Number(item.quantity),
+          unitPrice: Number(item.unitPrice),
+          vatRate: Number(item.vatRate),
+          lineNetAmount: Number(item.lineNetAmount),
+          vatAmount: Number(item.vatAmount),
+          lineGrossAmount: Number(item.lineGrossAmount),
+          discountAmount: Number(item.discountAmount),
+        })),
       },
     });
   } catch (error) {
@@ -88,24 +89,11 @@ export async function GET(_req: Request, { params }: Props) {
 export async function PATCH(req: Request, { params }: Props) {
   try {
     const { id } = await params;
-    const token = await getAuthToken();
+    const auth = await requireApiModuleAccess("invoices");
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.userId || !payload.companyId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
-
+    const companyId = auth.companyId;
+    const userId = auth.userId;
     const body = await req.json();
     const parsed = patchSchema.safeParse(body);
 
@@ -119,7 +107,7 @@ export async function PATCH(req: Request, { params }: Props) {
     const invoice = await db.invoice.findFirst({
       where: {
         id,
-        companyId: payload.companyId,
+        companyId: companyId,
       },
       include: {
         sale: true,
@@ -161,8 +149,8 @@ export async function PATCH(req: Request, { params }: Props) {
     if (invoice.saleId) {
       const result = await cancelSaleById(
         invoice.saleId,
-        payload.companyId,
-        payload.userId
+        companyId,
+        userId
       );
 
       if (!result.ok) {
@@ -183,6 +171,7 @@ export async function PATCH(req: Request, { params }: Props) {
 
       await reverseCustomerDebtFromDocument(
         tx,
+        companyId!,
         invoice.customerId,
         Number(invoice.total),
         effectivePaid
@@ -199,8 +188,8 @@ export async function PATCH(req: Request, { params }: Props) {
 
       await tx.activityLog.create({
         data: {
-          companyId: payload.companyId!,
-          userId: payload.userId,
+          companyId: companyId!,
+          userId: userId,
           action: "UPDATE",
           module: "invoices",
           message: `${invoice.invoiceNo} numaralı fatura iptal edildi.`,
@@ -209,8 +198,8 @@ export async function PATCH(req: Request, { params }: Props) {
 
       await createNotification(
         {
-          companyId: payload.companyId!,
-          userId: payload.userId,
+          companyId: companyId!,
+          userId: userId,
           type: "WARNING",
           category: "INVOICES",
           module: "invoices",

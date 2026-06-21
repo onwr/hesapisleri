@@ -1,12 +1,15 @@
+import { sanitizeAuthRedirectPath } from "@/lib/auth/auth-redirect";
+
 export function sanitizeRedirectPath(
   value: string | null | undefined
 ): string | null {
-  if (!value) return null;
+  if (!value) {
+    return null;
+  }
 
-  const trimmed = value.trim();
-  if (!trimmed.startsWith("/")) return null;
-  if (trimmed.startsWith("//")) return null;
-  if (trimmed.includes("://")) return null;
+  const sanitized = sanitizeAuthRedirectPath(value, { fallback: "" });
 
-  return trimmed;
+  return sanitized || null;
 }
+
+export { sanitizeAuthRedirectPath } from "@/lib/auth/auth-redirect";

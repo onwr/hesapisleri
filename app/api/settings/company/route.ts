@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuthToken, verifyToken } from "@/lib/auth";
+import { requireApiModuleAccess } from "@/lib/module-access";
 import {
   SettingsAccessError,
   serializeCompany,
@@ -12,31 +12,13 @@ import {
 } from "@/lib/storage/cdn";
 import { updateCompanySettingsSchema } from "@/lib/settings-utils";
 
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
-
 export async function PATCH(req: Request) {
   try {
-    const token = await getAuthToken();
+    const auth = await requireApiModuleAccess("settings");
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.userId || !payload.companyId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
-
+    const companyId = auth.companyId;
+    const userId = auth.userId;
     const body = await req.json();
     const parsed = updateCompanySettingsSchema.safeParse(body);
 
@@ -52,8 +34,8 @@ export async function PATCH(req: Request) {
     }
 
     const result = await updateCompanySettings({
-      companyId: payload.companyId,
-      userId: payload.userId,
+      companyId: companyId,
+      userId: userId,
       data: parsed.data,
     });
 

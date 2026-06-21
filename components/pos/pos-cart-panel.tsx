@@ -3,12 +3,20 @@
 import {
   Loader2,
   Minus,
+  Percent,
   Plus,
   ShoppingCart,
   Trash2,
   X,
 } from "lucide-react";
-import { POS_CARD_CLASS, POS_CART_ROW_CLASS } from "@/components/pos/pos-ui-tokens";
+import {
+  POS_CARD_CLASS,
+  POS_CART_ROW_CLASS,
+  POS_GRADIENT_CHECKOUT_CLASS,
+  POS_GRADIENT_TOTAL_CLASS,
+} from "@/components/pos/pos-ui-tokens";
+import { SaleLineEditFields } from "@/components/sales/sale-line-edit-fields";
+import { calculateLineSubtotal } from "@/lib/sale-calculation-utils";
 
 export type PosCartItem = {
   productId: string;
@@ -24,10 +32,13 @@ type PosCartPanelProps = {
   subtotal: number;
   vatTotal: number;
   discount: string;
+  discountAmount: number;
   total: number;
   error: string;
   checkingOut: boolean;
   onDiscountChange: (value: string) => void;
+  onUnitPriceChange: (productId: string, value: number) => void;
+  onVatRateChange: (productId: string, value: number) => void;
   onIncrease: (productId: string) => void;
   onDecrease: (productId: string) => void;
   onRemove: (productId: string) => void;
@@ -43,10 +54,13 @@ export function PosCartPanel({
   subtotal,
   vatTotal,
   discount,
+  discountAmount,
   total,
   error,
   checkingOut,
   onDiscountChange,
+  onUnitPriceChange,
+  onVatRateChange,
   onIncrease,
   onDecrease,
   onRemove,
@@ -56,6 +70,8 @@ export function PosCartPanel({
   mobile = false,
   onCloseMobile,
 }: PosCartPanelProps) {
+  const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+
   return (
     <div
       className={[
@@ -65,12 +81,14 @@ export function PosCartPanel({
     >
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-50 text-orange-600">
             <ShoppingCart size={20} />
           </div>
           <div>
             <h2 className="text-base font-extrabold text-[#0f1f4d]">Sepet</h2>
-            <p className="text-xs text-slate-500">{cart.length} ürün</p>
+            <p className="text-xs text-slate-500">
+              {cart.length} kalem · {cartItemCount} adet
+            </p>
           </div>
         </div>
 
@@ -104,17 +122,32 @@ export function PosCartPanel({
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="font-extrabold text-[#0f1f4d]">{item.name}</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Birim: {formatMoney(item.unitPrice)}
+                  <p className="mt-1 text-[10px] font-medium text-slate-400">
+                    Bu satışa özel fiyat
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => onRemove(item.productId)}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-rose-500"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-rose-100 bg-white text-rose-500 hover:bg-rose-50"
                 >
                   <Trash2 size={15} />
                 </button>
+              </div>
+
+              <div className="mt-3">
+                <SaleLineEditFields
+                  key={item.productId}
+                  unitPrice={item.unitPrice}
+                  vatRate={item.vatRate}
+                  onUnitPriceChange={(value) =>
+                    onUnitPriceChange(item.productId, value)
+                  }
+                  onVatRateChange={(value) =>
+                    onVatRateChange(item.productId, value)
+                  }
+                  compact
+                />
               </div>
 
               <div className="mt-3 flex items-center justify-between">
@@ -138,7 +171,7 @@ export function PosCartPanel({
                   </button>
                 </div>
                 <p className="text-sm font-extrabold text-[#0f1f4d]">
-                  {formatMoney(item.quantity * item.unitPrice)}
+                  {formatMoney(calculateLineSubtotal(item))}
                 </p>
               </div>
             </div>
@@ -146,33 +179,50 @@ export function PosCartPanel({
         )}
       </div>
 
-      <div className="mt-4 space-y-2 rounded-2xl border border-slate-200/60 bg-slate-50/50 p-4">
-        <div className="flex justify-between text-sm">
-          <span className="text-slate-500">Ara toplam</span>
-          <span className="font-bold text-[#0f1f4d]">
-            {formatMoney(subtotal)}
-          </span>
-        </div>
+      <div className="mt-4 space-y-2 rounded-2xl border border-rose-100 bg-rose-50/40 p-4">
         <div className="flex items-center justify-between gap-3 text-sm">
-          <span className="text-slate-500">İndirim (₺)</span>
+          <span className="inline-flex items-center gap-1.5 font-bold text-rose-700">
+            <Percent size={14} />
+            İndirim (₺)
+          </span>
           <input
+            id="pos-discount-input"
             value={discount}
             onChange={(e) => onDiscountChange(e.target.value)}
             type="number"
             min="0"
-            className="h-10 w-28 rounded-xl border border-slate-200/80 bg-white px-3 text-right text-sm font-bold outline-none focus:border-blue-300 focus:ring-4 focus:ring-blue-100"
+            className="h-10 w-28 rounded-xl border border-rose-200 bg-white px-3 text-right text-sm font-bold text-[#0f1f4d] outline-none focus:border-rose-300 focus:ring-4 focus:ring-rose-100"
           />
+        </div>
+      </div>
+
+      <div className="mt-3 space-y-2 rounded-2xl border border-slate-200/60 bg-slate-50/50 p-4">
+        <div className="flex justify-between text-sm">
+          <span className="text-slate-500">Ara Toplam</span>
+          <span className="font-bold text-[#0f1f4d]">
+            {formatMoney(subtotal)}
+          </span>
         </div>
         <div className="flex justify-between text-sm">
           <span className="text-slate-500">KDV</span>
           <span className="font-bold text-[#0f1f4d]">{formatMoney(vatTotal)}</span>
         </div>
+        {discountAmount > 0 ? (
+          <div className="flex justify-between text-sm">
+            <span className="text-rose-600">İndirim</span>
+            <span className="font-bold text-rose-600">
+              -{formatMoney(discountAmount)}
+            </span>
+          </div>
+        ) : null}
         <div className="h-px bg-slate-200" />
-        <div className="flex justify-between">
-          <span className="font-extrabold text-[#0f1f4d]">Genel toplam</span>
-          <span className="text-xl font-extrabold text-[#0f1f4d]">
-            {formatMoney(total)}
-          </span>
+        <div className={POS_GRADIENT_TOTAL_CLASS}>
+          <div className="flex justify-between">
+            <span className="font-extrabold text-[#0f1f4d]">Genel Toplam</span>
+            <span className="text-xl font-extrabold text-[#0f1f4d]">
+              {formatMoney(total)}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -187,13 +237,21 @@ export function PosCartPanel({
           type="button"
           onClick={onOpenPayment}
           disabled={checkingOut || cart.length === 0}
-          className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#0f1f4d] text-sm font-black text-white shadow-[0_10px_24px_rgba(15,31,77,0.18)] transition hover:bg-[#162a5c] disabled:opacity-50"
+          className={[
+            "flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-sm font-black text-white transition disabled:opacity-50",
+            POS_GRADIENT_CHECKOUT_CLASS,
+          ].join(" ")}
         >
           {checkingOut ? (
             <Loader2 className="animate-spin" size={18} />
           ) : null}
           Satışı Tamamla
         </button>
+        <p className="hidden text-center text-[10px] font-semibold text-slate-400 xl:block">
+          Nakit <kbd className="rounded border px-1">F2</kbd> · Kart{" "}
+          <kbd className="rounded border px-1">F4</kbd> · Barkod{" "}
+          <kbd className="rounded border px-1">F6</kbd>
+        </p>
         <button
           type="button"
           onClick={onClear}

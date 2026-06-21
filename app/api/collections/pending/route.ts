@@ -7,7 +7,7 @@ import {
   parseCollectionPaymentStatus,
   parseDateParam,
   normalizeDateRange,
-} from "@/lib/collections-page-data";
+} from "@/lib/collections-page-utils";
 
 export async function GET(req: Request) {
   const auth = await requireAnyApiModuleAccess([

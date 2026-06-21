@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>E-Belge Modal Önizleme</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-slate-200 p-8">
+    <div class="mx-auto grid max-w-6xl gap-8 lg:grid-cols-3">
+      <section>
+        <h2 class="mb-3 text-sm font-semibold text-slate-700">1. Sağlayıcı seçin</h2>
+        <div class="rounded-2xl bg-white p-5 shadow-xl">
+          <h3 class="text-lg font-semibold">E-Belge Bağlantısı</h3>
+          <p class="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            Bilgilerinizi kullandığınız e-fatura özel entegratörünün panelinden alabilirsiniz.
+          </p>
+          <label class="mt-4 block text-sm font-medium">Sağlayıcı</label>
+          <select class="mt-1 w-full rounded-xl border px-3 py-2 text-sm">
+            <option selected>Sağlayıcı seçin</option>
+            <option>eFinans</option>
+            <option>Trendyol E-Faturam</option>
+          </select>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="mb-3 text-sm font-semibold text-slate-700">2. eFinans formu</h2>
+        <div class="rounded-2xl bg-white p-5 shadow-xl">
+          <h3 class="text-lg font-semibold">E-Belge Bağlantısı</h3>
+          <p class="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            Bilgilerinizi kullandığınız e-fatura özel entegratörünün panelinden alabilirsiniz.
+          </p>
+          <label class="mt-4 block text-sm font-medium">Sağlayıcı</label>
+          <select class="mt-1 w-full rounded-xl border px-3 py-2 text-sm">
+            <option>eFinans</option>
+          </select>
+          <p class="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            eFinans API entegrasyonu henüz hazır değil.
+          </p>
+          <label class="mt-3 block text-sm font-medium">Kullanıcı adı</label>
+          <input class="mt-1 w-full rounded-xl border px-3 py-2 text-sm" value="wsadminuser" />
+          <label class="mt-3 block text-sm font-medium">Şifre</label>
+          <input type="password" class="mt-1 w-full rounded-xl border px-3 py-2 text-sm" value="********" />
+          <label class="mt-3 block text-sm font-medium">Firma kodu</label>
+          <input class="mt-1 w-full rounded-xl border px-3 py-2 text-sm" value="TAM0000011" />
+          <label class="mt-3 block text-sm font-medium">Ortam</label>
+          <select class="mt-1 w-full rounded-xl border px-3 py-2 text-sm">
+            <option>Test</option>
+            <option>Canlı</option>
+          </select>
+          <button class="mt-4 rounded-xl bg-[#0f1f4d] px-4 py-2 text-sm font-semibold text-white">
+            Ayarları Kaydet
+          </button>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="mb-3 text-sm font-semibold text-slate-700">3. Trendyol formu</h2>
+        <div class="rounded-2xl bg-white p-5 shadow-xl">
+          <h3 class="text-lg font-semibold">E-Belge Bağlantısı</h3>
+          <p class="mt-4 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            Bilgilerinizi kullandığınız e-fatura özel entegratörünün panelinden alabilirsiniz.
+          </p>
+          <label class="mt-4 block text-sm font-medium">Sağlayıcı</label>
+          <select class="mt-1 w-full rounded-xl border px-3 py-2 text-sm">
+            <option>Trendyol E-Faturam</option>
+          </select>
+          <label class="mt-3 block text-sm font-medium">E-posta</label>
+          <input class="mt-1 w-full rounded-xl border px-3 py-2 text-sm" value="ornek@firma.com" />
+          <label class="mt-3 block text-sm font-medium">Şifre</label>
+          <input type="password" class="mt-1 w-full rounded-xl border px-3 py-2 text-sm" value="********" />
+          <label class="mt-3 block text-sm font-medium">Bağlantı modu</label>
+          <select class="mt-1 w-full rounded-xl border px-3 py-2 text-sm">
+            <option>Doğrudan E-Faturam hesabı</option>
+          </select>
+          <label class="mt-3 block text-sm font-medium">Ortam</label>
+          <select class="mt-1 w-full rounded-xl border px-3 py-2 text-sm">
+            <option>Test</option>
+          </select>
+          <div class="mt-3 grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-sm font-medium">Fatura öneki</label>
+              <input class="mt-1 w-full rounded-xl border px-3 py-2 text-sm" value="ABC" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium">XSLT kodu</label>
+              <input class="mt-1 w-full rounded-xl border px-3 py-2 text-sm" />
+            </div>
+          </div>
+          <button class="mt-4 rounded-xl bg-[#0f1f4d] px-4 py-2 text-sm font-semibold text-white">
+            Kaydet ve bağlan
+          </button>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

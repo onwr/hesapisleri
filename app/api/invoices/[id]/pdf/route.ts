@@ -1,13 +1,8 @@
 import { NextResponse } from "next/server";
+import { requireApiModuleAccess } from "@/lib/module-access";
 import { db } from "@/lib/prisma";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import { buildInvoiceDetailView } from "@/lib/invoice-detail-utils";
 import { formatMoney } from "@/lib/invoice-form-utils";
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -24,32 +19,22 @@ function escapeHtml(value: string) {
 export async function GET(_request: Request, { params }: Props) {
   try {
     const { id } = await params;
-    const token = await getAuthToken();
+    const auth = await requireApiModuleAccess("invoices");
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.companyId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
-
+    const companyId = auth.companyId;
+    const userId = auth.userId;
     const invoice = await db.invoice.findFirst({
       where: {
         id,
-        companyId: payload.companyId,
+        companyId: companyId,
       },
       include: {
         customer: true,
         company: true,
+        items: {
+          orderBy: { lineIndex: "asc" },
+        },
       },
     });
 
@@ -60,33 +45,41 @@ export async function GET(_request: Request, { params }: Props) {
       );
     }
 
-    const view = buildInvoiceDetailView({
-      id: invoice.id,
-      invoiceNo: invoice.invoiceNo,
-      type: invoice.type,
-      status: invoice.status,
-      paymentStatus: invoice.paymentStatus,
-      total: Number(invoice.total),
-      createdAt: invoice.createdAt,
-      dueDate: invoice.dueDate,
-      gibStatus: invoice.gibStatus,
-      gibMessage: invoice.gibMessage,
-      pdfUrl: invoice.pdfUrl,
-      saleId: invoice.saleId,
-      customer: invoice.customer
-        ? {
-            id: invoice.customer.id,
-            name: invoice.customer.name,
-            phone: invoice.customer.phone,
-            email: invoice.customer.email,
-          }
-        : null,
-      company: {
-        name: invoice.company.name,
-        taxNo: invoice.company.taxNo,
-        address: invoice.company.address,
+    const view = buildInvoiceDetailView(
+      {
+        id: invoice.id,
+        invoiceNo: invoice.invoiceNo,
+        type: invoice.type,
+        status: invoice.status,
+        paymentStatus: invoice.paymentStatus,
+        total: Number(invoice.total),
+        subtotal: Number(invoice.subtotal),
+        totalDiscount: Number(invoice.totalDiscount),
+        taxableAmount: Number(invoice.taxableAmount),
+        totalVat: Number(invoice.totalVat),
+        financialSnapshotStatus: invoice.financialSnapshotStatus,
+        createdAt: invoice.createdAt,
+        dueDate: invoice.dueDate,
+        gibStatus: invoice.gibStatus,
+        gibMessage: invoice.gibMessage,
+        pdfUrl: invoice.pdfUrl,
+        saleId: invoice.saleId,
+        customer: invoice.customer
+          ? {
+              id: invoice.customer.id,
+              name: invoice.customer.name,
+              phone: invoice.customer.phone,
+              email: invoice.customer.email,
+            }
+          : null,
+        company: {
+          name: invoice.company.name,
+          taxNo: invoice.company.taxNo,
+          address: invoice.company.address,
+        },
       },
-    });
+      { dbItems: invoice.items }
+    );
 
     const itemRows =
       view.items.length > 0
@@ -98,7 +91,7 @@ export async function GET(_request: Request, { params }: Props) {
                 <td style="text-align:center">${item.quantity}</td>
                 <td style="text-align:right">${formatMoney(item.unitPrice)}</td>
                 <td style="text-align:center">%${item.vatRate}</td>
-                <td style="text-align:right">${formatMoney(item.quantity * item.unitPrice)}</td>
+                <td style="text-align:right">${formatMoney(item.lineGrossAmount)}</td>
               </tr>
             `
             )

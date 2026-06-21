@@ -1,4 +1,5 @@
 import { db } from "@/lib/prisma";
+import { TenantNotFoundError } from "@/lib/tenant/tenant-errors";
 import { roundMoney } from "@/lib/sale-payment-utils";
 
 type TransactionClient = Omit<
@@ -40,6 +41,7 @@ export function resolveDocumentPaidAmount(input: {
 
 export async function adjustCustomerBalance(
   tx: TransactionClient,
+  companyId: string,
   customerId: string | null | undefined,
   delta: number
 ) {
@@ -48,24 +50,33 @@ export async function adjustCustomerBalance(
   const rounded = roundMoney(delta);
   if (rounded === 0) return;
 
-  await tx.customer.update({
-    where: { id: customerId },
+  const result = await tx.customer.updateMany({
+    where: {
+      id: customerId,
+      companyId,
+    },
     data: {
       balance: {
         increment: rounded,
       },
     },
   });
+
+  if (result.count === 0) {
+    throw new TenantNotFoundError("Müşteri bulunamadı.");
+  }
 }
 
 export async function applyCustomerDebtFromDocument(
   tx: TransactionClient,
+  companyId: string,
   customerId: string | null | undefined,
   total: number,
   paidAmount: number
 ) {
   await adjustCustomerBalance(
     tx,
+    companyId,
     customerId,
     getCustomerDebtDelta(total, paidAmount)
   );
@@ -73,12 +84,14 @@ export async function applyCustomerDebtFromDocument(
 
 export async function reverseCustomerDebtFromDocument(
   tx: TransactionClient,
+  companyId: string,
   customerId: string | null | undefined,
   total: number,
   paidAmount: number
 ) {
   await adjustCustomerBalance(
     tx,
+    companyId,
     customerId,
     -getCustomerDebtDelta(total, paidAmount)
   );
@@ -86,10 +99,11 @@ export async function reverseCustomerDebtFromDocument(
 
 export async function applyCustomerCollection(
   tx: TransactionClient,
+  companyId: string,
   customerId: string | null | undefined,
   amount: number
 ) {
-  await adjustCustomerBalance(tx, customerId, -roundMoney(amount));
+  await adjustCustomerBalance(tx, companyId, customerId, -roundMoney(amount));
 }
 
 function resolveInvoicePaidAmountForRecalc(invoice: {
@@ -174,8 +188,8 @@ export async function recalculateCustomerBalances(
       balance += getCustomerDebtDelta(Number(invoice.total), paidAmount);
     }
 
-    await tx.customer.update({
-      where: { id: customer.id },
+    await tx.customer.updateMany({
+      where: { id: customer.id, companyId },
       data: {
         balance: roundMoney(balance),
       },

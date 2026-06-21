@@ -87,6 +87,7 @@ function toTableRow(
     phone: string | null;
     email: string | null;
     taxNo: string | null;
+    taxOffice?: string | null;
     group: string | null;
     balance: unknown;
     status: string;
@@ -102,6 +103,7 @@ function toTableRow(
     phone: customer.phone,
     email: customer.email,
     taxNo: customer.taxNo,
+    taxOffice: customer.taxOffice ?? null,
     group: groupName,
     groupColor: groupColorMap[groupName] ?? null,
     balance: Number(customer.balance),

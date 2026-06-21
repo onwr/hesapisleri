@@ -12,6 +12,7 @@ import {
   type SalePaymentMethod,
 } from "@/lib/sale-payment-utils";
 import { applyCustomerCollection } from "@/lib/customer-balance-utils";
+import { invalidateDashboardCache } from "@/lib/dashboard-cache-invalidation";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -178,7 +179,12 @@ export async function POST(req: Request, { params }: Props) {
         note: parsed.data.note?.trim() || undefined,
       });
 
-      await applyCustomerCollection(tx, sale.customerId, collectAmount);
+      await applyCustomerCollection(
+        tx,
+        companyId,
+        sale.customerId,
+        collectAmount
+      );
 
       const updated = await tx.sale.update({
         where: { id: sale.id },
@@ -219,6 +225,8 @@ export async function POST(req: Request, { params }: Props) {
 
       return updated;
     });
+
+    invalidateDashboardCache(companyId, "sale-collect");
 
     return NextResponse.json({
       success: true,

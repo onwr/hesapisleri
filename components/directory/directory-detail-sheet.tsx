@@ -32,6 +32,10 @@ import {
   isSourceManagedDirectoryContact,
   type DirectoryContactRow,
 } from "@/lib/directory-utils";
+import {
+  getDirectoryAvatarClass,
+  getDirectorySourceBadgeClass,
+} from "@/lib/directory-page-ui-utils";
 import { DirectoryContactActions } from "@/components/directory/directory-contact-actions";
 
 type DirectoryDetailSheetProps = {
@@ -86,7 +90,12 @@ export function DirectoryDetailSheet({
           </SheetTitle>
           <div className="border-b border-slate-200/80 bg-gradient-to-br from-[#f7f8ff] to-white px-5 pb-5 pt-4">
             <div className="flex items-start gap-3 pr-8">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#0f1f4d] text-lg font-black text-white shadow-sm">
+              <div
+                className={[
+                  "flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-lg font-black shadow-sm",
+                  getDirectoryAvatarClass(contact.sourceType),
+                ].join(" ")}
+              >
                 {getInitials(contact)}
               </div>
 
@@ -122,7 +131,9 @@ export function DirectoryDetailSheet({
                   >
                     {getDirectoryTypeLabel(contact.type)}
                   </span>
-                  <span className="inline-flex rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-slate-600 ring-1 ring-inset ring-slate-200">
+                  <span
+                    className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black ring-1 ring-inset ${getDirectorySourceBadgeClass(contact.sourceType)}`}
+                  >
                     {getDirectorySourceLabel(contact.sourceType)}
                   </span>
                   {!contact.isActive ? (

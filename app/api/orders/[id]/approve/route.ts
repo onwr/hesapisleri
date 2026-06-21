@@ -46,8 +46,10 @@ export async function POST(_req: Request, { params }: Props) {
       warehouseId: item.warehouseId ?? undefined,
     }));
 
+    let stockWarnings: Awaited<ReturnType<typeof validateSaleItemsStock>> = [];
+
     await db.$transaction(async (tx) => {
-      await validateSaleItemsStock(
+      stockWarnings = await validateSaleItemsStock(
         tx,
         auth.companyId,
         stockItems,
@@ -81,6 +83,12 @@ export async function POST(_req: Request, { params }: Props) {
     return NextResponse.json({
       success: true,
       message: "Sipariş onaylandı ve stok düşüldü.",
+      ...(stockWarnings.length > 0
+        ? {
+            warning: stockWarnings[0]?.message,
+            negativeStockItems: stockWarnings,
+          }
+        : {}),
     });
   } catch (error) {
     if (error instanceof SaleStockValidationError) {

@@ -1,19 +1,39 @@
 import Link from "next/link";
-import { Search } from "lucide-react";
-import { AdminNavTabs } from "@/components/admin/admin-nav-tabs";
-import { AdminPageHeader } from "@/components/admin/admin-page-header";
+import {
+  Search,
+  Shield,
+  UserCheck,
+  UserMinus,
+  UserPlus,
+  Users,
+} from "lucide-react";
+import { AdminPageContainer } from "@/components/admin/layout/admin-page-container";
+import { AdminPageHeader } from "@/components/admin/layout/admin-page-header";
+import { AdminStatCard } from "@/components/admin/layout/admin-stat-card";
 import { AdminUserActions } from "@/components/admin/admin-user-actions";
+import {
+  appInputClass,
+  appPanelClass,
+  appPrimaryButtonClass,
+  appSelectClass,
+  appTableClass,
+  appTableHeadClass,
+  appTableRowClass,
+} from "@/lib/admin-ui";
 import {
   formatAdminDate,
   getCompanyStatusClass,
+  getCompanyStatusLabel,
   getPlatformRoleLabel,
 } from "@/lib/admin-utils";
-import type { getAdminUsers } from "@/lib/admin-service";
+import type { getAdminUsers, getAdminUsersSummary } from "@/lib/admin-service";
 
 type UsersData = Awaited<ReturnType<typeof getAdminUsers>>;
+type SummaryData = Awaited<ReturnType<typeof getAdminUsersSummary>>;
 
 type AdminUsersContentProps = {
   users: UsersData;
+  summary: SummaryData;
   filters: {
     q?: string;
     status?: string;
@@ -22,27 +42,66 @@ type AdminUsersContentProps = {
   currentUserId: string;
 };
 
-const cardClassName =
-  "rounded-[22px] border border-slate-200/70 bg-white p-5 shadow-[0_10px_26px_rgba(15,23,42,0.035)]";
-
 export function AdminUsersContent({
   users,
+  summary,
   filters,
   currentUserId,
 }: AdminUsersContentProps) {
   return (
-    <div>
+    <AdminPageContainer size="full">
       <AdminPageHeader
         title="Kullanıcılar"
         description="Platform kullanıcılarını, Super Admin yetkilerini ve hesap durumlarını yönetin."
       />
-      <AdminNavTabs />
 
-      <div className={cardClassName}>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        <AdminStatCard
+          title="Toplam"
+          value={String(summary.total)}
+          icon={Users}
+          tone="blue"
+        />
+        <AdminStatCard
+          title="Aktif"
+          value={String(summary.active)}
+          icon={UserCheck}
+          tone="green"
+          href="/admin/users?status=ACTIVE"
+        />
+        <AdminStatCard
+          title="Pasif"
+          value={String(summary.passive)}
+          icon={UserMinus}
+          tone="neutral"
+          href="/admin/users?status=PASSIVE"
+        />
+        <AdminStatCard
+          title="Super Admin"
+          value={String(summary.superAdmins)}
+          icon={Shield}
+          tone="purple"
+          href="/admin/users?role=SUPER_ADMIN"
+        />
+        <AdminStatCard
+          title="Son 7 Gün Giriş"
+          value={String(summary.recentLogins)}
+          icon={UserCheck}
+          tone="green"
+        />
+        <AdminStatCard
+          title="Firmasız"
+          value={String(summary.withoutCompany)}
+          icon={UserPlus}
+          tone="amber"
+        />
+      </div>
+
+      <div className={`${appPanelClass} p-4`}>
         <form
           action="/admin/users"
           method="get"
-          className="mb-5 grid gap-3 lg:grid-cols-[1.4fr_0.8fr_0.8fr_auto]"
+          className="mb-4 grid gap-3 lg:grid-cols-[1.4fr_0.8fr_0.8fr_auto]"
         >
           <label className="relative block">
             <Search
@@ -53,13 +112,13 @@ export function AdminUsersContent({
               name="q"
               defaultValue={filters.q ?? ""}
               placeholder="Ad veya e-posta ara..."
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50/70 py-3 pl-10 pr-4 text-[13px] font-medium text-[#0f1f4d] outline-none transition focus:border-blue-300 focus:bg-white"
+              className={`${appInputClass} pl-10`}
             />
           </label>
           <select
             name="status"
             defaultValue={filters.status ?? "ALL"}
-            className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-[13px] font-semibold text-[#0f1f4d]"
+            className={appSelectClass}
           >
             <option value="ALL">Tüm durumlar</option>
             <option value="ACTIVE">Aktif</option>
@@ -69,24 +128,21 @@ export function AdminUsersContent({
           <select
             name="role"
             defaultValue={filters.role ?? "ALL"}
-            className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-[13px] font-semibold text-[#0f1f4d]"
+            className={appSelectClass}
           >
             <option value="ALL">Tüm roller</option>
             <option value="SUPER_ADMIN">Super Admin</option>
             <option value="USER">Kullanıcı</option>
           </select>
-          <button
-            type="submit"
-            className="rounded-2xl bg-[#0f1f4d] px-5 py-3 text-[13px] font-bold text-white"
-          >
+          <button type="submit" className={appPrimaryButtonClass}>
             Filtrele
           </button>
         </form>
 
         <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-[13px]">
+          <table className={appTableClass}>
             <thead>
-              <tr className="border-b border-slate-100 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+              <tr className={appTableHeadClass}>
                 <th className="px-3 py-2">Kullanıcı</th>
                 <th className="px-3 py-2">Rol</th>
                 <th className="px-3 py-2">Firmalar</th>
@@ -99,10 +155,7 @@ export function AdminUsersContent({
             <tbody>
               {users.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={7}
-                    className="px-3 py-10 text-center text-slate-500"
-                  >
+                  <td colSpan={7} className="px-3 py-10 text-center text-slate-500">
                     Filtreye uygun kullanıcı bulunamadı.
                   </td>
                 </tr>
@@ -110,7 +163,7 @@ export function AdminUsersContent({
                 users.map((user) => (
                   <tr
                     key={user.id}
-                    className="border-b border-slate-50 align-top last:border-0"
+                    className={`${appTableRowClass} align-top`}
                   >
                     <td className="px-3 py-3">
                       <Link
@@ -123,7 +176,7 @@ export function AdminUsersContent({
                     </td>
                     <td className="px-3 py-3">
                       <span
-                        className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                        className={`rounded-md px-2 py-0.5 text-[11px] font-bold ${
                           user.role === "SUPER_ADMIN"
                             ? "bg-violet-100 text-violet-700"
                             : "bg-slate-100 text-slate-700"
@@ -135,9 +188,7 @@ export function AdminUsersContent({
                     <td className="px-3 py-3 text-slate-600">
                       {user.companies.length === 0
                         ? "—"
-                        : user.companies
-                            .map((company) => company.name)
-                            .join(", ")}
+                        : user.companies.map((c) => c.name).join(", ")}
                     </td>
                     <td className="px-3 py-3 text-slate-500">
                       {formatAdminDate(user.lastLoginAt)}
@@ -147,9 +198,9 @@ export function AdminUsersContent({
                     </td>
                     <td className="px-3 py-3">
                       <span
-                        className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${getCompanyStatusClass(user.status)}`}
+                        className={`rounded-md px-2 py-0.5 text-[11px] font-bold ${getCompanyStatusClass(user.status)}`}
                       >
-                        {user.status}
+                        {getCompanyStatusLabel(user.status)}
                       </span>
                     </td>
                     <td className="px-3 py-3">
@@ -176,6 +227,6 @@ export function AdminUsersContent({
           </table>
         </div>
       </div>
-    </div>
+    </AdminPageContainer>
   );
 }

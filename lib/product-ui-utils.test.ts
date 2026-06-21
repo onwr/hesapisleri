@@ -87,7 +87,7 @@ describe("product ui utils", () => {
   it("form alan grupları tanımlı", () => {
     assert.deepEqual([...PRODUCT_FORM_SECTIONS], [
       "Temel Bilgiler",
-      "Fiyatlandırma",
+      "Fiyat Bilgileri",
       "Stok & Barkod",
       "Durum",
     ]);
@@ -118,37 +118,47 @@ describe("products compact management ui", () => {
     assert.doesNotMatch(filters, /Ürün Ekle/);
   });
 
-  it("ana sayfa kompakt başlık, özet bar ve stok senkron butonu kullanır", () => {
+  it("ana sayfa renkli aksiyon kartları ve özet kartları kullanır", () => {
     const shell = read("components/products/products-shell.tsx");
-    assert.match(shell, /Ürünler/);
-    assert.match(shell, /Ürün, stok, fiyat ve barkod yönetimi/);
-    assert.match(shell, /PRODUCT_STATS_BAR_CLASS/);
-    assert.match(shell, /StatPill/);
+    assert.match(shell, /ProductsQuickActions/);
+    assert.match(shell, /ProductsSummaryCards/);
+    assert.match(shell, /ProductsSubNav/);
     assert.match(shell, /ProductsStockSyncButton/);
-    assert.match(shell, /SKU Eşlemeleri/);
-    assert.doesNotMatch(shell, /StatCard/);
-    assert.doesNotMatch(shell, /ActionCard/);
+    assert.doesNotMatch(shell, /StatPill/);
+    assert.doesNotMatch(shell, /ToolbarButton/);
   });
 
-  it("ana sayfada duplicate Ürün Ekle ve SKU Eşlemeleri aksiyonu yok", () => {
-    const shell = read("components/products/products-shell.tsx");
-    const addCount = (shell.match(/Ürün Ekle/g) ?? []).length;
-    const skuCount = (shell.match(/SKU Eşlemeleri/g) ?? []).length;
-    assert.equal(addCount, 1);
-    assert.equal(skuCount, 1);
+  it("quick action component siparişler stiline benzer gradient kartlar kullanır", () => {
+    const actions = read("components/products/products-quick-actions.tsx");
+    const utils = read("lib/products-page-ui-utils.ts");
+    assert.match(actions, /rounded-2xl/);
+    assert.match(actions, /ArrowRight/);
+    assert.match(utils, /Yeni Ürün/);
+    assert.match(utils, /Yeni Hizmet/);
+    assert.match(utils, /Stok Hareketi/);
+    assert.match(utils, /Depolar/);
+    assert.match(utils, /SKU Eşlemeleri/);
+    assert.match(utils, /Barkod İşlemleri/);
   });
 
-  it("action card bölümü kaldırıldı", () => {
-    const shell = read("components/products/products-shell.tsx");
-    assert.doesNotMatch(shell, /ActionCard/);
-    assert.doesNotMatch(shell, /Kategori Yönetimi/);
+  it("özet kartlarında stok değeri ve tür metrikleri görünür", () => {
+    const summary = read("components/products/products-summary-cards.tsx");
+    const utils = read("lib/products-page-ui-utils.ts");
+    assert.match(summary, /ProductsSummaryCards/);
+    assert.match(summary, /card\.title/);
+    assert.match(utils, /Toplam Kalem/);
+    assert.match(utils, /Stoklu Ürün/);
+    assert.match(utils, /Hizmet/);
+    assert.match(utils, /Düşük \/ Eksi Stok/);
+    assert.match(utils, /Stok Değeri/);
+    assert.match(utils, /Aktif Ürün/);
+    assert.match(utils, /Alış fiyatına göre/);
   });
 
-  it("kompakt stat summary render edilir", () => {
+  it("ana sayfada duplicate toolbar butonları kaldırıldı", () => {
     const shell = read("components/products/products-shell.tsx");
-    assert.match(shell, /Düşük Stok/);
-    assert.match(shell, /Stok Yok/);
-    assert.match(shell, /Stok Değeri/);
+    assert.doesNotMatch(shell, /Ürün Ekle/);
+    assert.doesNotMatch(shell, /SKU Eşlemeleri/);
   });
 
   it("desktop tablo ve mobil kart satırı birlikte kullanılır", () => {
@@ -169,6 +179,20 @@ describe("products compact management ui", () => {
     assert.match(page, /effectiveRole === "ADMIN"/);
   });
 
+  it("ürün sayfası permission prop'larını shell'e geçirir", () => {
+    const page = read("app/products/page.tsx");
+    assert.match(page, /permissions/);
+    assert.match(page, /canManageProducts/);
+    assert.match(page, /canManageWarehouses/);
+    assert.match(page, /canAccessModule\(effectiveRole, "stocks"/);
+  });
+
+  it("yeni hizmet formu type=service query ile açılır", () => {
+    const page = read("app/products/new/page.tsx");
+    assert.match(page, /type=service|params\.type/);
+    assert.match(page, /initialProductType/);
+  });
+
   it("ürün detay kompakt stok özeti ve stok merkezi linki tanımlı", () => {
     const detail = read("components/products/product-detail-view.tsx");
     assert.match(detail, /Mevcut Stok/);
@@ -184,7 +208,7 @@ describe("products compact management ui", () => {
     const form = read("components/products/product-form-fields.tsx");
     assert.match(form, /Temel Bilgiler/);
     assert.match(form, /Stok & Barkod/);
-    assert.match(form, /Fiyatlandırma/);
+    assert.match(form, /Fiyat Bilgileri/);
     assert.match(form, /POS Görünürlüğü/);
     assert.match(form, /PRODUCT_FORM_SECTION_CLASS/);
   });

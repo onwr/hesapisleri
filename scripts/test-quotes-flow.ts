@@ -314,6 +314,7 @@ async function convertQuote(
 
       await applyCustomerDebtFromDocument(
         tx,
+        ctx.companyId,
         sale.customerId,
         total,
         payment.paidAmount
@@ -624,38 +625,54 @@ async function main() {
       data: { stock: 1 },
     });
 
+    const warehouseStockRows = await db.warehouseStock.findMany({
+      where: { companyId: ctx.companyId, productId: ctx.productId },
+    });
+
+    if (warehouseStockRows.length > 0) {
+      await db.warehouseStock.update({
+        where: { id: warehouseStockRows[0]!.id },
+        data: { quantity: 1 },
+      });
+    }
+
     const insufficientItems = [buildQuoteItem(ctx, 5)];
+    const insufficientTotal = calcTotals(insufficientItems).total;
     const insufficientQuote = await createQuote(ctx, insufficientItems);
     const insufficientConvert = await convertQuote(ctx, insufficientQuote.id, {
       paymentStatus: "UNPAID",
     });
 
     assertTrue(
-      "Stok yetersiz dönüşüm başarısız olmalı",
-      !insufficientConvert.ok
+      "Stok yetersiz dönüşüm başarılı olmalı",
+      insufficientConvert.ok
     );
 
-    if (!insufficientConvert.ok) {
-      assertTrue(
-        "Stok yetersiz mesajı",
-        insufficientConvert.message.includes("yeterli stok yok")
-      );
-    }
-
     const insufficientSnapshot = await getSaleSnapshot(insufficientQuote.id);
-    assertEqual("Stok yetersiz status", insufficientSnapshot.status, "DRAFT");
-    assertEqual("Stok yetersiz stok", await getProductStock(ctx.productId), 1);
+    assertEqual("Stok yetersiz status", insufficientSnapshot.status, "COMPLETED");
+    assertEqual("Stok yetersiz stok", await getProductStock(ctx.productId), -4);
     assertEqual(
       "Stok yetersiz customer.balance",
       await getCustomerBalance(ctx.customerId),
-      balanceBeforeInsufficient
+      balanceBeforeInsufficient + insufficientTotal
     );
-    console.log("✅ Stok yetersizliği engellendi");
+    console.log("✅ Stok yetersizliğinde dönüşüm tamamlandı");
 
     await db.product.update({
       where: { id: ctx.productId },
       data: { stock: 10 },
     });
+
+    const resetWarehouseRows = await db.warehouseStock.findMany({
+      where: { companyId: ctx.companyId, productId: ctx.productId },
+    });
+
+    if (resetWarehouseRows.length > 0) {
+      await db.warehouseStock.update({
+        where: { id: resetWarehouseRows[0]!.id },
+        data: { quantity: 10 },
+      });
+    }
 
     const cancelItems = [buildQuoteItem(ctx, 1)];
     const balanceBeforeCancel = await getCustomerBalance(ctx.customerId);

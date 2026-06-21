@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -12,9 +12,10 @@ import {
   Warehouse,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
+import { guardPageModule } from "@/lib/module-access";
+
 import { MarketplaceLogo } from "@/components/orders/marketplace-logo";
 import { OrderDetailActions } from "@/components/orders/order-detail-actions";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import { formatMoney } from "@/lib/format-utils";
 import { getMarketplaceName } from "@/lib/marketplace-logos";
 import {
@@ -30,25 +31,17 @@ type Props = {
   params: Promise<{ id: string }>;
 };
 
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
-
 function formatDate(date: Date | null) {
   if (!date) return "—";
   return formatOrderDateTime(date);
 }
 
 export default async function OrderDetailPage({ params }: Props) {
+  const session = await guardPageModule("orders");
+  const company = session.company;
   const { id } = await params;
-  const token = await getAuthToken();
-  if (!token) redirect("/login");
 
-  const payload = verifyToken<AuthPayload>(token);
-  if (!payload?.companyId) redirect("/login");
-
-  const data = await getOrderDetailData(payload.companyId, id);
+  const data = await getOrderDetailData(company.id, id);
   if (!data) notFound();
 
   const { sale, orderRow, activities } = data;

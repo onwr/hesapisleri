@@ -1,14 +1,11 @@
 import { NextResponse } from "next/server";
-import { getAuthToken, verifyToken } from "@/lib/auth";
+import { requireApiModuleAccess } from "@/lib/module-access";
 import {
   getProductsExportRows,
   parseProductsListOptions,
 } from "@/lib/products-page-data";
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
+import { PRODUCT_TYPE_LABELS } from "@/lib/product-type-utils";
+import { calculateProductStockValue } from "@/lib/inventory-value-utils";
 
 function escapeCsvValue(value: string) {
   if (/[",\n]/.test(value)) {
@@ -26,24 +23,11 @@ function getStatusLabel(status: string) {
 
 export async function GET(request: Request) {
   try {
-    const token = await getAuthToken();
+    const auth = await requireApiModuleAccess("products");
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.companyId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
-
+    const companyId = auth.companyId;
+    const userId = auth.userId;
     const { searchParams } = new URL(request.url);
     const listOptions = parseProductsListOptions({
       tab: searchParams.get("tab"),
@@ -53,25 +37,39 @@ export async function GET(request: Request) {
       sort: searchParams.get("sort"),
     });
 
-    const products = await getProductsExportRows(payload.companyId, listOptions);
+    const products = await getProductsExportRows(companyId, listOptions);
 
     const header = [
       "Ürün Adı",
+      "Tür",
       "Stok Kodu",
       "Barkod",
       "Grup",
       "Stok",
+      "Alış Fiyatı",
       "Satış Fiyatı",
+      "Stok Değeri",
       "Durum",
     ];
 
     const rows = products.map((product, index) => [
       product.name,
+      PRODUCT_TYPE_LABELS[product.productType],
       product.sku || `STK-${String(index + 1).padStart(4, "0")}`,
       product.barcode ?? "",
       product.categoryName,
-      String(product.stock),
+      product.isService ? "Stoksuz" : String(product.stock),
+      String(Number(product.buyPrice)),
       String(Number(product.sellPrice)),
+      product.isService
+        ? ""
+        : String(
+            calculateProductStockValue({
+              productType: product.productType,
+              stock: product.stock,
+              buyPrice: product.buyPrice,
+            })
+          ),
       getStatusLabel(product.status),
     ]);
 

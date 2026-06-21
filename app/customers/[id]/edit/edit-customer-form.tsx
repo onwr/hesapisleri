@@ -11,12 +11,17 @@ import {
   Mail,
   MapPin,
   Phone,
+  ReceiptText,
   Save,
   User,
-  Users,
 } from "lucide-react";
 import { AppLoadingScreen } from "@/components/layout/app-loading-screen";
 import { CustomerGroupSelect } from "@/components/customers/customer-group-select";
+import {
+  CustomerTaxCertificateField,
+  mapTaxCertificateFromCustomer,
+  type TaxCertificateFormValue,
+} from "@/components/customers/customer-tax-certificate-field";
 import {
   buildCustomerPayload,
   getFirstCustomerErrorMessage,
@@ -29,6 +34,11 @@ type CustomerRecord = {
   phone: string | null;
   email: string | null;
   taxNo: string | null;
+  taxOffice: string | null;
+  taxCertificateUrl: string | null;
+  taxCertificateFileName: string | null;
+  taxCertificateMimeType: string | null;
+  taxCertificateSize: number | null;
   address: string | null;
   group: string | null;
 };
@@ -45,14 +55,23 @@ export function EditCustomerForm({ customer }: { customer: CustomerRecord }) {
     phone: customer.phone || "",
     email: customer.email || "",
     taxNo: customer.taxNo || "",
+    taxOffice: customer.taxOffice || "",
     address: customer.address || "",
     group: customer.group || "Genel",
+    ...mapTaxCertificateFromCustomer(customer),
   });
 
-  function updateForm(key: keyof typeof form, value: string) {
+  function updateForm(key: keyof typeof form, value: string | number | null) {
     setForm((prev) => ({
       ...prev,
       [key]: value,
+    }));
+  }
+
+  function updateTaxCertificate(value: TaxCertificateFormValue) {
+    setForm((prev) => ({
+      ...prev,
+      ...value,
     }));
   }
 
@@ -133,6 +152,12 @@ export function EditCustomerForm({ customer }: { customer: CustomerRecord }) {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <section className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+            <div className="border-b border-slate-100 p-4">
+              <h2 className="text-[16px] font-black text-[#0f1f4d]">
+                Temel Bilgiler
+              </h2>
+            </div>
+
             <div className="grid gap-4 p-4 md:grid-cols-2">
               <div className="md:col-span-2">
                 <InputField
@@ -146,6 +171,20 @@ export function EditCustomerForm({ customer }: { customer: CustomerRecord }) {
                 />
               </div>
 
+              <CustomerGroupSelect
+                value={form.group}
+                onChange={(value) => updateForm("group", value)}
+                error={fieldErrors.group}
+              />
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+            <div className="border-b border-slate-100 p-4">
+              <h2 className="text-[16px] font-black text-[#0f1f4d]">İletişim</h2>
+            </div>
+
+            <div className="grid gap-4 p-4 md:grid-cols-2">
               <InputField
                 label="Telefon"
                 icon={<Phone size={18} />}
@@ -164,9 +203,19 @@ export function EditCustomerForm({ customer }: { customer: CustomerRecord }) {
                 placeholder="ornek@mail.com"
                 error={fieldErrors.email}
               />
+            </div>
+          </section>
 
+          <section className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+            <div className="border-b border-slate-100 p-4">
+              <h2 className="text-[16px] font-black text-[#0f1f4d]">
+                Vergi Bilgileri
+              </h2>
+            </div>
+
+            <div className="grid gap-4 p-4 md:grid-cols-2">
               <InputField
-                label="Vergi No / T.C."
+                label="Vergi No / TCKN"
                 icon={<Building2 size={18} />}
                 value={form.taxNo}
                 onChange={(value) => updateForm("taxNo", value)}
@@ -174,42 +223,66 @@ export function EditCustomerForm({ customer }: { customer: CustomerRecord }) {
                 error={fieldErrors.taxNo}
               />
 
-              <CustomerGroupSelect
-                value={form.group}
-                onChange={(value) => updateForm("group", value)}
-                error={fieldErrors.group}
+              <InputField
+                label="Vergi Dairesi"
+                icon={<ReceiptText size={18} />}
+                value={form.taxOffice}
+                onChange={(value) => updateForm("taxOffice", value)}
+                placeholder="Örn. Battalgazi Vergi Dairesi"
+                error={fieldErrors.taxOffice}
               />
 
               <div className="md:col-span-2">
-                <label className="text-[12px] font-black text-[#24345f]">
-                  Adres
-                </label>
-
-                <div className="relative mt-2">
-                  <MapPin
-                    size={18}
-                    className="absolute left-4 top-4 text-slate-400"
-                  />
-
-                  <textarea
-                    value={form.address}
-                    onChange={(e) => updateForm("address", e.target.value)}
-                    className={[
-                      "min-h-32 w-full rounded-2xl border bg-white py-3 pl-11 pr-4 text-[13px] font-medium text-[#24345f] outline-none transition placeholder:text-slate-400 focus:ring-4",
-                      fieldErrors.address
-                        ? "border-rose-300 focus:border-rose-300 focus:ring-rose-50"
-                        : "border-slate-200 focus:border-blue-200 focus:ring-blue-50",
-                    ].join(" ")}
-                    placeholder="Müşteri adresi"
-                  />
-                </div>
-
-                {fieldErrors.address ? (
-                  <p className="mt-2 text-[11px] font-bold text-rose-500">
-                    {fieldErrors.address}
-                  </p>
-                ) : null}
+                <CustomerTaxCertificateField
+                  value={{
+                    taxCertificateUrl: form.taxCertificateUrl,
+                    taxCertificateFileName: form.taxCertificateFileName,
+                    taxCertificateMimeType: form.taxCertificateMimeType,
+                    taxCertificateSize: form.taxCertificateSize,
+                  }}
+                  onChange={updateTaxCertificate}
+                  error={fieldErrors.taxCertificateUrl}
+                />
               </div>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+            <div className="border-b border-slate-100 p-4">
+              <h2 className="text-[16px] font-black text-[#0f1f4d]">
+                Adres / Notlar
+              </h2>
+            </div>
+
+            <div className="p-4">
+              <label className="text-[12px] font-black text-[#24345f]">
+                Adres
+              </label>
+
+              <div className="relative mt-2">
+                <MapPin
+                  size={18}
+                  className="absolute left-4 top-4 text-slate-400"
+                />
+
+                <textarea
+                  value={form.address}
+                  onChange={(e) => updateForm("address", e.target.value)}
+                  className={[
+                    "min-h-32 w-full rounded-2xl border bg-white py-3 pl-11 pr-4 text-[13px] font-medium text-[#24345f] outline-none transition placeholder:text-slate-400 focus:ring-4",
+                    fieldErrors.address
+                      ? "border-rose-300 focus:border-rose-300 focus:ring-rose-50"
+                      : "border-slate-200 focus:border-blue-200 focus:ring-blue-50",
+                  ].join(" ")}
+                  placeholder="Müşteri adresi"
+                />
+              </div>
+
+              {fieldErrors.address ? (
+                <p className="mt-2 text-[11px] font-bold text-rose-500">
+                  {fieldErrors.address}
+                </p>
+              ) : null}
             </div>
           </section>
 

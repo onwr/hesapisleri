@@ -1,42 +1,14 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { ArrowLeft, Tags } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
+import { guardPageModule } from "@/lib/module-access";
+
 import { ProductCategoriesManager } from "@/components/products/product-categories-manager";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import { getProductCategoriesWithStats } from "@/lib/product-category-service";
-import { db } from "@/lib/prisma";
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
-
 export default async function ProductCategoriesPage() {
-  const token = await getAuthToken();
-  if (!token) redirect("/login");
-
-  const payload = verifyToken<AuthPayload>(token);
-  if (!payload?.userId || !payload.companyId) redirect("/login");
-
-  const user = await db.user.findUnique({
-    where: { id: payload.userId },
-    include: {
-      companyUsers: {
-        include: { company: true },
-      },
-    },
-  });
-
-  if (!user) redirect("/login");
-
-  const company =
-    user.companyUsers.find((item) => item.companyId === payload.companyId)
-      ?.company ?? user.companyUsers[0]?.company;
-
-  if (!company) redirect("/login");
-
-  const { categories, summary } = await getProductCategoriesWithStats(
+  const session = await guardPageModule("products");
+  const company = session.company;
+const { categories, summary } = await getProductCategoriesWithStats(
     company.id
   );
 

@@ -1,36 +1,18 @@
 import { NextResponse } from "next/server";
+import { requireApiModuleAccess } from "@/lib/module-access";
 import { db } from "@/lib/prisma";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import {
   customerFormSchema,
   normalizeCustomerInput,
 } from "@/lib/customer-form-utils";
 
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
-
 export async function POST(req: Request) {
   try {
-    const token = await getAuthToken();
+    const auth = await requireApiModuleAccess("customers");
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.userId || !payload.companyId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
-
+    const companyId = auth.companyId;
+    const userId = auth.userId;
     const body = await req.json();
     const parsed = customerFormSchema.safeParse(body);
 
@@ -45,11 +27,25 @@ export async function POST(req: Request) {
       );
     }
 
-    const normalized = normalizeCustomerInput(parsed.data);
+    let normalized;
+    try {
+      normalized = normalizeCustomerInput(parsed.data);
+    } catch (error) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            error instanceof Error
+              ? error.message
+              : "Vergi levhası bilgileri geçersiz.",
+        },
+        { status: 400 }
+      );
+    }
 
     const customer = await db.customer.create({
       data: {
-        companyId: payload.companyId,
+        companyId: companyId,
         ...normalized,
         balance: 0,
         status: "ACTIVE",
@@ -58,8 +54,8 @@ export async function POST(req: Request) {
 
     await db.activityLog.create({
       data: {
-        companyId: payload.companyId,
-        userId: payload.userId,
+        companyId: companyId,
+        userId: userId,
         action: "CREATE",
         module: "customers",
         message: `${customer.name} müşterisi oluşturuldu.`,

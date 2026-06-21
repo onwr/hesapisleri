@@ -22,6 +22,8 @@ import {
   buildEmployeePaymentDueNotificationInput,
   buildLateCollectionNotificationInput,
   buildLowStockNotificationInput,
+  buildMembershipExpiredNotificationInput,
+  buildMembershipExpiringNotificationInput,
   computeDailySummaryStats,
   countLowStockProducts,
   filterEmployeePaymentsDueOnWindow,
@@ -32,9 +34,16 @@ import {
   type DueInvoiceWindow,
   DUE_INVOICE_WINDOWS,
   EMPLOYEE_PAYMENT_DUE_WINDOWS,
+  MEMBERSHIP_EXPIRY_WINDOWS,
+  getMembershipExpiryDateForWindow,
   type ProactiveNotificationPayload,
   type ProactiveNotificationType,
 } from "@/lib/notification-cron-utils";
+import {
+  getMembershipStatus,
+  getRemainingMembershipDays,
+} from "@/lib/membership-utils";
+import { ensureCompanySubscription } from "@/lib/membership-service";
 
 export type CronJobResult = {
   companyId: string;
@@ -388,6 +397,59 @@ async function processEmployeePaymentDue(
   }
 }
 
+async function processMembershipNotifications(
+  context: CompanyCronContext,
+  referenceDate: Date,
+  dateKey: string,
+  items: CronJobResult[]
+) {
+  const subscription = await ensureCompanySubscription(context.companyId);
+  const status = getMembershipStatus(subscription, referenceDate);
+  const periodEnd = subscription.currentPeriodEnd;
+
+  if (!periodEnd) {
+    return;
+  }
+
+  if (status === "EXPIRED") {
+    const payload = buildMembershipExpiredNotificationInput({
+      companyId: context.companyId,
+      dateKey,
+    });
+    const outcome = await emitProactiveNotification(
+      context.companyId,
+      payload,
+      true
+    );
+    recordJobResult(items, context.companyId, "MEMBERSHIP_EXPIRED", outcome);
+    return;
+  }
+
+  for (const window of MEMBERSHIP_EXPIRY_WINDOWS) {
+    const targetDate = getMembershipExpiryDateForWindow(referenceDate, window);
+    const targetKey = formatDateKey(targetDate);
+    const periodEndKey = formatDateKey(periodEnd);
+
+    if (targetKey !== periodEndKey) {
+      continue;
+    }
+
+    const remainingDays = getRemainingMembershipDays(periodEnd, referenceDate);
+    const payload = buildMembershipExpiringNotificationInput({
+      companyId: context.companyId,
+      remainingDays,
+      window,
+      dateKey,
+    });
+    const outcome = await emitProactiveNotification(
+      context.companyId,
+      payload,
+      true
+    );
+    recordJobResult(items, context.companyId, "MEMBERSHIP_EXPIRING", outcome);
+  }
+}
+
 async function processCompanyNotifications(
   context: CompanyCronContext,
   referenceDate: Date,
@@ -400,6 +462,7 @@ async function processCompanyNotifications(
   await processLateCollections(context, referenceDate, dateKey, items);
   await processDailySummary(context, referenceDate, dateKey, items);
   await processEmployeePaymentDue(context, referenceDate, dateKey, items);
+  await processMembershipNotifications(context, referenceDate, dateKey, items);
 }
 
 export async function runProactiveNotificationCron(

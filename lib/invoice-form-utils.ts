@@ -1,10 +1,13 @@
-export type InvoiceLineItem = {
+import { allowsNegativeStock } from "@/lib/stock-policy";
+import {
+  calculateInvoiceTotals as calculateInvoiceTotalsCore,
+  type InvoiceLineInput,
+} from "@/lib/invoice-tax-calculation-utils";
+
+export type InvoiceLineItem = InvoiceLineInput & {
   id: string;
   productId?: string;
   name: string;
-  quantity: number;
-  unitPrice: number;
-  vatRate: number;
 };
 
 export type CatalogProduct = {
@@ -31,6 +34,7 @@ export function createEmptyItem(): InvoiceLineItem {
 }
 
 export function getStockClass(stock: number) {
+  if (stock < 0) return "bg-rose-100 text-rose-700";
   if (stock <= 0) return "bg-rose-50 text-rose-500";
   if (stock <= 10) return "bg-orange-50 text-orange-500";
   return "bg-emerald-50 text-emerald-600";
@@ -50,6 +54,10 @@ export function getMaxQuantityForItem(
   items: InvoiceLineItem[],
   item: InvoiceLineItem
 ) {
+  if (allowsNegativeStock()) {
+    return null;
+  }
+
   if (!item.productId) return null;
 
   const product = products.find((entry) => entry.id === item.productId);
@@ -68,35 +76,15 @@ export function calculateInvoiceTotals(
   items: InvoiceLineItem[],
   discountAmount: number
 ) {
-  const subtotal = items.reduce(
-    (sum, item) => sum + item.quantity * item.unitPrice,
-    0
-  );
-
-  const discount = Math.min(Math.max(0, discountAmount), subtotal);
-  const netSubtotal = subtotal - discount;
-
-  let vatTotal = 0;
-
-  if (subtotal > 0) {
-    for (const item of items) {
-      const lineBase = item.quantity * item.unitPrice;
-      const lineShare = lineBase / subtotal;
-      const discountedLineBase = lineBase - discount * lineShare;
-      vatTotal += (discountedLineBase * item.vatRate) / 100;
-    }
-  }
-
-  return {
-    subtotal,
-    discount,
-    vatTotal,
-    total: netSubtotal + vatTotal,
-  };
+  return calculateInvoiceTotalsCore(items, discountAmount);
 }
 
 export function previewInvoiceNo() {
   const year = new Date().getFullYear();
   const random = Math.floor(1000 + Math.random() * 9000);
   return `FTR-${year}-${random}`;
+}
+
+export function formatInvoiceNumber(value: string) {
+  return value.trim().toUpperCase();
 }

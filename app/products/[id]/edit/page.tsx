@@ -1,30 +1,21 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
+import { guardPageModule } from "@/lib/module-access";
 import { EditProductForm } from "@/components/products/edit-product-form";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import { db } from "@/lib/prisma";
 
 type Props = {
   params: Promise<{ id: string }>;
 };
 
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
-
 export default async function EditProductPage({ params }: Props) {
+  const session = await guardPageModule("products");
+  const company = session.company;
   const { id } = await params;
-
-  const token = await getAuthToken();
-  if (!token) redirect("/login");
-
-  const payload = verifyToken<AuthPayload>(token);
-  if (!payload?.userId || !payload.companyId) redirect("/login");
 
   const product = await db.product.findFirst({
     where: {
       id,
-      companyId: payload.companyId,
+      companyId: company.id,
     },
     include: {
       category: true,
@@ -35,9 +26,10 @@ export default async function EditProductPage({ params }: Props) {
 
   return (
     <EditProductForm
-      companyId={payload.companyId}
+      companyId={company.id}
       product={{
         id: product.id,
+        productType: product.productType,
         name: product.name,
         sku: product.sku,
         barcode: product.barcode,

@@ -111,17 +111,19 @@ describe("directory UI wiring", () => {
     assert.match(menu, /module: "directory"/);
   });
 
-  it("compact header, summary bar, filters ve tablo içerir", () => {
+  it("renkli quick actions, summary ve sol/sağ layout içerir", () => {
     const client = read("components/directory/directory-page-client.tsx");
-    assert.match(client, /Fihrist/);
-    assert.match(client, /PRODUCT_FILTER_CARD_CLASS/);
+    assert.match(client, /DirectoryQuickActions/);
+    assert.match(client, /DirectorySummaryCards/);
+    assert.match(client, /DirectorySidebarWidgets/);
+    assert.match(client, /DirectorySourceFilterChips/);
     assert.match(client, /id="directory-list"/);
-    assert.match(client, /hidden overflow-hidden[\s\S]*md:block/);
+    assert.match(client, /hidden overflow-x-auto[\s\S]*md:block/);
     assert.match(client, /md:hidden/);
     assert.match(client, /DirectoryContactActions/);
     assert.match(client, /DIRECTORY_SEARCH_PLACEHOLDER/);
     assert.match(client, /Fihristte kayıt bulunmuyor/);
-    assert.match(client, /Senkronize Et/);
+    assert.match(client, /sync-customers/);
   });
 
   it("detay sheet kaynak kayıt mesajı ve kart linki gösterir", () => {

@@ -16,6 +16,11 @@ type AppShellClientProps = {
   companyRole?: string;
   isSuperAdmin?: boolean;
   isOwner?: boolean;
+  membershipSummary?: {
+    statusLabel: string;
+    remainingDays: number;
+    isExpired: boolean;
+  };
 };
 
 function AppShellMain({ children }: { children: ReactNode }) {
@@ -23,7 +28,7 @@ function AppShellMain({ children }: { children: ReactNode }) {
 
   return (
     <main
-      className={`px-5 py-6 transition-[margin] duration-200 lg:px-8 ${sidebarOffsetClass(collapsed)}`}
+      className={`px-5 py-6 transition-[margin] duration-200 max-md:min-w-0 lg:px-8 ${sidebarOffsetClass(collapsed)}`}
     >
       {children}
     </main>
@@ -37,16 +42,18 @@ export function AppShellClient({
   companyRole,
   isSuperAdmin = false,
   isOwner = false,
+  membershipSummary,
 }: AppShellClientProps) {
   return (
     <SidebarProvider>
-      <div className="min-h-screen bg-[#f7f8ff]">
+      <div className="min-h-screen bg-[#f7f8ff] max-md:overflow-x-clip">
         <AppSidebar
           userName={userName ?? "Kullanıcı"}
           companyName={companyName ?? "Firma"}
           companyRole={companyRole}
           isSuperAdmin={isSuperAdmin}
           isOwner={isOwner}
+          membershipSummary={membershipSummary}
         />
         <AppTopbar userName={userName} companyName={companyName} />
         <AppShellMain>{children}</AppShellMain>

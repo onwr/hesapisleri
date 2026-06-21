@@ -28,6 +28,11 @@ describe("product stock sync service", () => {
     assert.match(warehouse, /syncProductTotalStock/);
   });
 
+  it("sale-stock-utils hizmet kalemlerini atlar", () => {
+    const saleStock = read("lib/sale-stock-utils.ts");
+    assert.match(saleStock, /isServiceProductType/);
+  });
+
   it("POS satış sonrası stok sync çağrılır", () => {
     const saleStock = read("lib/sale-stock-utils.ts");
     assert.match(saleStock, /syncProductTotalStock/);
@@ -40,6 +45,18 @@ describe("product stock sync service", () => {
     assert.match(route, /ADMIN/);
     assert.match(route, /updated/);
     assert.match(route, /unchanged/);
+  });
+
+  it("SERVICE ürünler sync dışında tutulur", () => {
+    const source = read("lib/product-stock-sync-service.ts");
+    assert.match(source, /isServiceProductType/);
+    assert.match(source, /productType: "STOCK"/);
+  });
+
+  it("ürün oluşturmada hizmet için stok hareketi oluşturulmaz", () => {
+    const createRoute = read("app/api/products/create/route.ts");
+    assert.match(createRoute, /productType === "SERVICE"/);
+    assert.match(createRoute, /applyWarehouseStockMovement/);
   });
 
   it("ürün oluşturmada başlangıç stoku hareket ile yazılır", () => {

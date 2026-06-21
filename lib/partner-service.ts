@@ -1,0 +1,730 @@
+import type {
+  PartnerBadgeType,
+  PartnerProfileStatus,
+  Prisma,
+} from "@prisma/client";
+import { z } from "zod";
+import { db } from "@/lib/prisma";
+import { buildReferralUrl } from "@/lib/partner-cookie";
+import {
+  ensurePartnerSettings,
+  linkPartnerUserByEmail,
+  resolvePartnerFromAttribution,
+} from "@/lib/partner-conversion-service";
+import {
+  approvePartnerApplicationSchema,
+  calculateConversionRate,
+  generateReferralCode,
+  getAudienceTypeLabel,
+  getBadgeTypeLabel,
+  getConversionTypeLabel,
+  getEarningStatusLabel,
+  hashPartnerIp,
+  normalizePartnerEmail,
+  partnerApplicationSchema,
+  rejectPartnerApplicationSchema,
+  sanitizeReferralCode,
+} from "@/lib/partner-utils";
+
+export class PartnerServiceError extends Error {
+  status: number;
+
+  constructor(message: string, status = 400) {
+    super(message);
+    this.name = "PartnerServiceError";
+    this.status = status;
+  }
+}
+
+export async function resolvePartnerForUser(userId: string, email: string) {
+  return db.partnerProfile.findFirst({
+    where: {
+      status: { in: ["ACTIVE", "PASSIVE", "SUSPENDED"] },
+      OR: [{ userId }, { email: normalizePartnerEmail(email) }],
+    },
+  });
+}
+
+function serializePartner(partner: {
+  id: string;
+  fullName: string;
+  email: string;
+  phone: string | null;
+  referralCode: string;
+  commissionRate: Prisma.Decimal;
+  status: PartnerProfileStatus;
+  badgeType: PartnerBadgeType;
+  badgeLabel: string | null;
+  iban: string | null;
+  bankName: string | null;
+  accountHolderName: string | null;
+}) {
+  return {
+    id: partner.id,
+    fullName: partner.fullName,
+    email: partner.email,
+    phone: partner.phone,
+    referralCode: partner.referralCode,
+    referralUrl: buildReferralUrl(partner.referralCode),
+    commissionRate: Number(partner.commissionRate),
+    status: partner.status,
+    badgeType: partner.badgeType,
+    badgeLabel: partner.badgeLabel ?? getBadgeTypeLabel(partner.badgeType),
+    payoutInfo: {
+      iban: partner.iban,
+      bankName: partner.bankName,
+      accountHolderName: partner.accountHolderName,
+    },
+  };
+}
+
+export async function submitPartnerApplication(
+  input: z.infer<typeof partnerApplicationSchema>
+) {
+  const settings = await ensurePartnerSettings();
+
+  if (!settings.isApplicationOpen) {
+    throw new PartnerServiceError("Başvurular şu anda kapalı.", 403);
+  }
+
+  const email = normalizePartnerEmail(input.email);
+
+  const pending = await db.partnerApplication.findFirst({
+    where: { email, status: "PENDING" },
+  });
+
+  if (pending) {
+    throw new PartnerServiceError(
+      "Bu e-posta ile bekleyen bir başvurunuz zaten var.",
+      409
+    );
+  }
+
+  const existingPartner = await db.partnerProfile.findFirst({
+    where: { email },
+  });
+
+  if (existingPartner) {
+    throw new PartnerServiceError("Bu e-posta ile kayıtlı bir partner zaten var.", 409);
+  }
+
+  return db.partnerApplication.create({
+    data: {
+      fullName: input.fullName.trim(),
+      email,
+      phone: input.phone?.trim() || null,
+      socialUrl: input.socialUrl?.trim() || null,
+      audienceType: input.audienceType,
+      expectedReach: input.expectedReach?.trim() || null,
+      message: input.message?.trim() || null,
+    },
+  });
+}
+
+export async function listPartnerApplications() {
+  const applications = await db.partnerApplication.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 200,
+  });
+
+  return applications.map((app) => ({
+    id: app.id,
+    fullName: app.fullName,
+    email: app.email,
+    phone: app.phone,
+    socialUrl: app.socialUrl,
+    audienceType: app.audienceType,
+    audienceTypeLabel: getAudienceTypeLabel(app.audienceType),
+    expectedReach: app.expectedReach,
+    message: app.message,
+    status: app.status,
+    rejectionReason: app.rejectionReason,
+    createdAt: app.createdAt.toISOString(),
+    reviewedAt: app.reviewedAt?.toISOString() ?? null,
+  }));
+}
+
+export async function approvePartnerApplication(input: {
+  applicationId: string;
+  actorUserId: string;
+  data: z.infer<typeof approvePartnerApplicationSchema>;
+}) {
+  const application = await db.partnerApplication.findUnique({
+    where: { id: input.applicationId },
+  });
+
+  if (!application) {
+    throw new PartnerServiceError("Başvuru bulunamadı.", 404);
+  }
+
+  if (application.status !== "PENDING") {
+    throw new PartnerServiceError("Bu başvuru zaten işlenmiş.", 400);
+  }
+
+  const settings = await ensurePartnerSettings();
+  let referralCode = input.data.referralCode
+    ? sanitizeReferralCode(input.data.referralCode)
+    : generateReferralCode(application.fullName);
+
+  if (!referralCode) {
+    referralCode = generateReferralCode("PARTNER");
+  }
+
+  const existingCode = await db.partnerProfile.findUnique({
+    where: { referralCode },
+  });
+
+  if (existingCode) {
+    referralCode = generateReferralCode(referralCode);
+  }
+
+  const now = new Date();
+
+  const profile = await db.$transaction(async (tx) => {
+    const created = await tx.partnerProfile.create({
+      data: {
+        applicationId: application.id,
+        fullName: application.fullName,
+        email: application.email,
+        phone: application.phone,
+        referralCode,
+        commissionRate: input.data.commissionRate ?? Number(settings.defaultCommissionRate),
+        status: "ACTIVE",
+        badgeType: input.data.badgeType,
+        badgeLabel: input.data.badgeLabel ?? null,
+        notes: input.data.notes ?? null,
+      },
+    });
+
+    await tx.partnerApplication.update({
+      where: { id: application.id },
+      data: {
+        status: "APPROVED",
+        reviewedByUserId: input.actorUserId,
+        reviewedAt: now,
+      },
+    });
+
+    await linkPartnerUserByEmail(tx, created.id, application.email);
+
+    await tx.activityLog.create({
+      data: {
+        companyId: null,
+        userId: input.actorUserId,
+        action: "UPDATE",
+        module: "admin",
+        message: `Partner başvurusu onaylandı: ${application.fullName}`,
+      },
+    });
+
+    return created;
+  });
+
+  return serializePartner(profile);
+}
+
+export async function rejectPartnerApplication(input: {
+  applicationId: string;
+  actorUserId: string;
+  rejectionReason: string;
+}) {
+  const application = await db.partnerApplication.findUnique({
+    where: { id: input.applicationId },
+  });
+
+  if (!application) {
+    throw new PartnerServiceError("Başvuru bulunamadı.", 404);
+  }
+
+  if (application.status !== "PENDING") {
+    throw new PartnerServiceError("Bu başvuru zaten işlenmiş.", 400);
+  }
+
+  const updated = await db.$transaction(async (tx) => {
+    const saved = await tx.partnerApplication.update({
+      where: { id: application.id },
+      data: {
+        status: "REJECTED",
+        rejectionReason: input.rejectionReason,
+        reviewedByUserId: input.actorUserId,
+        reviewedAt: new Date(),
+      },
+    });
+
+    await tx.activityLog.create({
+      data: {
+        companyId: null,
+        userId: input.actorUserId,
+        action: "UPDATE",
+        module: "admin",
+        message: `Partner başvurusu reddedildi: ${application.fullName}`,
+      },
+    });
+
+    return saved;
+  });
+
+  return updated;
+}
+
+export async function recordReferralClick(input: {
+  referralCode: string;
+  ip?: string | null;
+  userAgent?: string | null;
+  referrer?: string | null;
+  landingUrl?: string | null;
+  utmSource?: string | null;
+  utmCampaign?: string | null;
+}) {
+  const partner = await resolvePartnerFromAttribution({
+    referralCode: input.referralCode,
+  });
+
+  if (!partner) {
+    return null;
+  }
+
+  const ipHash = input.ip ? hashPartnerIp(input.ip) : null;
+
+  return db.partnerReferralClick.create({
+    data: {
+      partnerId: partner.id,
+      referralCode: partner.referralCode,
+      ipHash,
+      userAgent: input.userAgent?.slice(0, 500) ?? null,
+      referrer: input.referrer?.slice(0, 500) ?? null,
+      landingUrl: input.landingUrl?.slice(0, 500) ?? null,
+      utmSource: input.utmSource ?? null,
+      utmCampaign: input.utmCampaign ?? null,
+    },
+  });
+}
+
+function monthStart(date = new Date()) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+export async function getPartnerProfile(partnerId: string) {
+  const partner = await db.partnerProfile.findUnique({
+    where: { id: partnerId },
+  });
+
+  if (!partner) {
+    throw new PartnerServiceError("Partner bulunamadı.", 404);
+  }
+
+  return serializePartner(partner);
+}
+
+export async function getPartnerDashboardStats(partnerId: string) {
+  const partner = await db.partnerProfile.findUnique({
+    where: { id: partnerId },
+  });
+
+  if (!partner) {
+    throw new PartnerServiceError("Partner bulunamadı.", 404);
+  }
+
+  const settings = await ensurePartnerSettings();
+  const start = monthStart();
+
+  const [
+    totalClicks,
+    monthClicks,
+    signups,
+    paidCompanies,
+    pendingEarnings,
+    approvedEarnings,
+    paidEarnings,
+    payableEarnings,
+  ] = await Promise.all([
+    db.partnerReferralClick.count({ where: { partnerId } }),
+    db.partnerReferralClick.count({
+      where: { partnerId, clickedAt: { gte: start } },
+    }),
+    db.partnerConversion.count({
+      where: { partnerId, type: "SIGNUP", status: { not: "CANCELLED" } },
+    }),
+    db.partnerConversion.count({
+      where: {
+        partnerId,
+        type: { in: ["PAID_MEMBERSHIP", "RENEWAL"] },
+        status: { not: "CANCELLED" },
+      },
+    }),
+    db.partnerEarning.aggregate({
+      where: { partnerId, status: "PENDING" },
+      _sum: { amount: true },
+    }),
+    db.partnerEarning.aggregate({
+      where: { partnerId, status: "APPROVED" },
+      _sum: { amount: true },
+    }),
+    db.partnerEarning.aggregate({
+      where: { partnerId, status: "PAID" },
+      _sum: { amount: true },
+    }),
+    db.partnerEarning.aggregate({
+      where: {
+        partnerId,
+        status: { in: ["APPROVED", "PAYABLE"] },
+      },
+      _sum: { amount: true },
+    }),
+  ]);
+
+  const pendingTotal = Number(pendingEarnings._sum.amount ?? 0);
+  const approvedTotal = Number(approvedEarnings._sum.amount ?? 0);
+  const paidTotal = Number(paidEarnings._sum.amount ?? 0);
+  const payableTotal = Number(payableEarnings._sum.amount ?? 0);
+  const minPayout = Number(settings.minimumPayoutAmount);
+  const remainingToMin = Math.max(0, minPayout - payableTotal);
+
+  return {
+    partner: serializePartner(partner),
+    metrics: {
+      totalClicks,
+      monthClicks,
+      signups,
+      paidCompanies,
+      conversionRate: calculateConversionRate(totalClicks, signups),
+      pendingEarnings: pendingTotal,
+      approvedEarnings: approvedTotal,
+      paidTotal,
+      payableTotal,
+      minimumPayoutAmount: minPayout,
+      remainingToMinPayout: remainingToMin,
+      canRequestPayout: payableTotal >= minPayout,
+    },
+    motivation: {
+      monthClicksText: `Bu ay ${monthClicks} tıklama aldınız`,
+      payoutText:
+        remainingToMin > 0
+          ? `İlk ödemenize ₺${remainingToMin.toLocaleString("tr-TR")} kaldı`
+          : "Ödeme talebi için yeterli bakiyeniz var",
+    },
+  };
+}
+
+export async function listPartnerClicks(partnerId: string, limit = 50) {
+  const clicks = await db.partnerReferralClick.findMany({
+    where: { partnerId },
+    orderBy: { clickedAt: "desc" },
+    take: limit,
+  });
+
+  return clicks.map((click) => ({
+    id: click.id,
+    referralCode: click.referralCode,
+    clickedAt: click.clickedAt.toISOString(),
+    converted: Boolean(click.convertedCompanyId),
+    convertedAt: click.convertedAt?.toISOString() ?? null,
+  }));
+}
+
+export async function listPartnerConversions(partnerId: string, limit = 50) {
+  const conversions = await db.partnerConversion.findMany({
+    where: { partnerId },
+    orderBy: { occurredAt: "desc" },
+    take: limit,
+    include: { company: { select: { name: true } } },
+  });
+
+  return conversions.map((conversion) => ({
+    id: conversion.id,
+    type: conversion.type,
+    typeLabel: getConversionTypeLabel(conversion.type),
+    amount: Number(conversion.amount),
+    commissionRate: Number(conversion.commissionRate),
+    commissionAmount: Number(conversion.commissionAmount),
+    status: conversion.status,
+    companyName: conversion.company?.name ?? null,
+    occurredAt: conversion.occurredAt.toISOString(),
+  }));
+}
+
+export async function listPartnerEarnings(partnerId: string, limit = 50) {
+  const earnings = await db.partnerEarning.findMany({
+    where: { partnerId },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+
+  return earnings.map((earning) => ({
+    id: earning.id,
+    amount: Number(earning.amount),
+    currency: earning.currency,
+    status: earning.status,
+    statusLabel: getEarningStatusLabel(earning.status),
+    description: earning.description,
+    createdAt: earning.createdAt.toISOString(),
+    paidAt: earning.paidAt?.toISOString() ?? null,
+  }));
+}
+
+export async function listPartnerPayouts(partnerId: string, limit = 50) {
+  const payouts = await db.partnerPayout.findMany({
+    where: { partnerId },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+
+  return payouts.map((payout) => ({
+    id: payout.id,
+    amount: Number(payout.amount),
+    currency: payout.currency,
+    status: payout.status,
+    paymentMethod: payout.paymentMethod,
+    paidAt: payout.paidAt?.toISOString() ?? null,
+    note: payout.note,
+    createdAt: payout.createdAt.toISOString(),
+  }));
+}
+
+export async function listAdminPartners() {
+  const partners = await db.partnerProfile.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 200,
+  });
+
+  const enriched = await Promise.all(
+    partners.map(async (partner) => {
+      const [clicks, signups, paidEarnings] = await Promise.all([
+        db.partnerReferralClick.count({ where: { partnerId: partner.id } }),
+        db.partnerConversion.count({
+          where: { partnerId: partner.id, type: "SIGNUP" },
+        }),
+        db.partnerEarning.aggregate({
+          where: { partnerId: partner.id, status: "PAID" },
+          _sum: { amount: true },
+        }),
+      ]);
+
+      const earningsSum = await db.partnerEarning.aggregate({
+        where: {
+          partnerId: partner.id,
+          status: { in: ["PENDING", "APPROVED", "PAYABLE"] },
+        },
+        _sum: { amount: true },
+      });
+
+      return {
+        ...serializePartner(partner),
+        clicks,
+        signups,
+        earnings: Number(earningsSum._sum.amount ?? 0),
+        paidTotal: Number(paidEarnings._sum.amount ?? 0),
+      };
+    })
+  );
+
+  return enriched;
+}
+
+export async function updatePartnerProfileAdmin(
+  partnerId: string,
+  input: {
+    commissionRate?: number;
+    badgeType?: PartnerBadgeType;
+    badgeLabel?: string | null;
+    status?: PartnerProfileStatus;
+    notes?: string | null;
+  }
+) {
+  const partner = await db.partnerProfile.update({
+    where: { id: partnerId },
+    data: {
+      commissionRate: input.commissionRate,
+      badgeType: input.badgeType,
+      badgeLabel: input.badgeLabel,
+      status: input.status,
+      notes: input.notes,
+    },
+  });
+
+  return serializePartner(partner);
+}
+
+export async function createPartnerPayoutAdmin(input: {
+  partnerId: string;
+  earningIds: string[];
+  paymentMethod: "IBAN" | "CASH" | "MANUAL";
+  note?: string;
+  markPaid: boolean;
+  actorUserId: string;
+}) {
+  const earnings = await db.partnerEarning.findMany({
+    where: {
+      id: { in: input.earningIds },
+      partnerId: input.partnerId,
+      status: { in: ["APPROVED", "PAYABLE"] },
+    },
+  });
+
+  if (!earnings.length) {
+    throw new PartnerServiceError("Ödenecek hak ediş bulunamadı.", 400);
+  }
+
+  const amount = earnings.reduce((sum, e) => sum + Number(e.amount), 0);
+  const now = new Date();
+
+  const payout = await db.$transaction(async (tx) => {
+    const created = await tx.partnerPayout.create({
+      data: {
+        partnerId: input.partnerId,
+        amount,
+        status: input.markPaid ? "PAID" : "PENDING",
+        paymentMethod: input.paymentMethod,
+        paidAt: input.markPaid ? now : null,
+        note: input.note ?? null,
+        createdByUserId: input.actorUserId,
+      },
+    });
+
+    await tx.partnerEarning.updateMany({
+      where: { id: { in: earnings.map((e) => e.id) } },
+      data: {
+        status: input.markPaid ? "PAID" : "PAYABLE",
+        payoutId: created.id,
+        paidAt: input.markPaid ? now : null,
+      },
+    });
+
+    const partner = await tx.partnerProfile.findUnique({
+      where: { id: input.partnerId },
+      select: { fullName: true },
+    });
+
+    await tx.activityLog.create({
+      data: {
+        companyId: null,
+        userId: input.actorUserId,
+        action: "CREATE",
+        module: "admin",
+        message: `Partner ödemesi oluşturuldu: ${partner?.fullName ?? input.partnerId} · ₺${amount}`,
+      },
+    });
+
+    return created;
+  });
+
+  return {
+    id: payout.id,
+    amount: Number(payout.amount),
+    status: payout.status,
+    paidAt: payout.paidAt?.toISOString() ?? null,
+  };
+}
+
+export async function getPartnerSettings() {
+  const settings = await ensurePartnerSettings();
+  return {
+    defaultCommissionRate: Number(settings.defaultCommissionRate),
+    cookieDurationDays: settings.cookieDurationDays,
+    minimumPayoutAmount: Number(settings.minimumPayoutAmount),
+    autoApproveConversions: settings.autoApproveConversions,
+    commissionOnRenewals: settings.commissionOnRenewals,
+    isApplicationOpen: settings.isApplicationOpen,
+    termsText: settings.termsText,
+  };
+}
+
+export async function updatePartnerSettings(
+  input: Partial<{
+    defaultCommissionRate: number;
+    cookieDurationDays: number;
+    minimumPayoutAmount: number;
+    autoApproveConversions: boolean;
+    commissionOnRenewals: boolean;
+    isApplicationOpen: boolean;
+    termsText: string | null;
+  }>
+) {
+  const settings = await db.partnerSettings.update({
+    where: { id: "default" },
+    data: input,
+  });
+
+  return getPartnerSettings();
+}
+
+export async function getAdminPartnerDetail(partnerId: string) {
+  const partner = await db.partnerProfile.findUnique({
+    where: { id: partnerId },
+  });
+
+  if (!partner) {
+    throw new PartnerServiceError("Partner bulunamadı.", 404);
+  }
+
+  const [clicks, conversions, earnings, payouts] = await Promise.all([
+    listPartnerClicks(partnerId, 100),
+    listPartnerConversions(partnerId, 100),
+    listPartnerEarnings(partnerId, 100),
+    listPartnerPayouts(partnerId, 100),
+  ]);
+
+  return {
+    partner: {
+      ...serializePartner(partner),
+      notes: partner.notes,
+      taxNumber: partner.taxNumber,
+      createdAt: partner.createdAt.toISOString(),
+    },
+    clicks,
+    conversions,
+    earnings,
+    payouts,
+  };
+}
+
+export async function listAdminPayouts() {
+  const payouts = await db.partnerPayout.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 200,
+    include: {
+      partner: {
+        select: { id: true, fullName: true, email: true, referralCode: true },
+      },
+    },
+  });
+
+  return payouts.map((payout) => ({
+    id: payout.id,
+    partnerId: payout.partnerId,
+    partnerName: payout.partner.fullName,
+    partnerEmail: payout.partner.email,
+    referralCode: payout.partner.referralCode,
+    amount: Number(payout.amount),
+    currency: payout.currency,
+    status: payout.status,
+    paymentMethod: payout.paymentMethod,
+    paidAt: payout.paidAt?.toISOString() ?? null,
+    note: payout.note,
+    createdAt: payout.createdAt.toISOString(),
+  }));
+}
+
+export async function updatePartnerProfileSelf(
+  partnerId: string,
+  input: {
+    phone?: string;
+    iban?: string;
+    bankName?: string;
+    accountHolderName?: string;
+    taxNumber?: string;
+  }
+) {
+  const partner = await db.partnerProfile.update({
+    where: { id: partnerId },
+    data: {
+      phone: input.phone,
+      iban: input.iban,
+      bankName: input.bankName,
+      accountHolderName: input.accountHolderName,
+      taxNumber: input.taxNumber,
+    },
+  });
+
+  return serializePartner(partner);
+}

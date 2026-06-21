@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
+import { invalidateDashboardCache } from "@/lib/dashboard-cache-invalidation";
 import { requireApiModuleAccess } from "@/lib/module-access";
 import { db } from "@/lib/prisma";
 import { moveStockBetweenWarehouses } from "@/lib/warehouse-service";
-import { warehouseTransferSchema } from "@/lib/warehouse-utils";
+import {
+  normalizeWarehouseTransferItems,
+  warehouseTransferSchema,
+  TRANSFER_FAILED_MESSAGE,
+} from "@/lib/warehouse-transfer-utils";
 
 export async function GET(request: Request) {
   try {
@@ -21,6 +26,7 @@ export async function GET(request: Request) {
         product: { select: { id: true, name: true } },
         fromWarehouse: { select: { id: true, name: true } },
         toWarehouse: { select: { id: true, name: true } },
+        items: { select: { id: true, productId: true, quantity: true } },
       },
       orderBy: { createdAt: "desc" },
       take: 100,
@@ -55,10 +61,37 @@ export async function POST(req: Request) {
       );
     }
 
+    const fromWarehouseId =
+      parsed.data.sourceWarehouseId ?? parsed.data.fromWarehouseId;
+    const toWarehouseId =
+      parsed.data.destinationWarehouseId ?? parsed.data.toWarehouseId;
+
+    if (!fromWarehouseId || !toWarehouseId) {
+      return NextResponse.json(
+        { success: false, message: "Kaynak ve hedef depo seçilmelidir." },
+        { status: 400 }
+      );
+    }
+
+    const normalizedItems = normalizeWarehouseTransferItems(parsed.data);
+    if (!normalizedItems.ok) {
+      return NextResponse.json(
+        { success: false, message: normalizedItems.message },
+        { status: 400 }
+      );
+    }
+
     const result = await moveStockBetweenWarehouses({
       companyId: auth.companyId,
       userId: auth.userId,
-      ...parsed.data,
+      fromWarehouseId,
+      toWarehouseId,
+      productId: normalizedItems.items[0]!.productId,
+      quantity: normalizedItems.items[0]!.quantity,
+      items: normalizedItems.items,
+      note: parsed.data.note,
+      transferDate: parsed.data.transferDate,
+      idempotencyKey: parsed.data.idempotencyKey,
     });
 
     if (!result.ok) {
@@ -68,15 +101,22 @@ export async function POST(req: Request) {
       );
     }
 
+    if (!result.replayed) {
+      invalidateDashboardCache(auth.companyId, "warehouse-transfer");
+    }
+
     return NextResponse.json({
       success: true,
-      message: "Depo transferi tamamlandı.",
-      data: result.data,
+      message: result.replayed
+        ? "Depo transferi daha önce tamamlanmıştı."
+        : "Depo transferi başarıyla tamamlandı.",
+      transfer: result.data.transfer,
+      replayed: result.replayed ?? false,
     });
   } catch (error) {
     console.error("STOCKS_TRANSFERS_POST_ERROR", error);
     return NextResponse.json(
-      { success: false, message: "Transfer oluşturulamadı." },
+      { success: false, message: TRANSFER_FAILED_MESSAGE },
       { status: 500 }
     );
   }

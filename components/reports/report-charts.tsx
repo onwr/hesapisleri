@@ -5,6 +5,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
   Line,
   LineChart,
   Pie,
@@ -44,6 +45,32 @@ const expenseColors = [
   "#64748b",
 ];
 
+function ChartEmptyState({ message }: { message: string }) {
+  return (
+    <div className="flex h-[210px] w-full items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 text-center text-[12px] font-semibold text-slate-500">
+      {message}
+    </div>
+  );
+}
+
+function DonutEmptyState({ total }: { total: number }) {
+  return (
+    <div className="flex items-center gap-6">
+      <div className="flex h-[170px] w-[170px] shrink-0 items-center justify-center rounded-full border border-dashed border-slate-200 bg-slate-50 text-center text-[11px] font-medium text-slate-400">
+        Veri yok
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[12px] font-semibold text-slate-500">
+          Bu dönem için rapor verisi bulunmuyor.
+        </p>
+        <p className="mt-2 text-[17px] font-black text-[#0f1f4d]">
+          {formatMoney(total)}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function ReportMiniLine({
   data,
   color = "#22c55e",
@@ -51,27 +78,31 @@ export function ReportMiniLine({
   data: Array<{ value: number }>;
   color?: string;
 }) {
+  const chartData = data.length > 0 ? data : [{ value: 0 }];
+
   return (
     <div className="h-12 w-24">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data}>
-          <Line
-            type="monotone"
-            dataKey="value"
-            stroke={color}
-            strokeWidth={2.2}
-            dot={false}
-          />
-        </LineChart>
-      </ResponsiveContainer>
+      <LineChart width={96} height={48} data={chartData}>
+        <Line
+          type="monotone"
+          dataKey="value"
+          stroke={color}
+          strokeWidth={2.2}
+          dot={false}
+        />
+      </LineChart>
     </div>
   );
 }
 
 export function FinanceBarChart({ data }: { data: MonthlyFinancePoint[] }) {
+  if (data.length === 0) {
+    return <ChartEmptyState message="Bu dönem için rapor verisi bulunmuyor." />;
+  }
+
   return (
-    <div className="h-[210px] w-full">
-      <ResponsiveContainer width="100%" height="100%">
+    <div className="h-[210px] w-full min-w-0">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0}>
         <BarChart data={data} barGap={8} barCategoryGap={24}>
           <CartesianGrid vertical={false} stroke="#eef2f7" />
           <XAxis
@@ -105,10 +136,14 @@ export function FinanceBarChart({ data }: { data: MonthlyFinancePoint[] }) {
 }
 
 export function CashFlowChart({ data }: { data: MonthlyFinancePoint[] }) {
+  if (data.length === 0) {
+    return <ChartEmptyState message="Bu dönem için rapor verisi bulunmuyor." />;
+  }
+
   return (
-    <div className="h-[210px] w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} barGap={6} barCategoryGap={18}>
+    <div className="h-[210px] w-full min-w-0">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+        <ComposedChart data={data} barGap={6} barCategoryGap={18}>
           <CartesianGrid vertical={false} stroke="#eef2f7" />
           <XAxis
             dataKey="month"
@@ -142,7 +177,7 @@ export function CashFlowChart({ data }: { data: MonthlyFinancePoint[] }) {
             strokeWidth={2.5}
             dot={{ r: 3, fill: "#2563eb" }}
           />
-        </BarChart>
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );
@@ -155,36 +190,41 @@ export function ExpenseDonutChart({
   data: ExpenseCategoryPoint[];
   total: number;
 }) {
+  if (data.length === 0) {
+    return <DonutEmptyState total={total} />;
+  }
+
   return (
     <div className="flex items-center gap-6">
       <div className="relative h-[170px] w-[170px] shrink-0">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={data}
-              dataKey="value"
-              cx="50%"
-              cy="50%"
-              innerRadius={54}
-              outerRadius={82}
-              stroke="#ffffff"
-              strokeWidth={2}
-            >
-              {data.map((_, index) => (
-                <Cell key={index} fill={expenseColors[index % expenseColors.length]} />
-              ))}
-            </Pie>
-            <Tooltip
-              formatter={(value) => formatMoney(Number(value))}
-              contentStyle={{
-                borderRadius: 14,
-                border: "1px solid #e2e8f0",
-                boxShadow: "0 12px 28px rgba(15,23,42,0.10)",
-                fontSize: 12,
-              }}
-            />
-          </PieChart>
-        </ResponsiveContainer>
+        <PieChart width={170} height={170}>
+          <Pie
+            data={data}
+            dataKey="value"
+            cx={85}
+            cy={85}
+            innerRadius={54}
+            outerRadius={82}
+            stroke="#ffffff"
+            strokeWidth={2}
+          >
+            {data.map((entry, index) => (
+              <Cell
+                key={entry.name}
+                fill={expenseColors[index % expenseColors.length]}
+              />
+            ))}
+          </Pie>
+          <Tooltip
+            formatter={(value) => formatMoney(Number(value))}
+            contentStyle={{
+              borderRadius: 14,
+              border: "1px solid #e2e8f0",
+              boxShadow: "0 12px 28px rgba(15,23,42,0.10)",
+              fontSize: 12,
+            }}
+          />
+        </PieChart>
 
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
           <p className="text-[17px] font-black tracking-[-0.03em] text-[#0f1f4d]">
@@ -220,7 +260,71 @@ export function ExpenseDonutChart({
   );
 }
 
+export function StockReportTable({
+  data,
+}: {
+  data: Array<{
+    id?: string;
+    name: string;
+    stock: number;
+    minStock: number;
+    buyPrice: number;
+    stockValue: number;
+    isLowStock: boolean;
+  }>;
+}) {
+  if (data.length === 0) {
+    return (
+      <div className="flex min-h-[180px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 text-center text-[12px] font-semibold text-slate-500">
+        Stok takipli ürün bulunmuyor.
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-100">
+      <table className="w-full text-left">
+        <thead>
+          <tr className="bg-slate-50/70 text-[11px] font-black text-[#24345f]/80">
+            <th className="px-4 py-3">Ürün</th>
+            <th className="px-4 py-3">Stok</th>
+            <th className="px-4 py-3">Min. Stok</th>
+            <th className="px-4 py-3 text-right">Stok Değeri</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {data.map((item) => (
+            <tr key={item.id ?? item.name} className="text-[12px] font-semibold text-[#24345f]">
+              <td className="px-4 py-3 font-extrabold text-[#0f1f4d]">
+                {item.name}
+                {item.isLowStock ? (
+                  <span className="ml-2 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-black text-amber-700">
+                    Düşük
+                  </span>
+                ) : null}
+              </td>
+              <td className="px-4 py-3">{item.stock}</td>
+              <td className="px-4 py-3">{item.minStock}</td>
+              <td className="px-4 py-3 text-right font-black text-[#0f1f4d]">
+                {formatMoney(item.stockValue)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function TopProductsTable({ data }: { data: TopProductPoint[] }) {
+  if (data.length === 0) {
+    return (
+      <div className="flex min-h-[180px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 text-center text-[12px] font-semibold text-slate-500">
+        Bu dönem için rapor verisi bulunmuyor.
+      </div>
+    );
+  }
+
   return (
     <div className="overflow-hidden rounded-xl border border-slate-100">
       <table className="w-full text-left">

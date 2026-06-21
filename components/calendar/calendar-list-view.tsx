@@ -20,6 +20,7 @@ import {
 type CalendarListViewProps = {
   events: NormalizedCalendarEvent[];
   onAddEvent?: () => void;
+  onEventClick?: (event: NormalizedCalendarEvent) => void;
 };
 
 function formatEventTime(event: NormalizedCalendarEvent) {
@@ -43,7 +44,11 @@ function formatGroupLabel(dateKey: string) {
   }).format(date);
 }
 
-export function CalendarListView({ events, onAddEvent }: CalendarListViewProps) {
+export function CalendarListView({
+  events,
+  onAddEvent,
+  onEventClick,
+}: CalendarListViewProps) {
   if (events.length === 0) {
     return (
       <div className={`${CALENDAR_CARD_CLASS} p-5 sm:p-6`}>
@@ -80,9 +85,23 @@ export function CalendarListView({ events, onAddEvent }: CalendarListViewProps) 
                   return (
                     <article
                       key={event.id}
+                      role={onEventClick ? "button" : undefined}
+                      tabIndex={onEventClick ? 0 : undefined}
+                      onClick={onEventClick ? () => onEventClick(event) : undefined}
+                      onKeyDown={
+                        onEventClick
+                          ? (keyEvent) => {
+                              if (keyEvent.key === "Enter" || keyEvent.key === " ") {
+                                keyEvent.preventDefault();
+                                onEventClick(event);
+                              }
+                            }
+                          : undefined
+                      }
                       className={[
                         CALENDAR_LIST_ROW_CLASS,
                         critical ? "border-rose-200/80 bg-rose-50/30" : "",
+                        onEventClick ? "cursor-pointer hover:bg-slate-50/80" : "",
                       ].join(" ")}
                     >
                       <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -139,6 +158,7 @@ export function CalendarListView({ events, onAddEvent }: CalendarListViewProps) 
                       {href ? (
                         <Link
                           href={href}
+                          onClick={(clickEvent) => clickEvent.stopPropagation()}
                           className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-slate-200/80 bg-white px-3 py-2 text-xs font-bold text-[#0f1f4d] transition hover:bg-slate-50"
                         >
                           Detaya Git

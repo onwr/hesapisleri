@@ -17,6 +17,8 @@ export const CUSTOMER_LIST_CSV_HEADER = [
   "Telefon",
   "E-Posta",
   "Vergi No",
+  "Vergi Dairesi",
+  "Vergi Levhası URL",
   "Grup",
   "Bakiye",
   "Durum",
@@ -27,6 +29,8 @@ export const CUSTOMER_DETAIL_CSV_HEADER = [
   "Telefon",
   "E-Posta",
   "Vergi No",
+  "Vergi Dairesi",
+  "Vergi Levhası URL",
   "Adres",
   "Grup",
   "Bakiye",
@@ -39,6 +43,8 @@ type CustomerExportRow = {
   phone: string | null;
   email: string | null;
   taxNo: string | null;
+  taxOffice?: string | null;
+  taxCertificateUrl?: string | null;
   group: string | null;
   balance: unknown;
   status: string;
@@ -52,6 +58,8 @@ export function buildCustomerListCsvRow(customer: CustomerExportRow) {
     customer.phone ?? "",
     customer.email ?? "",
     customer.taxNo ?? "",
+    customer.taxOffice ?? "",
+    customer.taxCertificateUrl ?? "",
     customer.group ?? "Genel",
     String(Number(customer.balance)),
     getCustomerStatusLabel(customer.status),
@@ -64,6 +72,8 @@ export function buildCustomerDetailCsvRow(customer: CustomerExportRow) {
     customer.phone ?? "",
     customer.email ?? "",
     customer.taxNo ?? "",
+    customer.taxOffice ?? "",
+    customer.taxCertificateUrl ?? "",
     customer.address ?? "",
     customer.group ?? "Genel",
     String(Number(customer.balance)),

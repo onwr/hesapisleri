@@ -21,6 +21,9 @@ import {
   getFirstProductErrorMessage,
   mapProductFieldErrors,
   productToFormValues,
+  resolveInitialBarcodePayloadMode,
+  shouldIncludeBarcodeInJsonPayload,
+  type ProductBarcodePayloadMode,
   type ProductFormValues,
   type ProductUnitType,
 } from "@/lib/product-form-utils";
@@ -29,6 +32,7 @@ type EditProductFormProps = {
   companyId: string;
   product: {
     id: string;
+    productType?: "STOCK" | "SERVICE";
     name: string;
     sku: string | null;
     barcode: string | null;
@@ -54,13 +58,13 @@ export function EditProductForm({ companyId, product }: EditProductFormProps) {
   const [form, setForm] = useState<ProductFormValues>(() =>
     productToFormValues(product)
   );
+  const [barcodePayloadMode, setBarcodePayloadMode] =
+    useState<ProductBarcodePayloadMode>(() =>
+      resolveInitialBarcodePayloadMode("edit", product.barcode)
+    );
 
   function updateForm(key: keyof ProductFormValues, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
-  }
-
-  function updateBatch(values: Partial<ProductFormValues>) {
-    setForm((prev) => ({ ...prev, ...values }));
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -69,14 +73,19 @@ export function EditProductForm({ companyId, product }: EditProductFormProps) {
     setError("");
     setFieldErrors({});
 
-    const payload = buildProductPayload(form);
+    const payload = buildProductPayload(form, { barcodeMode: barcodePayloadMode });
     const { stock: _stock, ...updatePayload } = payload;
+    const requestBody = shouldIncludeBarcodeInJsonPayload(barcodePayloadMode)
+      ? updatePayload
+      : Object.fromEntries(
+          Object.entries(updatePayload).filter(([key]) => key !== "barcode")
+        );
 
     try {
       const response = await fetch(`/api/products/${product.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatePayload),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
@@ -158,8 +167,9 @@ export function EditProductForm({ companyId, product }: EditProductFormProps) {
               fieldErrors={fieldErrors}
               mode="edit"
               currentStock={product.stock}
+              barcodePayloadMode={barcodePayloadMode}
+              onBarcodePayloadModeChange={setBarcodePayloadMode}
               onChange={updateForm}
-              onBatchChange={updateBatch}
               onUnitTypeChange={(value: ProductUnitType) =>
                 setForm((prev) => ({ ...prev, unitType: value }))
               }

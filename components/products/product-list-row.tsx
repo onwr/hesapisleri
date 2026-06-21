@@ -10,6 +10,7 @@ import {
   getProductMarketplaceBadge,
   getProductPosVisibilityBadge,
   getProductStockBadge,
+  getProductTypeBadge,
   printProductBarcode,
 } from "@/lib/product-ui-utils";
 import {
@@ -35,6 +36,7 @@ export function ProductListRow({
   showCheckbox = false,
   onDeleteBlocked,
 }: ProductListRowProps) {
+  const typeBadge = getProductTypeBadge(product.productType);
   const stockBadge = getProductStockBadge({
     stock: product.stock,
     minStock: product.minStock,
@@ -87,10 +89,18 @@ export function ProductListRow({
             <span
               className={[
                 "inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-black",
+                typeBadge.className,
+              ].join(" ")}
+            >
+              {typeBadge.label}
+            </span>
+            <span
+              className={[
+                "inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-black",
                 stockBadge.className,
               ].join(" ")}
             >
-              {stockBadge.label}
+              {product.isService ? "Stoksuz" : stockBadge.label}
             </span>
             <span
               className={[

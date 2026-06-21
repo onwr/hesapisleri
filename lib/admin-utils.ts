@@ -21,16 +21,36 @@ export const adminUserPatchSchema = z.object({
   status: z.enum(["ACTIVE", "PASSIVE", "SUSPENDED"]).optional(),
 });
 
-export function getMembershipStatusLabel(status: MembershipStatus) {
-  if (status === "ACTIVE") return "Aktif";
-  if (status === "PAST_DUE") return "Gecikmiş";
-  return "İptal";
+export function getMembershipStatusLabel(status: MembershipStatus | string) {
+  const map: Record<string, string> = {
+    TRIAL: "Deneme",
+    ACTIVE: "Aktif",
+    PAST_DUE: "Gecikmiş",
+    GRACE_PERIOD: "Ek Süre",
+    CANCELLED: "İptal",
+    EXPIRED: "Süresi Doldu",
+  };
+  return map[status] ?? "Bilinmiyor";
 }
 
-export function getMembershipStatusClass(status: MembershipStatus) {
-  if (status === "ACTIVE") return "bg-emerald-100 text-emerald-700";
-  if (status === "PAST_DUE") return "bg-orange-100 text-orange-700";
+export function getMembershipStatusClass(status: MembershipStatus | string) {
+  if (status === "ACTIVE" || status === "TRIAL")
+    return "bg-emerald-100 text-emerald-700";
+  if (status === "PAST_DUE" || status === "GRACE_PERIOD")
+    return "bg-orange-100 text-orange-700";
+  if (status === "EXPIRED") return "bg-rose-100 text-rose-700";
+  if (status === "CANCELLED") return "bg-slate-100 text-slate-600";
   return "bg-slate-100 text-slate-700";
+}
+
+/** @deprecated use getMembershipStatusLabel */
+export function getSubscriptionStatusLabel(status: string) {
+  return getMembershipStatusLabel(status);
+}
+
+/** @deprecated use getMembershipStatusClass */
+export function getSubscriptionStatusClass(status: string) {
+  return getMembershipStatusClass(status);
 }
 
 export function getCompanyStatusLabel(status: Status) {

@@ -10,12 +10,14 @@ import {
   Printer,
   ScanBarcode,
 } from "lucide-react";
+import { ProductSuppliersPanel } from "@/components/products/product-suppliers-panel";
 import { ProductThumbnail } from "@/components/products/product-thumbnail";
 import { PRODUCT_CARD_CLASS } from "@/components/products/product-ui-tokens";
 import {
   getProductMarketplaceBadge,
   getProductPosVisibilityBadge,
   getProductStockBadge,
+  getProductTypeBadge,
   MARKETPLACE_CHANNEL_LABELS,
   printProductBarcode,
 } from "@/lib/product-ui-utils";
@@ -35,6 +37,7 @@ type DetailTabKey =
   | "stock"
   | "sales"
   | "marketplace"
+  | "suppliers"
   | "activity";
 
 const TAB_LABELS: Record<DetailTabKey, string> = {
@@ -42,6 +45,7 @@ const TAB_LABELS: Record<DetailTabKey, string> = {
   stock: "Stok Hareketleri",
   sales: "Satış Geçmişi",
   marketplace: "Pazaryeri Eşlemeleri",
+  suppliers: "Tedarikçiler",
   activity: "Aktivite",
 };
 
@@ -66,6 +70,7 @@ export type ProductDetailViewProps = {
     createdAt: string;
     updatedAt: string;
     isService: boolean;
+    productType: "STOCK" | "SERVICE";
   };
   formatted: {
     buyPrice: string;
@@ -123,6 +128,7 @@ export function ProductDetailView({
   const [activeTab, setActiveTab] = useState<DetailTabKey>("general");
 
   const statusBadge = getProductStatusBadge(product.status);
+  const typeBadge = getProductTypeBadge(product.productType);
   const stockBadge = getProductStockBadge({
     stock: product.stock,
     minStock: product.minStock,
@@ -131,6 +137,9 @@ export function ProductDetailView({
   const posBadge = getProductPosVisibilityBadge(product.status);
   const mappingBadge = getProductMarketplaceBadge(
     channelMappings.map((item) => item.channel)
+  );
+  const visibleTabs = (Object.keys(TAB_LABELS) as DetailTabKey[]).filter(
+    (tab) => !product.isService || tab !== "stock"
   );
 
   return (
@@ -158,10 +167,18 @@ export function ProductDetailView({
                 <span
                   className={[
                     "rounded-full px-2.5 py-1 text-[10px] font-black ring-1 ring-inset",
+                    typeBadge.className,
+                  ].join(" ")}
+                >
+                  {typeBadge.label}
+                </span>
+                <span
+                  className={[
+                    "rounded-full px-2.5 py-1 text-[10px] font-black ring-1 ring-inset",
                     stockBadge.className,
                   ].join(" ")}
                 >
-                  {stockBadge.label}
+                  {product.isService ? "Stoksuz" : stockBadge.label}
                 </span>
                 <span
                   className={[
@@ -188,7 +205,9 @@ export function ProductDetailView({
               </h1>
               <p className="mt-1 text-sm font-semibold text-slate-500">
                 SKU: {product.sku || "Belirtilmedi"}
-                {product.barcode ? ` · Barkod: ${product.barcode}` : ""}
+                {!product.isService && product.barcode
+                  ? ` · Barkod: ${product.barcode}`
+                  : ""}
               </p>
               <span
                 className={[
@@ -208,27 +227,31 @@ export function ProductDetailView({
             >
               Düzenle
             </Link>
-            <Link
-              href={`/products/${product.id}/stock`}
-              className="inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-black text-[#0f1f4d] transition hover:bg-slate-50"
-            >
-              Stok Hareketi
-            </Link>
-            <button
-              type="button"
-              onClick={() =>
-                printProductBarcode({
-                  name: product.name,
-                  barcode: product.barcode,
-                  sku: product.sku || "—",
-                  sellPriceLabel: formatted.sellPrice,
-                })
-              }
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-black text-[#0f1f4d] transition hover:bg-slate-50"
-            >
-              <Printer size={14} />
-              Barkod Yazdır
-            </button>
+            {!product.isService ? (
+              <Link
+                href={`/products/${product.id}/stock`}
+                className="inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-black text-[#0f1f4d] transition hover:bg-slate-50"
+              >
+                Stok Hareketi
+              </Link>
+            ) : null}
+            {!product.isService ? (
+              <button
+                type="button"
+                onClick={() =>
+                  printProductBarcode({
+                    name: product.name,
+                    barcode: product.barcode,
+                    sku: product.sku || "—",
+                    sellPriceLabel: formatted.sellPrice,
+                  })
+                }
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-black text-[#0f1f4d] transition hover:bg-slate-50"
+              >
+                <Printer size={14} />
+                Barkod Yazdır
+              </button>
+            ) : null}
             <Link
               href="/pos"
               className="inline-flex h-9 items-center rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-black text-[#0f1f4d] transition hover:bg-slate-50"
@@ -239,25 +262,21 @@ export function ProductDetailView({
         </div>
       </section>
 
+      {!product.isService ? (
       <section className={PRODUCT_CARD_CLASS}>
         <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="grid flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <InfoLine
               label="Mevcut Stok"
-              value={
-                product.isService
-                  ? "Hizmet ürünü"
-                  : `${product.stock} ${unitLabel}`
-              }
+              value={`${product.stock} ${unitLabel}`}
             />
             <InfoLine
               label="Kritik Stok"
-              value={
-                product.isService ? "—" : `${product.minStock} ${unitLabel}`
-              }
+              value={`${product.minStock} ${unitLabel}`}
             />
             <InfoLine label="Satış Fiyatı" value={formatted.sellPrice} />
             <InfoLine label="Alış Fiyatı" value={formatted.buyPrice} />
+            <InfoLine label="Stok Değeri" value={formatted.stockValue} />
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span
@@ -269,7 +288,7 @@ export function ProductDetailView({
               {stockBadge.label}
             </span>
             <Link
-              href="/stocks"
+              href={`/products/stocks?productId=${product.id}&tab=movements`}
               className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-black text-[#0f1f4d] transition hover:bg-slate-50"
             >
               <ExternalLink size={14} />
@@ -278,10 +297,23 @@ export function ProductDetailView({
           </div>
         </div>
       </section>
+      ) : (
+      <section className={PRODUCT_CARD_CLASS}>
+        <div className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-4">
+          <InfoLine label="Kalem Türü" value={typeBadge.label} />
+          <InfoLine label="Stok Durumu" value="Stoksuz" />
+          <InfoLine label="Satış Fiyatı" value={formatted.sellPrice} />
+          <InfoLine label="Alış Fiyatı" value={formatted.buyPrice} />
+        </div>
+        <p className="border-t border-slate-100 px-4 py-2 text-[11px] text-slate-500">
+          Hizmet kalemlerinde stok değeri hesaplanmaz.
+        </p>
+      </section>
+      )}
 
       <section className={PRODUCT_CARD_CLASS}>
         <div className="flex flex-wrap gap-1.5 border-b border-slate-100 p-3">
-          {(Object.keys(TAB_LABELS) as DetailTabKey[]).map((tab) => (
+          {visibleTabs.map((tab) => (
             <button
               key={tab}
               type="button"
@@ -308,12 +340,16 @@ export function ProductDetailView({
                 label="Bu Ay Satış"
                 value={`${formatted.monthSalesTotal} (${monthSalesQuantity} adet)`}
               />
-              <InfoLine label="Stok Değeri" value={formatted.stockValue} />
+              {!product.isService ? (
+                <InfoLine label="Stok Değeri" value={formatted.stockValue} />
+              ) : null}
               <InfoLine label="Tahmini Kâr" value={formatted.profit} />
+              {!product.isService ? (
               <InfoLine
                 label="Depo / Raf"
                 value={product.warehouseLocation || "Belirtilmedi"}
               />
+              ) : null}
               {product.description ? (
                 <div className="md:col-span-2 rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
                   <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
@@ -443,6 +479,10 @@ export function ProductDetailView({
                 ))}
               </div>
             )
+          ) : null}
+
+          {activeTab === "suppliers" ? (
+            <ProductSuppliersPanel productId={product.id} />
           ) : null}
 
           {activeTab === "activity" ? (

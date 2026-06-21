@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAuthToken, verifyToken } from "@/lib/auth";
+import { requireAuthenticatedApiSession } from "@/lib/module-access";
 import {
   AuthCompaniesError,
   listUserCompanies,
@@ -13,34 +13,14 @@ import {
 import { createCompanyForUserInTransaction } from "@/lib/create-company-service";
 import { db } from "@/lib/prisma";
 
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
-
 export async function GET() {
   try {
-    const token = await getAuthToken();
-
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.userId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
+    const auth = await requireAuthenticatedApiSession();
+    if ("error" in auth) return auth.error;
 
     const data = await listUserCompanies(
-      payload.userId,
-      payload.companyId ?? null
+      auth.session.userId,
+      auth.session.companyId
     );
 
     return NextResponse.json({
@@ -66,23 +46,8 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const token = await getAuthToken();
-
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.userId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
+    const auth = await requireAuthenticatedApiSession();
+    if ("error" in auth) return auth.error;
 
     const body = await req.json();
     const parsed = parseCreateCompanyBody(body);
@@ -113,7 +78,7 @@ export async function POST(req: Request) {
     }
 
     const user = await db.user.findUnique({
-      where: { id: payload.userId },
+      where: { id: auth.session.userId },
     });
 
     if (!user) {
@@ -121,6 +86,37 @@ export async function POST(req: Request) {
         { success: false, message: "Kullanıcı bulunamadı." },
         { status: 401 }
       );
+    }
+
+    const referenceCompanyId = auth.session.companyId;
+    const { getCompanyUsageSummary } = await import(
+      "@/lib/billing/usage/usage-query-service"
+    );
+    const { getResolvedLimit } = await import(
+      "@/lib/billing/entitlements/entitlement-resolution-service"
+    );
+    const usage = referenceCompanyId
+      ? await getCompanyUsageSummary(referenceCompanyId, {
+          userId: auth.session.userId,
+        })
+      : { MAX_COMPANIES: await db.companyUser.count({
+          where: { userId: auth.session.userId, status: "ACTIVE" },
+        }) };
+    if (referenceCompanyId) {
+      const limit = await getResolvedLimit(referenceCompanyId, "MAX_COMPANIES", {
+        userId: auth.session.userId,
+      });
+      if (limit && !limit.isUnlimited && limit.value != null && usage.MAX_COMPANIES != null) {
+        if (usage.MAX_COMPANIES >= limit.value) {
+          return NextResponse.json(
+            {
+              success: false,
+              message: `Firma limitine ulaşıldı (${usage.MAX_COMPANIES}/${limit.value}).`,
+            },
+            { status: 409 }
+          );
+        }
+      }
     }
 
     const { company } = await createCompanyForUserInTransaction({

@@ -174,7 +174,7 @@ export function isManualDirectoryContact(
 export function isSourceManagedDirectoryContact(
   sourceType: DirectorySourceType | null | undefined
 ) {
-  return sourceType === "CUSTOMER" || sourceType === "EMPLOYEE";
+  return sourceType === "CUSTOMER" || sourceType === "EMPLOYEE" || sourceType === "SUPPLIER";
 }
 
 export function getDirectorySourceManageMessage(
@@ -186,11 +186,14 @@ export function getDirectorySourceManageMessage(
   if (sourceType === "EMPLOYEE") {
     return "Bu kayıt çalışan kartından yönetilir.";
   }
+  if (sourceType === "SUPPLIER") {
+    return "Bu kayıt tedarikçi kartından yönetilir.";
+  }
   return null;
 }
 
 export const DIRECTORY_SEARCH_PLACEHOLDER =
-  "Ad, firma, telefon, e-posta, etiket, departman…";
+  "Kişi, firma, telefon, e-posta veya vergi no ara";
 
 type DirectorySearchableContact = Pick<
   DirectoryContactRow,
@@ -244,6 +247,7 @@ export function getDirectorySourceHref(
   if (!sourceId) return null;
   if (sourceType === "CUSTOMER") return `/customers/${sourceId}`;
   if (sourceType === "EMPLOYEE") return `/team/${sourceId}`;
+  if (sourceType === "SUPPLIER") return `/suppliers/${sourceId}`;
   return null;
 }
 
@@ -328,7 +332,7 @@ export function parseDirectoryTypeFilter(value?: string | null) {
 }
 
 export function parseDirectorySourceFilter(value?: string | null) {
-  if (value === "MANUAL" || value === "CUSTOMER" || value === "EMPLOYEE") {
+  if (value === "MANUAL" || value === "CUSTOMER" || value === "EMPLOYEE" || value === "SUPPLIER") {
     return value;
   }
   return "ALL" as const;

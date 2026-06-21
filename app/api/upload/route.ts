@@ -1,42 +1,39 @@
 import { NextResponse } from "next/server";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import {
+  ImageOptimizerError,
   StorageConfigError,
   StorageUploadError,
   saveFileFromWebFile,
+  saveTaxCertificateFromWebFile,
 } from "@/lib/storage/cdn";
+import { requireAnyApiModuleAccess } from "@/lib/module-access";
 
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
+export const runtime = "nodejs";
 
 const DEFAULT_FOLDER = "hesapisleri/general";
 
 export async function POST(req: Request) {
   try {
-    const token = await getAuthToken();
+    const auth = await requireAnyApiModuleAccess([
+      "dashboard",
+      "products",
+      "sales",
+      "pos",
+      "settings",
+      "customers",
+      "employees",
+      "invoices",
+      "expenses",
+    ]);
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.userId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
+    const companyId = auth.companyId;
 
     const formData = await req.formData();
     const file = formData.get("file");
     const folder =
       formData.get("folder")?.toString().trim() || DEFAULT_FOLDER;
+    const purpose = formData.get("purpose")?.toString().trim();
 
     if (!file || !(file instanceof File)) {
       return NextResponse.json(
@@ -46,16 +43,22 @@ export async function POST(req: Request) {
     }
 
     const safeFolder = folder.replace(/[^a-zA-Z0-9/_-]/g, "");
-    const companyId = payload.companyId ?? "common";
     const uploadFolder = safeFolder.includes(companyId)
       ? safeFolder
       : `${safeFolder}/${companyId}`;
 
-    const url = await saveFileFromWebFile(
-      file,
-      uploadFolder,
-      `hesapisleri_${companyId}_${Date.now()}`
-    );
+    const url =
+      purpose === "tax-certificate"
+        ? await saveTaxCertificateFromWebFile(
+            file,
+            uploadFolder,
+            `hesapisleri_${companyId}_${Date.now()}`
+          )
+        : await saveFileFromWebFile(
+            file,
+            uploadFolder,
+            `hesapisleri_${companyId}_${Date.now()}`
+          );
 
     if (!url) {
       return NextResponse.json(
@@ -70,6 +73,13 @@ export async function POST(req: Request) {
       data: { url },
     });
   } catch (error) {
+    if (error instanceof ImageOptimizerError) {
+      return NextResponse.json(
+        { success: false, message: error.message },
+        { status: error.status }
+      );
+    }
+
     if (error instanceof StorageConfigError) {
       console.error("UPLOAD_CONFIG_ERROR", error);
       return NextResponse.json(

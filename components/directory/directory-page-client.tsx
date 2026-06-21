@@ -3,17 +3,18 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Download,
   Plus,
-  RefreshCw,
   Search,
   Star,
   UserPlus,
-  Users,
 } from "lucide-react";
 import { DirectoryContactActions } from "@/components/directory/directory-contact-actions";
 import { DirectoryContactModal } from "@/components/directory/directory-contact-modal";
 import { DirectoryDetailSheet } from "@/components/directory/directory-detail-sheet";
+import { DirectoryQuickActions } from "@/components/directory/directory-quick-actions";
+import { DirectorySourceFilterChips } from "@/components/directory/directory-source-filter-chips";
+import { DirectorySidebarWidgets } from "@/components/directory/directory-sidebar-widgets";
+import { DirectorySummaryCards } from "@/components/directory/directory-summary-cards";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,13 +26,14 @@ import {
 } from "@/components/ui/dialog";
 import {
   PRODUCT_CARD_CLASS,
-  PRODUCT_FILTER_CARD_CLASS,
   PRODUCT_INPUT_CLASS,
 } from "@/components/products/product-ui-tokens";
 import {
   buildDirectoryExportQuery,
   buildDirectoryQuery,
 } from "@/lib/directory-page-data";
+import type { DirectoryQuickActionKey } from "@/lib/directory-page-ui-utils";
+import { getDirectorySourceBadgeClass } from "@/lib/directory-page-ui-utils";
 import type { DirectorySummary } from "@/lib/directory-service";
 import {
   DIRECTORY_SEARCH_PLACEHOLDER,
@@ -129,7 +131,7 @@ export function DirectoryPageClient({
     });
   }
 
-  async function handleSync(endpoint: "customers" | "employees") {
+  async function handleSync(endpoint: "customers" | "employees" | "suppliers") {
     setSyncMessage(null);
     setActionPending(true);
 
@@ -239,59 +241,42 @@ export function DirectoryPageClient({
     setDetailContact(null);
   }
 
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-xl font-extrabold tracking-[-0.02em] text-[#0f1f4d]">
-            Fihrist
-          </h1>
-          <p className="text-[12px] font-medium text-slate-500">
-            Kişi, firma, müşteri ve çalışan iletişim bilgilerinize hızlıca
-            ulaşın. Senkronize Et ile kaynak verileri güncellenir.
-          </p>
-        </div>
+  function handleQuickAction(key: DirectoryQuickActionKey) {
+    if (key === "new-person") {
+      openCreateModal();
+      return;
+    }
 
-        <div className="flex flex-wrap items-center gap-2">
-          {canManage ? (
-            <>
-              <button
-                type="button"
-                onClick={openCreateModal}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#0f1f4d] px-3 text-[12px] font-black text-white transition hover:bg-[#162a5c]"
-              >
-                <Plus size={14} />
-                Kişi Ekle
-              </button>
-              <button
-                type="button"
-                disabled={actionPending}
-                onClick={() => handleSync("customers")}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-black text-[#0f1f4d] transition hover:bg-slate-50 disabled:opacity-60"
-              >
-                <RefreshCw size={14} />
-                Müş. Senkronize Et
-              </button>
-              <button
-                type="button"
-                disabled={actionPending}
-                onClick={() => handleSync("employees")}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-black text-[#0f1f4d] transition hover:bg-slate-50 disabled:opacity-60"
-              >
-                <Users size={14} />
-                Çal. Senkronize Et
-              </button>
-            </>
-          ) : null}
-          <a
-            href={exportHref}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-black text-[#0f1f4d] transition hover:bg-slate-50"
-          >
-            <Download size={14} />
-            Dışa Aktar
-          </a>
-        </div>
-      </div>
+    if (key === "sync-customers") {
+      void handleSync("customers");
+      return;
+    }
+
+    if (key === "sync-suppliers") {
+      void handleSync("suppliers");
+      return;
+    }
+
+    if (key === "sync-employees") {
+      void handleSync("employees");
+    }
+  }
+
+  function handleSourceFilterChange(next: {
+    sourceType: string;
+    favorite: string;
+  }) {
+    setSourceType(next.sourceType);
+    setFavorite(next.favorite);
+  }
+
+  return (
+    <div className="space-y-5">
+      <DirectoryQuickActions
+        canManage={canManage}
+        exportHref={exportHref}
+        onAction={handleQuickAction}
+      />
 
       {syncMessage ? (
         <p className="rounded-lg border border-sky-100 bg-sky-50 px-3 py-2 text-[12px] font-medium text-sky-800">
@@ -305,198 +290,207 @@ export function DirectoryPageClient({
         </p>
       ) : null}
 
-      <section className="flex flex-wrap items-stretch gap-1.5 rounded-xl border border-slate-200/80 bg-white px-2.5 py-1.5 shadow-sm">
-        <StatPill label="Toplam" value={summary.total} />
-        <StatPill label="Favori" value={summary.favorites} tone="amber" />
-        <StatPill label="Müşteri" value={summary.customers} tone="sky" />
-        <StatPill label="Çalışan" value={summary.employees} tone="violet" />
-        <StatPill label="Manuel" value={summary.manual} />
-      </section>
+      <DirectorySummaryCards summary={summary} />
 
-      <section className={`${PRODUCT_FILTER_CARD_CLASS} space-y-2`}>
-        <div className="grid gap-2 md:grid-cols-12">
-          <label className="md:col-span-4">
-            <span className="mb-1 block text-[11px] font-black uppercase tracking-wide text-slate-500">
-              Arama
-            </span>
-            <div className="relative">
-              <Search
-                size={14}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <section className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+          <div className="space-y-3 border-b border-slate-100 p-4">
+            <DirectorySourceFilterChips
+              sourceType={sourceType}
+              favorite={favorite}
+              onChange={handleSourceFilterChange}
+            />
+
+            <div className="grid gap-2 md:grid-cols-12">
+              <label className="md:col-span-4">
+                <span className="mb-1 block text-[11px] font-black uppercase tracking-wide text-slate-500">
+                  Arama
+                </span>
+                <div className="relative">
+                  <Search
+                    size={14}
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+                  <input
+                    className={`${PRODUCT_INPUT_CLASS} pl-9`}
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") applyFilters();
+                    }}
+                    placeholder={DIRECTORY_SEARCH_PLACEHOLDER}
+                  />
+                </div>
+              </label>
+
+              <FilterSelect
+                label="Tür"
+                value={type}
+                onChange={setType}
+                className="md:col-span-2"
+                options={[
+                  { value: "ALL", label: "Tümü" },
+                  { value: "PERSON", label: "Kişi" },
+                  { value: "COMPANY", label: "Firma" },
+                  { value: "CUSTOMER", label: "Müşteri" },
+                  { value: "EMPLOYEE", label: "Çalışan" },
+                  { value: "OTHER", label: "Diğer" },
+                ]}
               />
-              <input
-                className={`${PRODUCT_INPUT_CLASS} pl-9`}
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") applyFilters();
-                }}
-                placeholder={DIRECTORY_SEARCH_PLACEHOLDER}
+
+              <FilterSelect
+                label="Kaynak"
+                value={sourceType}
+                onChange={setSourceType}
+                className="md:col-span-2"
+                options={[
+                  { value: "ALL", label: "Tümü" },
+                  { value: "MANUAL", label: "Manuel" },
+                  { value: "CUSTOMER", label: "Müşteri" },
+                  { value: "EMPLOYEE", label: "Çalışan" },
+                  { value: "SUPPLIER", label: "Tedarikçi" },
+                ]}
+              />
+
+              <FilterSelect
+                label="Favori"
+                value={favorite}
+                onChange={setFavorite}
+                className="md:col-span-2"
+                options={[
+                  { value: "ALL", label: "Tümü" },
+                  { value: "yes", label: "Favoriler" },
+                  { value: "no", label: "Favori Değil" },
+                ]}
+              />
+
+              <FilterSelect
+                label="Durum"
+                value={status}
+                onChange={setStatus}
+                className="md:col-span-2"
+                options={[
+                  { value: "active", label: "Aktif" },
+                  { value: "passive", label: "Pasif" },
+                  { value: "ALL", label: "Tümü" },
+                ]}
               />
             </div>
-          </label>
 
-          <FilterSelect
-            label="Tür"
-            value={type}
-            onChange={setType}
-            className="md:col-span-2"
-            options={[
-              { value: "ALL", label: "Tümü" },
-              { value: "PERSON", label: "Kişi" },
-              { value: "COMPANY", label: "Firma" },
-              { value: "CUSTOMER", label: "Müşteri" },
-              { value: "EMPLOYEE", label: "Çalışan" },
-              { value: "OTHER", label: "Diğer" },
-            ]}
-          />
+            <div className="grid gap-2 md:grid-cols-12">
+              <FilterSelect
+                label="Etiket"
+                value={tag}
+                onChange={setTag}
+                className="md:col-span-3"
+                options={[
+                  { value: "", label: "Tümü" },
+                  ...tags.map((item) => ({ value: item, label: item })),
+                ]}
+              />
 
-          <FilterSelect
-            label="Kaynak"
-            value={sourceType}
-            onChange={setSourceType}
-            className="md:col-span-2"
-            options={[
-              { value: "ALL", label: "Tümü" },
-              { value: "MANUAL", label: "Manuel" },
-              { value: "CUSTOMER", label: "Müşteri" },
-              { value: "EMPLOYEE", label: "Çalışan" },
-            ]}
-          />
+              <FilterSelect
+                label="Sıralama"
+                value={sort}
+                onChange={setSort}
+                className="md:col-span-3"
+                options={[
+                  { value: "name_asc", label: "Ada göre (A-Z)" },
+                  { value: "name_desc", label: "Ada göre (Z-A)" },
+                  { value: "favorite_first", label: "Favoriler önce" },
+                  { value: "updated_desc", label: "Son güncellenen" },
+                ]}
+              />
 
-          <FilterSelect
-            label="Favori"
-            value={favorite}
-            onChange={setFavorite}
-            className="md:col-span-2"
-            options={[
-              { value: "ALL", label: "Tümü" },
-              { value: "yes", label: "Favoriler" },
-              { value: "no", label: "Favori Değil" },
-            ]}
-          />
-
-          <FilterSelect
-            label="Durum"
-            value={status}
-            onChange={setStatus}
-            className="md:col-span-2"
-            options={[
-              { value: "active", label: "Aktif" },
-              { value: "passive", label: "Pasif" },
-              { value: "ALL", label: "Tümü" },
-            ]}
-          />
-        </div>
-
-        <div className="grid gap-2 md:grid-cols-12">
-          <FilterSelect
-            label="Etiket"
-            value={tag}
-            onChange={setTag}
-            className="md:col-span-3"
-            options={[
-              { value: "", label: "Tümü" },
-              ...tags.map((item) => ({ value: item, label: item })),
-            ]}
-          />
-
-          <FilterSelect
-            label="Sıralama"
-            value={sort}
-            onChange={setSort}
-            className="md:col-span-3"
-            options={[
-              { value: "name_asc", label: "Ada göre (A-Z)" },
-              { value: "name_desc", label: "Ada göre (Z-A)" },
-              { value: "favorite_first", label: "Favoriler önce" },
-              { value: "updated_desc", label: "Son güncellenen" },
-            ]}
-          />
-
-          <div className="flex items-end md:col-span-6 md:justify-end">
-            <button
-              type="button"
-              onClick={applyFilters}
-              disabled={isPending}
-              className="inline-flex h-9 items-center rounded-lg bg-[#0f1f4d] px-4 text-[12px] font-black text-white transition hover:bg-[#162a5c] disabled:opacity-60"
-            >
-              Filtrele
-            </button>
+              <div className="flex items-end md:col-span-6 md:justify-end">
+                <button
+                  type="button"
+                  onClick={applyFilters}
+                  disabled={isPending}
+                  className="inline-flex h-9 items-center rounded-lg bg-[#0f1f4d] px-4 text-[12px] font-black text-white transition hover:bg-[#162a5c] disabled:opacity-60"
+                >
+                  Filtrele
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-      </section>
 
-      {contacts.length === 0 ? (
-        <section className={`${PRODUCT_CARD_CLASS} px-6 py-12 text-center`}>
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
-            <UserPlus size={22} />
-          </div>
-          <h2 className="text-base font-black text-[#0f1f4d]">
-            Fihristte kayıt bulunmuyor.
-          </h2>
-          <p className="mt-1 text-[13px] text-slate-500">
-            İlk kişiyi ekleyin veya müşteri/çalışan kayıtlarınızı fihriste
-            aktarın.
-          </p>
-          {canManage ? (
-            <button
-              type="button"
-              onClick={openCreateModal}
-              className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#0f1f4d] px-4 text-[12px] font-black text-white"
-            >
-              <Plus size={14} />
-              Kişi Ekle
-            </button>
-          ) : null}
+          {contacts.length === 0 ? (
+            <div className="px-6 py-16 text-center">
+              <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-3xl bg-emerald-50 text-emerald-600">
+                <UserPlus size={28} />
+              </div>
+              <h2 className="text-lg font-black text-[#0f1f4d]">
+                Fihristte kayıt bulunmuyor.
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                İlk kişiyi ekleyin veya müşteri/çalışan kayıtlarınızı fihriste
+                aktarın.
+              </p>
+              {canManage ? (
+                <button
+                  type="button"
+                  onClick={openCreateModal}
+                  className="mt-5 inline-flex h-11 items-center gap-1.5 rounded-2xl bg-emerald-600 px-5 text-sm font-black text-white"
+                >
+                  <Plus size={16} />
+                  Kişi Ekle
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <>
+              <div id="directory-list" className="hidden overflow-x-auto md:block">
+                <table className="min-w-full text-left text-[12px]">
+                  <thead className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-black uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2.5">Favori</th>
+                      <th className="px-3 py-2.5">Ad / Firma</th>
+                      <th className="px-3 py-2.5">Tür</th>
+                      <th className="px-3 py-2.5">Telefon</th>
+                      <th className="px-3 py-2.5">E-Posta</th>
+                      <th className="px-3 py-2.5">Departman / Ünvan</th>
+                      <th className="px-3 py-2.5">Kaynak</th>
+                      <th className="px-3 py-2.5">Etiketler</th>
+                      <th className="px-3 py-2.5">İletişim</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {contacts.map((contact) => (
+                      <DirectoryTableRow
+                        key={contact.id}
+                        contact={contact}
+                        onOpenDetail={setDetailContact}
+                        onToggleFavorite={handleToggleFavorite}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="space-y-2 p-4 md:hidden">
+                {contacts.map((contact) => (
+                  <DirectoryMobileCard
+                    key={contact.id}
+                    contact={contact}
+                    onOpenDetail={setDetailContact}
+                    onToggleFavorite={handleToggleFavorite}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </section>
-      ) : (
-        <>
-          <section
-            id="directory-list"
-            className={`hidden overflow-hidden ${PRODUCT_CARD_CLASS} md:block`}
-          >
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-[12px]">
-                <thead className="border-b border-slate-100 bg-slate-50/80 text-[11px] font-black uppercase tracking-wide text-slate-500">
-                  <tr>
-                    <th className="px-3 py-2.5">Favori</th>
-                    <th className="px-3 py-2.5">Ad / Firma</th>
-                    <th className="px-3 py-2.5">Tür</th>
-                    <th className="px-3 py-2.5">Telefon</th>
-                    <th className="px-3 py-2.5">E-Posta</th>
-                    <th className="px-3 py-2.5">Departman / Ünvan</th>
-                    <th className="px-3 py-2.5">Kaynak</th>
-                    <th className="px-3 py-2.5">Etiketler</th>
-                    <th className="px-3 py-2.5">İletişim</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {contacts.map((contact) => (
-                    <DirectoryTableRow
-                      key={contact.id}
-                      contact={contact}
-                      onOpenDetail={setDetailContact}
-                      onToggleFavorite={handleToggleFavorite}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
 
-          <section className="space-y-2 md:hidden">
-            {contacts.map((contact) => (
-              <DirectoryMobileCard
-                key={contact.id}
-                contact={contact}
-                onOpenDetail={setDetailContact}
-                onToggleFavorite={handleToggleFavorite}
-              />
-            ))}
-          </section>
-        </>
-      )}
+        <aside className="space-y-4">
+          <DirectorySidebarWidgets
+            summary={summary}
+            canManage={canManage}
+            exportHref={exportHref}
+            onAction={handleQuickAction}
+          />
+        </aside>
+      </div>
 
       <DirectoryContactModal
         open={modalOpen}
@@ -595,7 +589,7 @@ function DirectoryTableRow({
             event.stopPropagation();
             onToggleFavorite(contact);
           }}
-          className="text-amber-500"
+          className="text-amber-500 transition hover:scale-110"
         >
           <Star
             size={16}
@@ -649,8 +643,12 @@ function DirectoryTableRow({
       <td className="px-3 py-2.5 text-slate-600">
         {[contact.department, contact.title].filter(Boolean).join(" · ") || "—"}
       </td>
-      <td className="px-3 py-2.5 text-slate-600">
-        {getDirectorySourceLabel(contact.sourceType)}
+      <td className="px-3 py-2.5">
+        <span
+          className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-black ring-1 ring-inset ${getDirectorySourceBadgeClass(contact.sourceType)}`}
+        >
+          {getDirectorySourceLabel(contact.sourceType)}
+        </span>
       </td>
       <td className="px-3 py-2.5">
         <div className="flex max-w-[140px] flex-wrap gap-1">
@@ -708,7 +706,7 @@ function DirectoryMobileCard({
             event.stopPropagation();
             onToggleFavorite(contact);
           }}
-          className="text-amber-500"
+          className="text-amber-500 transition hover:scale-110"
         >
           <Star
             size={16}
@@ -723,7 +721,9 @@ function DirectoryMobileCard({
         >
           {getDirectoryTypeLabel(contact.type)}
         </span>
-        <span className="text-[11px] font-medium text-slate-500">
+        <span
+          className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-black ring-1 ring-inset ${getDirectorySourceBadgeClass(contact.sourceType)}`}
+        >
           {getDirectorySourceLabel(contact.sourceType)}
         </span>
       </div>
@@ -740,34 +740,6 @@ function DirectoryMobileCard({
         />
       </div>
     </article>
-  );
-}
-
-function StatPill({
-  label,
-  value,
-  tone = "default",
-}: {
-  label: string;
-  value: number;
-  tone?: "default" | "amber" | "sky" | "violet";
-}) {
-  const toneClass =
-    tone === "amber"
-      ? "text-amber-700"
-      : tone === "sky"
-        ? "text-sky-700"
-        : tone === "violet"
-          ? "text-violet-700"
-          : "text-[#0f1f4d]";
-
-  return (
-    <div className="min-w-[72px] flex-1 rounded-lg bg-slate-50/80 px-2.5 py-1">
-      <p className="text-[9px] font-black uppercase tracking-wide text-slate-500">
-        {label}
-      </p>
-      <p className={`text-base font-black leading-tight ${toneClass}`}>{value}</p>
-    </div>
   );
 }
 

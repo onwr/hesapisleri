@@ -1,17 +1,12 @@
 import { NextResponse } from "next/server";
+import { requireApiModuleAccess } from "@/lib/module-access";
 import { db } from "@/lib/prisma";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import {
   buildCsvContent,
   buildCustomerDetailCsvRow,
   CUSTOMER_DETAIL_CSV_HEADER,
   sanitizeCustomerExportFilename,
 } from "@/lib/customer-export-utils";
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
 
 type Props = {
   params: Promise<{
@@ -21,30 +16,17 @@ type Props = {
 
 export async function GET(_req: Request, { params }: Props) {
   try {
-    const token = await getAuthToken();
+    const auth = await requireApiModuleAccess("customers");
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.companyId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
-
+    const companyId = auth.companyId;
+    const userId = auth.userId;
     const { id } = await params;
 
     const customer = await db.customer.findFirst({
       where: {
         id,
-        companyId: payload.companyId,
+        companyId: companyId,
       },
     });
 

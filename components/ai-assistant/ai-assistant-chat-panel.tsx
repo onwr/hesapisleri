@@ -1,32 +1,244 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Bot, Send, Sparkles } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
-  generateAiAnswer,
+  AlertCircle,
+  Bot,
+  Maximize2,
+  Minimize2,
+  RefreshCw,
+  Send,
+  Sparkles,
+  UserRound,
+  X,
+} from "lucide-react";
+import {
+  formatDateInputValue,
   QUICK_QUESTIONS,
-  type AiAssistantContext,
   type AiChatMessage,
+  type AiTopicKey,
 } from "@/lib/ai-assistant-page-utils";
 
 type AiAssistantChatPanelProps = {
-  context: AiAssistantContext;
   initialMessages: AiChatMessage[];
   initialQuestion?: string | null;
   highlight?: boolean;
+  from: Date;
+  to: Date;
+  activeTopic: AiTopicKey;
 };
 
+const EMPTY_MESSAGE_ERROR = "Lütfen bir mesaj yazın.";
+const GENERIC_ERROR =
+  "Asistan şu anda cevap veremiyor. Lütfen tekrar deneyin.";
+
+function formatMessageTime(date: Date) {
+  return date.toLocaleTimeString("tr-TR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function TypingIndicator() {
+  return (
+    <div className="flex items-start gap-2.5">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-blue-500 to-violet-600 text-white shadow-md shadow-blue-200/60">
+        <Bot size={16} strokeWidth={2.4} />
+      </div>
+      <div className="rounded-2xl rounded-tl-md border border-slate-200/80 bg-white px-4 py-3 shadow-sm">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-blue-500 [animation-delay:0ms]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-violet-500 [animation-delay:120ms]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-blue-500 [animation-delay:240ms]" />
+          </div>
+          <span className="text-[11px] font-semibold text-slate-400">
+            Düşünüyor...
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type ChatMessageBubbleProps = {
+  message: AiChatMessage;
+  index: number;
+};
+
+function ChatMessageBubble({ message, index }: ChatMessageBubbleProps) {
+  const isUser = message.role === "user";
+  const timeMatch = message.id.match(/(\d{13})/);
+  const timeLabel = timeMatch
+    ? formatMessageTime(new Date(Number(timeMatch[1])))
+    : null;
+
+  if (isUser) {
+    return (
+      <div
+        className="animate-in fade-in slide-in-from-bottom-2 fill-mode-both flex justify-end gap-2.5 duration-500"
+        style={{ animationDelay: `${index * 30}ms` }}
+      >
+        <div className="max-w-[min(85%,520px)]">
+          <div className="rounded-2xl rounded-tr-md bg-linear-to-br from-blue-600 to-violet-600 px-4 py-3 text-[13px] font-medium leading-6 text-white shadow-lg shadow-blue-200/50">
+            <p className="whitespace-pre-wrap">{message.content}</p>
+          </div>
+          {timeLabel ? (
+            <p className="mt-1 text-right text-[10px] font-semibold text-slate-400">
+              {timeLabel}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+          <UserRound size={16} strokeWidth={2.2} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="animate-in fade-in slide-in-from-bottom-2 fill-mode-both flex items-start gap-2.5 duration-500"
+      style={{ animationDelay: `${index * 30}ms` }}
+    >
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-blue-500 to-violet-600 text-white shadow-md shadow-blue-200/60">
+        <Bot size={16} strokeWidth={2.4} />
+      </div>
+      <div className="max-w-[min(85%,620px)]">
+        <div className="rounded-2xl rounded-tl-md border border-slate-200/80 bg-white px-4 py-3 text-[13px] font-medium leading-6 text-[#24345f] shadow-sm">
+          <p className="whitespace-pre-wrap">{message.content}</p>
+        </div>
+        {timeLabel ? (
+          <p className="mt-1 text-[10px] font-semibold text-slate-400">
+            {timeLabel}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+type ChatPanelChromeProps = {
+  isFullscreen: boolean;
+  onToggleFullscreen: () => void;
+  onCloseFullscreen?: () => void;
+  highlight?: boolean;
+  children: ReactNode;
+  footer: ReactNode;
+};
+
+function ChatPanelChrome({
+  isFullscreen,
+  onToggleFullscreen,
+  onCloseFullscreen,
+  highlight,
+  children,
+  footer,
+}: ChatPanelChromeProps) {
+  const header = (
+    <div
+      className={[
+        "relative shrink-0 overflow-hidden border-b border-white/10 px-4 py-3.5 sm:px-5",
+        isFullscreen
+          ? "bg-linear-to-r from-[#0f1f4d] via-[#1a2f6b] to-[#2d1b69]"
+          : "rounded-t-2xl bg-linear-to-r from-[#0f1f4d] via-[#1a2f6b] to-[#2d1b69]",
+      ].join(" ")}
+    >
+      <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl" />
+      <div className="pointer-events-none absolute -bottom-10 left-1/3 h-24 w-24 rounded-full bg-violet-400/20 blur-2xl" />
+
+      <div className="relative flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/20 bg-white/15 text-white shadow-inner backdrop-blur-sm">
+            <Sparkles size={20} strokeWidth={2.2} />
+          </div>
+          <div className="min-w-0">
+            <h3 className="truncate text-[15px] font-black text-white sm:text-[16px]">
+              AI Finans Asistanı
+            </h3>
+            <p className="truncate text-[11px] font-medium text-blue-100/90">
+              İşletme verilerinize dayalı akıllı yanıtlar
+            </p>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={onToggleFullscreen}
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-white transition hover:bg-white/20"
+            aria-label={isFullscreen ? "Tam ekrandan çık" : "Tam ekran"}
+            title={isFullscreen ? "Tam ekrandan çık" : "Tam ekran"}
+          >
+            {isFullscreen ? (
+              <Minimize2 size={17} strokeWidth={2.4} />
+            ) : (
+              <Maximize2 size={17} strokeWidth={2.4} />
+            )}
+          </button>
+          {isFullscreen && onCloseFullscreen ? (
+            <button
+              type="button"
+              onClick={onCloseFullscreen}
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-white transition hover:bg-white/20 sm:hidden"
+              aria-label="Kapat"
+            >
+              <X size={17} strokeWidth={2.4} />
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+
+  const shell = (
+    <section
+      id="ai-chat-panel"
+      className={[
+        "flex flex-col overflow-hidden bg-white",
+        isFullscreen
+          ? "h-full"
+          : [
+              "animate-in fade-in slide-in-from-bottom-3 fill-mode-both rounded-2xl border shadow-[0_10px_28px_rgba(15,23,42,0.04)] duration-700",
+              highlight
+                ? "border-blue-300 ring-2 ring-blue-100"
+                : "border-slate-200/80",
+            ].join(" "),
+      ].join(" ")}
+      style={isFullscreen ? undefined : { animationDelay: "180ms" }}
+    >
+      {header}
+      {children}
+      {footer}
+    </section>
+  );
+
+  return shell;
+}
+
 export function AiAssistantChatPanel({
-  context,
   initialMessages,
   initialQuestion,
   highlight = false,
+  from,
+  to,
+  activeTopic,
 }: AiAssistantChatPanelProps) {
   const [messages, setMessages] = useState(initialMessages);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [retryQuestion, setRetryQuestion] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const handledInitial = useRef(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     setMessages(initialMessages);
@@ -36,7 +248,26 @@ export function AiAssistantChatPanel({
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, isTyping]);
+  }, [messages, isTyping, error, isFullscreen]);
+
+  useEffect(() => {
+    if (!isFullscreen) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsFullscreen(false);
+      }
+    };
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isFullscreen]);
 
   useEffect(() => {
     if (!initialQuestion || handledInitial.current) return;
@@ -44,9 +275,21 @@ export function AiAssistantChatPanel({
     void sendQuestion(initialQuestion);
   }, [initialQuestion]);
 
+  useEffect(() => {
+    const textarea = inputRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, isFullscreen ? 160 : 120)}px`;
+  }, [input, isFullscreen]);
+
   async function sendQuestion(question: string) {
     const trimmed = question.trim();
-    if (!trimmed || isTyping) return;
+    if (!trimmed) {
+      setError(EMPTY_MESSAGE_ERROR);
+      return;
+    }
+
+    if (isTyping) return;
 
     const userMessage: AiChatMessage = {
       id: `user-${Date.now()}`,
@@ -56,130 +299,195 @@ export function AiAssistantChatPanel({
 
     setMessages((current) => [...current, userMessage]);
     setInput("");
+    setError(null);
+    setRetryQuestion(null);
     setIsTyping(true);
 
-    await new Promise((resolve) => window.setTimeout(resolve, 700));
+    try {
+      const response = await fetch("/api/assistant/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: trimmed,
+          context: activeTopic === "all" ? "dashboard" : activeTopic,
+          from: formatDateInputValue(from),
+          to: formatDateInputValue(to),
+        }),
+      });
 
-    const answer = generateAiAnswer(trimmed, context);
-    const assistantMessage: AiChatMessage = {
-      id: `assistant-${Date.now()}`,
-      role: "assistant",
-      content: answer,
-    };
+      const data = (await response.json()) as {
+        success?: boolean;
+        message?: string;
+      };
 
-    setMessages((current) => [...current, assistantMessage]);
-    setIsTyping(false);
+      if (!response.ok || !data.success || !data.message) {
+        throw new Error(data.message || GENERIC_ERROR);
+      }
+
+      const assistantMessage: AiChatMessage = {
+        id: `assistant-${Date.now()}`,
+        role: "assistant",
+        content: data.message,
+      };
+
+      setMessages((current) => [...current, assistantMessage]);
+    } catch (requestError) {
+      const message =
+        requestError instanceof Error ? requestError.message : GENERIC_ERROR;
+      setError(message);
+      setRetryQuestion(trimmed);
+    } finally {
+      setIsTyping(false);
+      inputRef.current?.focus();
+    }
   }
 
-  return (
-    <section
-      id="ai-chat-panel"
+  const messageArea = (
+    <div
+      ref={scrollRef}
       className={[
-        "animate-in fade-in slide-in-from-bottom-3 fill-mode-both duration-700 rounded-2xl border bg-white shadow-[0_10px_28px_rgba(15,23,42,0.04)]",
-        highlight
-          ? "border-blue-300 ring-2 ring-blue-100"
-          : "border-slate-200/80",
+        "flex-1 space-y-4 overflow-y-auto bg-linear-to-b from-slate-50/90 to-white p-4 sm:p-5",
+        isFullscreen ? "min-h-0" : "max-h-[min(52vh,420px)] min-h-[280px]",
       ].join(" ")}
-      style={{ animationDelay: "180ms" }}
     >
-      <div className="border-b border-slate-100 p-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
-            <Bot size={21} strokeWidth={2.4} />
+      {messages.length <= 1 ? (
+        <div className="mx-auto mb-2 max-w-lg rounded-2xl border border-dashed border-slate-200 bg-white/80 px-4 py-5 text-center">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+            <Bot size={24} strokeWidth={2.2} />
           </div>
-
-          <div>
-            <h3 className="text-[15px] font-black text-[#0f1f4d]">AI Sohbet</h3>
-            <p className="text-[11px] font-medium text-slate-500">
-              Finansal sorularınızı sorun
-            </p>
-          </div>
+          <p className="text-[14px] font-black text-[#0f1f4d]">
+            Size nasıl yardımcı olabilirim?
+          </p>
+          <p className="mt-1 text-[12px] font-medium leading-5 text-slate-500">
+            Satış, gider, stok ve tahsilat hakkında sorular sorabilirsiniz.
+          </p>
         </div>
-      </div>
+      ) : null}
 
-      <div className="space-y-4 p-4">
-        <div
-          ref={scrollRef}
-          className="max-h-[320px] space-y-3 overflow-y-auto rounded-2xl border border-slate-100 bg-slate-50/70 p-3"
-        >
-          {messages.map((message, index) => (
-            <div
-              key={message.id}
-              className={[
-                "animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-500",
-                message.role === "user" ? "flex justify-end" : "flex justify-start",
-              ].join(" ")}
-              style={{ animationDelay: `${index * 40}ms` }}
-            >
-              <div
-                className={[
-                  "max-w-[92%] rounded-2xl px-3.5 py-2.5 text-[12px] font-medium leading-5",
-                  message.role === "user"
-                    ? "bg-linear-to-br from-blue-600 to-violet-600 text-white"
-                    : "border border-slate-200 bg-white text-[#24345f]",
-                ].join(" ")}
-              >
-                {message.content}
-              </div>
-            </div>
-          ))}
+      {messages.map((message, index) => (
+        <ChatMessageBubble key={message.id} message={message} index={index} />
+      ))}
 
-          {isTyping ? (
-            <div className="flex justify-start">
-              <div className="flex items-center gap-1 rounded-2xl border border-slate-200 bg-white px-3 py-2.5">
-                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-blue-500 [animation-delay:0ms]" />
-                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-blue-500 [animation-delay:120ms]" />
-                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-blue-500 [animation-delay:240ms]" />
-              </div>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="space-y-2">
-          {QUICK_QUESTIONS.slice(0, 5).map((question, index) => (
-            <button
-              key={question}
-              type="button"
-              onClick={() => void sendQuestion(question)}
-              disabled={isTyping}
-              className="animate-in fade-in slide-in-from-right-2 fill-mode-both w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-[11px] font-bold text-[#24345f] transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-wait disabled:opacity-60"
-              style={{ animationDelay: `${220 + index * 50}ms` }}
-            >
-              {question}
-            </button>
-          ))}
-        </div>
-
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void sendQuestion(input);
-          }}
-          className="rounded-2xl border border-slate-200 bg-slate-50 p-2"
-        >
-          <textarea
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            placeholder="Örn: Bu ay kârda mıyım?"
-            rows={3}
-            className="min-h-[72px] w-full resize-none rounded-xl bg-white p-3 text-[12px] font-medium text-[#24345f] outline-none placeholder:text-slate-400"
-          />
-
-          <button
-            type="submit"
-            disabled={isTyping || !input.trim()}
-            className="mt-2 flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-linear-to-br from-blue-600 to-violet-600 text-[12px] font-black text-white shadow-lg shadow-blue-100 transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Gönder
-            <Send size={15} strokeWidth={2.8} />
-          </button>
-        </form>
-
-        <p className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400">
-          <Sparkles size={12} />
-          Yanıtlar işletme verilerinize göre otomatik üretilir.
-        </p>
-      </div>
-    </section>
+      {isTyping ? <TypingIndicator /> : null}
+    </div>
   );
+
+  const composer = (
+    <div
+      className={[
+        "shrink-0 border-t border-slate-100 bg-white p-3 sm:p-4",
+        isFullscreen ? "" : "rounded-b-2xl",
+      ].join(" ")}
+    >
+      {error ? (
+        <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5">
+          <div className="flex items-start gap-2">
+            <AlertCircle
+              size={16}
+              className="mt-0.5 shrink-0 text-rose-500"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="text-[12px] font-bold text-rose-700">{error}</p>
+              {retryQuestion ? (
+                <button
+                  type="button"
+                  onClick={() => void sendQuestion(retryQuestion)}
+                  disabled={isTyping}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-[11px] font-extrabold text-rose-700 transition hover:bg-rose-100 disabled:cursor-wait disabled:opacity-60"
+                >
+                  <RefreshCw size={12} />
+                  Tekrar dene
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="mb-3 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {QUICK_QUESTIONS.map((question) => (
+          <button
+            key={question}
+            type="button"
+            onClick={() => void sendQuestion(question)}
+            disabled={isTyping}
+            className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-bold text-[#24345f] transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-wait disabled:opacity-60"
+          >
+            {question}
+          </button>
+        ))}
+      </div>
+
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void sendQuestion(input);
+        }}
+        className="flex items-end gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2 shadow-inner"
+      >
+        <textarea
+          ref={inputRef}
+          value={input}
+          onChange={(event) => {
+            setInput(event.target.value);
+            if (error === EMPTY_MESSAGE_ERROR) {
+              setError(null);
+            }
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              void sendQuestion(input);
+            }
+          }}
+          placeholder="Mesajınızı yazın... (Enter gönderir, Shift+Enter satır atlar)"
+          rows={1}
+          className="max-h-[160px] min-h-[44px] flex-1 resize-none bg-transparent px-2 py-2.5 text-[13px] font-medium text-[#24345f] outline-none placeholder:text-slate-400"
+        />
+
+        <button
+          type="submit"
+          disabled={isTyping || !input.trim()}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-blue-600 to-violet-600 text-white shadow-lg shadow-blue-200/60 transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
+          aria-label="Gönder"
+          title="Gönder"
+        >
+          <Send size={18} strokeWidth={2.6} />
+        </button>
+      </form>
+
+      <p className="mt-2 flex items-center justify-center gap-1.5 text-[10px] font-semibold text-slate-400">
+        <Sparkles size={11} />
+        Yanıtlar işletme verilerinize göre üretilir
+        {isFullscreen ? (
+          <span className="text-slate-300">· Esc ile çık</span>
+        ) : null}
+      </p>
+    </div>
+  );
+
+  const panel = (
+    <ChatPanelChrome
+      isFullscreen={isFullscreen}
+      onToggleFullscreen={() => setIsFullscreen((current) => !current)}
+      onCloseFullscreen={() => setIsFullscreen(false)}
+      highlight={highlight}
+      footer={composer}
+    >
+      {messageArea}
+    </ChatPanelChrome>
+  );
+
+  if (isFullscreen && mounted) {
+    return createPortal(
+      <div className="fixed inset-0 z-[80] flex flex-col bg-slate-950/40 p-0 backdrop-blur-sm sm:p-3 md:p-5">
+        <div className="mx-auto flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-none bg-white shadow-2xl sm:rounded-2xl sm:border sm:border-slate-200/80">
+          {panel}
+        </div>
+      </div>,
+      document.body
+    );
+  }
+
+  return panel;
 }

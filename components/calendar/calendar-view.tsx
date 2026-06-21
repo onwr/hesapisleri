@@ -20,6 +20,7 @@ type CalendarViewProps = {
   events: NormalizedCalendarEvent[];
   selectedDateKey: string;
   onSelectDate: (dateKey: string) => void;
+  onEventClick?: (event: NormalizedCalendarEvent) => void;
   compact?: boolean;
   mini?: boolean;
   embedded?: boolean;
@@ -33,6 +34,7 @@ export function CalendarView({
   events,
   selectedDateKey,
   onSelectDate,
+  onEventClick,
   compact = false,
   mini = false,
   embedded = false,
@@ -160,9 +162,31 @@ export function CalendarView({
                       {visible.map((event) => (
                         <div
                           key={event.id}
+                          role={onEventClick ? "button" : undefined}
+                          tabIndex={onEventClick ? 0 : undefined}
+                          onClick={
+                            onEventClick
+                              ? (clickEvent) => {
+                                  clickEvent.stopPropagation();
+                                  onEventClick(event);
+                                }
+                              : undefined
+                          }
+                          onKeyDown={
+                            onEventClick
+                              ? (keyEvent) => {
+                                  if (keyEvent.key === "Enter" || keyEvent.key === " ") {
+                                    keyEvent.preventDefault();
+                                    keyEvent.stopPropagation();
+                                    onEventClick(event);
+                                  }
+                                }
+                              : undefined
+                          }
                           className={[
                             "truncate rounded-lg px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset",
                             getCalendarEventPillClass(event),
+                            onEventClick ? "cursor-pointer hover:opacity-90" : "",
                           ].join(" ")}
                           title={event.title}
                         >

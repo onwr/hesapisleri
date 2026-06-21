@@ -39,12 +39,22 @@ import { buildExpenseTransactionTitle } from "@/lib/expense-utils";
 import {
   buildEmployeePaymentExpenseTitle,
   buildEmployeePaymentTransactionTitle,
+  buildEmployeeAdvanceTransactionTitle,
   buildEmployeePaymentsActionUrl,
   buildMarkPaymentPaidFinanceResult,
   EMPLOYEE_EXPENSE_CATEGORY,
   resolveEmployeePaymentFinancePlan,
   type MarkPaymentPaidFinanceResult,
 } from "@/lib/employee-payment-finance-utils";
+import {
+  buildEmployeeLedgerRows,
+  calculateEmployeeCurrentBalance,
+  type EmployeeLedgerRow,
+} from "@/lib/employee-ledger-utils";
+import {
+  normalizeSalaryPatchInput,
+  salaryAmountChanged,
+} from "@/lib/employee-salary-utils";
 import { getEmployeePerformanceDetail } from "@/lib/employee-performance-service";
 
 export class EmployeeServiceError extends Error {
@@ -150,8 +160,12 @@ function serializeSalary(
   salary: {
     id: string;
     amount: Prisma.Decimal;
+    grossAmount?: Prisma.Decimal | null;
     currency: string;
     period: EmployeeSalaryPeriod;
+    paymentDay?: number | null;
+    iban?: string | null;
+    bankName?: string | null;
     effectiveFrom: Date;
     effectiveTo: Date | null;
     isActive: boolean;
@@ -161,9 +175,15 @@ function serializeSalary(
   return {
     id: salary.id,
     amount: Number(salary.amount),
+    netSalary: Number(salary.amount),
+    grossAmount:
+      salary.grossAmount != null ? Number(salary.grossAmount) : null,
     currency: salary.currency,
     period: salary.period,
     periodLabel: getSalaryPeriodLabel(salary.period),
+    paymentDay: salary.paymentDay ?? null,
+    iban: salary.iban ?? null,
+    bankName: salary.bankName ?? null,
     effectiveFrom: salary.effectiveFrom.toISOString(),
     effectiveTo: salary.effectiveTo?.toISOString() ?? null,
     isActive: salary.isActive,
@@ -267,6 +287,7 @@ export function serializeEmployee(
 ) {
   const activeSalary = employee.salaryRecords?.find((s) => s.isActive);
   const balance = calculateEmployeeBalance(employee.payments ?? []);
+  const currentBalance = calculateEmployeeCurrentBalance(employee.payments ?? []);
   const pendingPayments =
     employee.payments?.filter(
       (p) => p.status === "PENDING" || p.status === "OVERDUE"
@@ -357,6 +378,7 @@ export function serializeEmployee(
       : null,
     activeSalary: activeSalary ? serializeSalary(activeSalary) : null,
     balance,
+    currentBalance,
     pendingLeaveCount: pendingLeaves,
     onLeaveNow: Boolean(activeLeave),
     actionUrl: buildEmployeeActionUrl(employee.id),
@@ -374,8 +396,13 @@ export async function createEmployee(input: {
   data: Parameters<typeof normalizeEmployeeInput>[0] & {
     salary?: {
       amount: number;
+      grossAmount?: number | null;
       period?: EmployeeSalaryPeriod;
       currency?: string;
+      paymentDay?: number | null;
+      iban?: string | null;
+      bankName?: string | null;
+      notes?: string | null;
     };
   };
 }) {
@@ -437,10 +464,15 @@ export async function createEmployee(input: {
           companyId: input.companyId,
           employeeId: created.id,
           amount: input.data.salary.amount,
+          grossAmount: input.data.salary.grossAmount ?? null,
           currency: input.data.salary.currency ?? "TRY",
           period: input.data.salary.period ?? "MONTHLY",
+          paymentDay: input.data.salary.paymentDay ?? null,
+          iban: input.data.salary.iban ?? null,
+          bankName: input.data.salary.bankName ?? null,
           effectiveFrom: normalized.startDate ?? new Date(),
           isActive: true,
+          notes: input.data.salary.notes ?? null,
         },
       });
     }
@@ -734,13 +766,24 @@ export async function createEmployeeSalary(input: {
   actorUserId: string;
   employeeId: string;
   amount: number;
+  grossAmount?: number | null;
   period?: EmployeeSalaryPeriod;
   currency?: string;
+  paymentDay?: number | null;
+  iban?: string | null;
+  bankName?: string | null;
   effectiveFrom?: Date;
-  notes?: string;
+  notes?: string | null;
 }) {
   if (!input.amount || input.amount <= 0) {
     throw new EmployeeServiceError("Geçerli bir maaş tutarı girin.");
+  }
+
+  if (
+    input.paymentDay != null &&
+    (input.paymentDay < 1 || input.paymentDay > 31)
+  ) {
+    throw new EmployeeServiceError("Maaş ödeme günü 1-31 arasında olmalıdır.");
   }
 
   await getEmployeeInCompany(input.employeeId, input.companyId);
@@ -765,11 +808,15 @@ export async function createEmployeeSalary(input: {
         companyId: input.companyId,
         employeeId: input.employeeId,
         amount: input.amount,
+        grossAmount: input.grossAmount ?? null,
         currency: input.currency ?? "TRY",
         period: input.period ?? "MONTHLY",
+        paymentDay: input.paymentDay ?? null,
+        iban: input.iban ?? null,
+        bankName: input.bankName ?? null,
         effectiveFrom,
         isActive: true,
-        notes: input.notes,
+        notes: input.notes ?? null,
       },
     });
 
@@ -781,7 +828,7 @@ export async function createEmployeeSalary(input: {
       companyId: input.companyId,
       userId: input.actorUserId,
       action: "SALARY",
-      message: `${formatEmployeeDisplayName(employee)} maaşı güncellendi.`,
+      message: `Çalışan maaş bilgisi güncellendi: ${formatEmployeeDisplayName(employee)}`,
     });
   });
 
@@ -801,6 +848,312 @@ export async function createEmployeeSalary(input: {
     employeeId: input.employeeId,
     includeSensitive: true,
   });
+}
+
+export async function updateEmployeeSalary(input: {
+  companyId: string;
+  actorUserId: string;
+  employeeId: string;
+  patch: ReturnType<typeof normalizeSalaryPatchInput>;
+}) {
+  const employee = await getEmployeeInCompany(input.employeeId, input.companyId);
+  const activeSalary = employee.salaryRecords.find((salary) => salary.isActive);
+
+  if (!activeSalary) {
+    if (!input.patch.amount || input.patch.amount <= 0) {
+      throw new EmployeeServiceError("Geçerli bir maaş tutarı girin.");
+    }
+
+    return createEmployeeSalary({
+      companyId: input.companyId,
+      actorUserId: input.actorUserId,
+      employeeId: input.employeeId,
+      amount: input.patch.amount,
+      grossAmount: input.patch.grossAmount,
+      period: input.patch.period,
+      currency: input.patch.currency,
+      paymentDay: input.patch.paymentDay,
+      iban: input.patch.iban,
+      bankName: input.patch.bankName,
+      effectiveFrom: input.patch.effectiveFrom,
+      notes: input.patch.notes,
+    });
+  }
+
+  if (
+    input.patch.paymentDay != null &&
+    (input.patch.paymentDay < 1 || input.patch.paymentDay > 31)
+  ) {
+    throw new EmployeeServiceError("Maaş ödeme günü 1-31 arasında olmalıdır.");
+  }
+
+  if (
+    input.patch.amount != null &&
+    (input.patch.amount <= 0 ||
+      salaryAmountChanged(Number(activeSalary.amount), input.patch.amount))
+  ) {
+    return createEmployeeSalary({
+      companyId: input.companyId,
+      actorUserId: input.actorUserId,
+      employeeId: input.employeeId,
+      amount: input.patch.amount ?? Number(activeSalary.amount),
+      grossAmount:
+        input.patch.grossAmount ??
+        (activeSalary.grossAmount != null
+          ? Number(activeSalary.grossAmount)
+          : null),
+      period: input.patch.period ?? activeSalary.period,
+      currency: input.patch.currency ?? activeSalary.currency,
+      paymentDay: input.patch.paymentDay ?? activeSalary.paymentDay,
+      iban: input.patch.iban ?? activeSalary.iban,
+      bankName: input.patch.bankName ?? activeSalary.bankName,
+      effectiveFrom: input.patch.effectiveFrom,
+      notes: input.patch.notes ?? activeSalary.notes,
+    });
+  }
+
+  await db.$transaction(async (tx) => {
+    await tx.employeeSalary.update({
+      where: { id: activeSalary.id },
+      data: {
+        grossAmount:
+          input.patch.grossAmount !== undefined
+            ? input.patch.grossAmount
+            : undefined,
+        period: input.patch.period,
+        currency: input.patch.currency,
+        paymentDay:
+          input.patch.paymentDay !== undefined
+            ? input.patch.paymentDay
+            : undefined,
+        iban: input.patch.iban !== undefined ? input.patch.iban : undefined,
+        bankName:
+          input.patch.bankName !== undefined ? input.patch.bankName : undefined,
+        notes: input.patch.notes !== undefined ? input.patch.notes : undefined,
+        ...(input.patch.effectiveFrom
+          ? { effectiveFrom: input.patch.effectiveFrom }
+          : {}),
+      },
+    });
+
+    await logEmployeeActivity(tx, {
+      companyId: input.companyId,
+      userId: input.actorUserId,
+      action: "SALARY",
+      message: `Çalışan maaş bilgisi güncellendi: ${formatEmployeeDisplayName(employee)}`,
+    });
+  });
+
+  return getEmployeeById({
+    companyId: input.companyId,
+    employeeId: input.employeeId,
+    includeSensitive: true,
+  });
+}
+
+export async function getEmployeeLedger(input: {
+  companyId: string;
+  employeeId: string;
+}): Promise<{
+  currentBalance: number;
+  entries: EmployeeLedgerRow[];
+}> {
+  const employee = await getEmployeeInCompany(input.employeeId, input.companyId);
+  const entries = buildEmployeeLedgerRows(employee.payments);
+
+  return {
+    currentBalance: calculateEmployeeCurrentBalance(employee.payments),
+    entries,
+  };
+}
+
+export type EmployeeLedgerActionType =
+  | "SALARY_ACCRUAL"
+  | "SALARY_PAYMENT"
+  | "ADVANCE"
+  | "DEDUCTION"
+  | "BONUS"
+  | "ADJUSTMENT";
+
+export async function createEmployeeLedgerMovement(input: {
+  companyId: string;
+  actorUserId: string;
+  employeeId: string;
+  type: EmployeeLedgerActionType;
+  amount: number;
+  date?: Date;
+  accountId?: string | null;
+  description?: string | null;
+  direction?: "DEBIT" | "CREDIT";
+}) {
+  if (!input.amount || input.amount <= 0) {
+    throw new EmployeeServiceError("Geçerli bir tutar girin.");
+  }
+
+  const employee = await getEmployeeInCompany(input.employeeId, input.companyId);
+  const displayName = formatEmployeeDisplayName(employee);
+  const movementDate = input.date ?? new Date();
+  const description = input.description?.trim() || null;
+
+  if (input.type === "SALARY_ACCRUAL") {
+    const payment = await createEmployeePayment({
+      companyId: input.companyId,
+      actorUserId: input.actorUserId,
+      employeeId: input.employeeId,
+      type: "SALARY",
+      amount: input.amount,
+      dueDate: movementDate,
+      description: description ?? "Maaş tahakkuku",
+    });
+
+    await db.activityLog.create({
+      data: {
+        companyId: input.companyId,
+        userId: input.actorUserId,
+        action: "SALARY_ACCRUAL",
+        module: "employees",
+        message: `Maaş tahakkuku eklendi: ${displayName} - ${formatMoney(input.amount)}`,
+      },
+    });
+
+    return { payment, ledger: await getEmployeeLedger(input) };
+  }
+
+  if (input.type === "DEDUCTION") {
+    const payment = await db.$transaction(async (tx) => {
+      const created = await tx.employeePayment.create({
+        data: {
+          companyId: input.companyId,
+          employeeId: input.employeeId,
+          type: "DEDUCTION",
+          direction: "DEDUCTED",
+          amount: input.amount,
+          currency: "TRY",
+          dueDate: movementDate,
+          paidAt: movementDate,
+          status: "PAID",
+          description: description ?? "Kesinti",
+          createdByUserId: input.actorUserId,
+        },
+      });
+
+      await logEmployeeActivity(tx, {
+        companyId: input.companyId,
+        userId: input.actorUserId,
+        action: "DEDUCTION",
+        message: `Çalışan kesintisi eklendi: ${displayName} - ${formatMoney(input.amount)}`,
+      });
+
+      return created;
+    });
+
+    return {
+      payment: serializePayment(payment),
+      ledger: await getEmployeeLedger(input),
+    };
+  }
+
+  if (input.type === "ADJUSTMENT") {
+    const isDebit = input.direction !== "CREDIT";
+    const payment = await db.$transaction(async (tx) => {
+      const created = await tx.employeePayment.create({
+        data: {
+          companyId: input.companyId,
+          employeeId: input.employeeId,
+          type: "OTHER",
+          direction: isDebit ? "PAYABLE" : "PAID",
+          amount: input.amount,
+          currency: "TRY",
+          dueDate: movementDate,
+          paidAt: isDebit ? null : movementDate,
+          status: isDebit ? "PENDING" : "PAID",
+          description: description ?? "Cari düzeltme",
+          createdByUserId: input.actorUserId,
+        },
+      });
+
+      await logEmployeeActivity(tx, {
+        companyId: input.companyId,
+        userId: input.actorUserId,
+        action: "LEDGER_ADJUSTMENT",
+        message: `Çalışan cari düzeltmesi eklendi: ${displayName}`,
+      });
+
+      return created;
+    });
+
+    return {
+      payment: serializePayment(payment),
+      ledger: await getEmployeeLedger(input),
+    };
+  }
+
+  const paymentType: EmployeePaymentType =
+    input.type === "ADVANCE"
+      ? "ADVANCE"
+      : input.type === "BONUS"
+        ? "BONUS"
+        : "SALARY";
+
+  if (!input.accountId?.trim()) {
+    throw new EmployeeServiceError("Ödeme için kasa/banka hesabı seçilmelidir.");
+  }
+
+  const account = await db.account.findFirst({
+    where: {
+      id: input.accountId,
+      companyId: input.companyId,
+      status: "ACTIVE",
+    },
+  });
+
+  if (!account) {
+    throw new EmployeeServiceError("Seçilen hesap bulunamadı veya pasif.");
+  }
+
+  const payment = await createEmployeePayment({
+    companyId: input.companyId,
+    actorUserId: input.actorUserId,
+    employeeId: input.employeeId,
+    type: paymentType,
+    amount: input.amount,
+    dueDate: movementDate,
+    description:
+      description ??
+      (paymentType === "ADVANCE" ? "Personel avansı" : "Çalışan ödemesi"),
+    relatedAccountId: account.id,
+  });
+
+  const paid = await markEmployeePaymentPaid({
+    companyId: input.companyId,
+    actorUserId: input.actorUserId,
+    employeeId: input.employeeId,
+    paymentId: payment.id,
+    paidAt: movementDate,
+    relatedAccountId: account.id,
+    createTransaction: true,
+  });
+
+  const actionMessage =
+    paymentType === "ADVANCE"
+      ? `Çalışan avansı verildi: ${displayName} - ${formatMoney(input.amount)}`
+      : `Çalışan ödemesi yapıldı: ${displayName} - ${formatMoney(input.amount)}`;
+
+  await db.activityLog.create({
+    data: {
+      companyId: input.companyId,
+      userId: input.actorUserId,
+      action: paymentType === "ADVANCE" ? "ADVANCE" : "PAYMENT_PAID",
+      module: "employees",
+      message: actionMessage,
+    },
+  });
+
+  return {
+    payment: paid.payment,
+    finance: paid.finance,
+    ledger: await getEmployeeLedger(input),
+  };
 }
 
 export async function createEmployeePayment(input: {
@@ -1031,7 +1384,10 @@ export async function markEmployeePaymentPaid(input: {
         data: {
           accountId: account.id,
           type: "EXPENSE",
-          title: buildEmployeePaymentTransactionTitle(displayName),
+          title:
+            payment.type === "ADVANCE"
+              ? buildEmployeeAdvanceTransactionTitle(displayName)
+              : buildEmployeePaymentTransactionTitle(displayName),
           amount,
           date: paidAt,
           note,

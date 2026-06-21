@@ -13,23 +13,17 @@ import {
 } from "lucide-react";
 import { AccountDetailActions } from "@/components/cash-bank/account-detail-actions";
 import { AppShell } from "@/components/layout/app-shell";
+import { guardPageModule } from "@/lib/module-access";
+
 import { BankLogo } from "@/components/shared/bank-logo";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import { getAccountDetailData } from "@/lib/cash-bank-account-service";
 import {
   formatCashMoney,
   getAccountTypeText,
 } from "@/lib/cash-bank-page-utils";
-import { db } from "@/lib/prisma";
-
 type Props = {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ movement?: string }>;
-};
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
 };
 
 function formatDateTime(date: Date) {
@@ -77,35 +71,13 @@ function MetricCard({
   );
 }
 
-export default async function CashBankAccountDetailPage({
-  params,
+export default async function CashBankAccountDetailPage({ params,
   searchParams,
 }: Props) {
-  const { id } = await params;
+  const session = await guardPageModule("cash-bank");
+  const company = session.company;
+const { id } = await params;
   const query = await searchParams;
-
-  const token = await getAuthToken();
-  if (!token) redirect("/login");
-
-  const payload = verifyToken<AuthPayload>(token);
-  if (!payload?.userId || !payload.companyId) redirect("/login");
-
-  const user = await db.user.findUnique({
-    where: { id: payload.userId },
-    include: {
-      companyUsers: {
-        include: { company: true },
-      },
-    },
-  });
-
-  if (!user) redirect("/login");
-
-  const company =
-    user.companyUsers.find((item) => item.companyId === payload.companyId)
-      ?.company ?? user.companyUsers[0]?.company;
-
-  if (!company) redirect("/login");
 
   const detail = await getAccountDetailData(company.id, id);
   if (!detail) notFound();

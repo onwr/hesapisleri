@@ -13,10 +13,12 @@ import {
   X,
 } from "lucide-react";
 import { StatCard } from "@/components/cards/stat-card";
+import { EmployeeLedgerTab } from "@/components/employees/employee-ledger-tab";
 import { EmployeePaymentMarkPaidModal } from "@/components/employees/employee-payment-mark-paid-modal";
 import { EmployeePayrollSummaryTab } from "@/components/employees/employee-payroll-summary-tab";
 import { EmployeePerformancePanel } from "@/components/employees/employee-performance-panel";
 import { EmployeePosTab } from "@/components/employees/employee-pos-tab";
+import { EmployeeSalaryTab } from "@/components/employees/employee-salary-tab";
 import {
   EmployeeDetailBackLink,
   EmployeeProfileHeader,
@@ -31,9 +33,16 @@ import {
   shouldShowMarkPaidButton,
 } from "@/lib/employee-payment-finance-utils";
 import {
-  formatEmployeeDate,
-} from "@/lib/employee-page-utils";
+  formatEmployeeLedgerBalanceLabel,
+  getEmployeeLedgerBalanceTone,
+} from "@/lib/employee-ledger-utils";
+import { formatEmployeeDate } from "@/lib/employee-page-utils";
 import { formatMoney, formatNumber } from "@/lib/format-utils";
+import {
+  CreateUserFromEmployeeModal,
+  ResetUserPasswordModal,
+} from "@/components/settings/create-user-from-employee-modal";
+import type { AssignableCompanyUserRole } from "@/lib/company-user-from-employee-utils";
 import {
   getPaymentStatusBadgeClass,
   getPaymentTypeLabel,
@@ -43,6 +52,8 @@ import {
 
 type DetailTab =
   | "overview"
+  | "salary"
+  | "ledger"
   | "performance"
   | "leaves"
   | "payments"
@@ -70,6 +81,8 @@ type EmployeeDetailClientProps = {
 
 const TABS: { key: DetailTab; label: string }[] = [
   { key: "overview", label: "Genel Bakış" },
+  { key: "salary", label: "Maaş Bilgisi" },
+  { key: "ledger", label: "Cari Hareketler" },
   { key: "performance", label: "Satış Performansı" },
   { key: "leaves", label: "İzinler" },
   { key: "payments", label: "Ödemeler" },
@@ -108,6 +121,8 @@ export function EmployeeDetailClient({
   const [leaveType, setLeaveType] = useState("ANNUAL");
 
   const [markPaidPaymentId, setMarkPaidPaymentId] = useState<string | null>(null);
+  const [createUserOpen, setCreateUserOpen] = useState(false);
+  const [passwordResetOpen, setPasswordResetOpen] = useState(false);
   const [markPaidAt, setMarkPaidAt] = useState(
     () => new Date().toISOString().slice(0, 10)
   );
@@ -150,6 +165,121 @@ export function EmployeeDetailClient({
     if (json.success) {
       setEmployee(json.employee);
       setPerformance(json.performance);
+    }
+  }
+
+  async function handleCreateSystemUser(payload: {
+    employeeId: string;
+    email: string;
+    password: string;
+    passwordConfirm: string;
+    role: AssignableCompanyUserRole;
+    status: "ACTIVE" | "PASSIVE";
+  }) {
+    setSaving(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const res = await fetch("/api/settings/users/from-employee", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+
+      if (!res.ok || !json.success) {
+        throw new Error(json.message || "Kullanıcı oluşturulamadı.");
+      }
+
+      setSuccess("Kullanıcı oluşturuldu.");
+      setCreateUserOpen(false);
+      await reload();
+    } catch (createError) {
+      const message =
+        createError instanceof Error
+          ? createError.message
+          : "Kullanıcı oluşturulurken bir hata oluştu.";
+      setError(message);
+      throw createError;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleResetSystemUserPassword(payload: {
+    password: string;
+    passwordConfirm: string;
+  }) {
+    if (!employee.linkedUser?.companyUserId) return;
+
+    setSaving(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const res = await fetch(
+        `/api/settings/users/${employee.linkedUser.companyUserId}/password`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+      const json = await res.json();
+
+      if (!res.ok || !json.success) {
+        throw new Error(json.message || "Şifre güncellenemedi.");
+      }
+
+      setSuccess("Kullanıcı şifresi güncellendi.");
+      setPasswordResetOpen(false);
+    } catch (resetError) {
+      const message =
+        resetError instanceof Error
+          ? resetError.message
+          : "Şifre güncellenirken bir hata oluştu.";
+      setError(message);
+      throw resetError;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleToggleSystemUserStatus() {
+    if (!employee.linkedUser?.companyUserId) return;
+
+    const nextStatus =
+      employee.linkedUser.status === "ACTIVE" ? "PASSIVE" : "ACTIVE";
+
+    setSaving(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const res = await fetch(
+        `/api/settings/users/${employee.linkedUser.companyUserId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: nextStatus }),
+        }
+      );
+      const json = await res.json();
+
+      if (!res.ok || !json.success) {
+        setError(json.message || "Kullanıcı durumu güncellenemedi.");
+        return;
+      }
+
+      setSuccess(
+        nextStatus === "ACTIVE" ? "Kullanıcı aktif yapıldı." : "Kullanıcı pasif yapıldı."
+      );
+      await reload();
+    } catch {
+      setError("Kullanıcı durumu güncellenirken bir hata oluştu.");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -392,6 +522,9 @@ export function EmployeeDetailClient({
         onAddPayment={() => setTab("payments")}
         onAddLeave={() => setTab("leaves")}
         onManagePos={() => setTab("pos")}
+        onCreateSystemUser={() => setCreateUserOpen(true)}
+        onResetSystemUserPassword={() => setPasswordResetOpen(true)}
+        onToggleSystemUserStatus={handleToggleSystemUserStatus}
         onPassivate={handlePassivate}
         onActivate={handleActivate}
         onDelete={handleDelete}
@@ -413,11 +546,15 @@ export function EmployeeDetailClient({
           color="purple"
         />
         <StatCard
-          title="Bekleyen Ödeme"
-          value={formatMoney(employee.balance.totalPending)}
-          subtitle={`Net ${formatMoney(employee.balance.netPayable)}`}
+          title="Cari Bakiye"
+          value={formatEmployeeLedgerBalanceLabel(employee.currentBalance ?? 0)}
+          subtitle="Şirketin çalışana borcu"
           icon={<Wallet size={18} />}
-          color="orange"
+          color={
+            getEmployeeLedgerBalanceTone(employee.currentBalance ?? 0) === "credit"
+              ? "orange"
+              : "green"
+          }
         />
         <StatCard
           title="Kullanılan İzin"
@@ -488,6 +625,29 @@ export function EmployeeDetailClient({
                 <p>Departman: {employee.department ?? "—"}</p>
                 <p>Görev: {employee.jobTitle ?? "—"}</p>
               </InfoCard>
+              <InfoCard title="Maaş Bilgisi">
+                {employee.activeSalary ? (
+                  <>
+                    <p>
+                      Net: {formatMoney(employee.activeSalary.amount)} /{" "}
+                      {employee.activeSalary.periodLabel}
+                    </p>
+                    {employee.activeSalary.grossAmount != null ? (
+                      <p>Brüt: {formatMoney(employee.activeSalary.grossAmount)}</p>
+                    ) : null}
+                    <p>
+                      Ödeme günü:{" "}
+                      {employee.activeSalary.paymentDay
+                        ? `Her ayın ${employee.activeSalary.paymentDay}. günü`
+                        : "—"}
+                    </p>
+                    <p>IBAN: {employee.activeSalary.iban ?? "—"}</p>
+                    <p>Banka: {employee.activeSalary.bankName ?? "—"}</p>
+                  </>
+                ) : (
+                  <p className="text-slate-500">Tanımlı maaş yok</p>
+                )}
+              </InfoCard>
               <InfoCard title="Ödeme Özeti">
                 <p>Bekleyen: {formatMoney(employee.balance.totalPending)}</p>
                 <p>Ödenen: {formatMoney(employee.balance.totalPaid)}</p>
@@ -502,6 +662,22 @@ export function EmployeeDetailClient({
                 <p>Kullanılan gün: {performance.leaveSummary.totalDaysUsed}</p>
               </InfoCard>
             </div>
+          ) : null}
+
+          {tab === "salary" ? (
+            <EmployeeSalaryTab
+              employee={employee}
+              canManage={canManage}
+              onUpdated={(nextEmployee) => setEmployee(nextEmployee)}
+            />
+          ) : null}
+
+          {tab === "ledger" ? (
+            <EmployeeLedgerTab
+              employeeId={employee.id}
+              canProcessPayments={canProcessPayments}
+              onReloadEmployee={reload}
+            />
           ) : null}
 
           {tab === "performance" ? (
@@ -912,6 +1088,23 @@ export function EmployeeDetailClient({
         onNotesChange={setMarkPaidNotes}
         onClose={closeMarkPaidModal}
         onSubmit={submitMarkPaymentPaid}
+      />
+
+      <CreateUserFromEmployeeModal
+        open={createUserOpen}
+        saving={saving}
+        onClose={() => setCreateUserOpen(false)}
+        onSubmit={handleCreateSystemUser}
+        preselectedEmployeeId={employee.id}
+        preselectedEmail={employee.email ?? undefined}
+      />
+
+      <ResetUserPasswordModal
+        open={passwordResetOpen}
+        saving={saving}
+        userLabel={employee.fullName}
+        onClose={() => setPasswordResetOpen(false)}
+        onSubmit={handleResetSystemUserPassword}
       />
     </div>
   );

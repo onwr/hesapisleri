@@ -302,7 +302,7 @@ export function sumActiveAccountBalances(
 ) {
   return roundCashMoney(
     accounts
-      .filter((account) => account.status !== "INACTIVE")
+      .filter((account) => account.status === "ACTIVE" || !account.status)
       .reduce((sum, account) => sum + Number(account.balance), 0)
   );
 }

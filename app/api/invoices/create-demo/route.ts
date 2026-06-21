@@ -1,18 +1,13 @@
 import { NextResponse } from "next/server";
+import { requireApiModuleAccess } from "@/lib/module-access";
 import { z } from "zod";
 import { createNotification } from "@/lib/notification-service";
 import { db } from "@/lib/prisma";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import {
   generateInvoiceNo,
   getMockGibMeta,
   resolveInvoiceStatusForType,
 } from "@/lib/invoices/mock-gib";
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
 
 const createDemoSchema = z.object({
   type: z.enum(["NORMAL", "E_INVOICE", "E_ARCHIVE"]).default("E_INVOICE"),
@@ -28,24 +23,11 @@ const createDemoSchema = z.object({
 
 export async function POST(req: Request) {
   try {
-    const token = await getAuthToken();
+    const auth = await requireApiModuleAccess("invoices");
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.userId || !payload.companyId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
-
+    const companyId = auth.companyId;
+    const userId = auth.userId;
     const body = await req.json();
     const parsed = createDemoSchema.safeParse(body);
 
@@ -70,7 +52,7 @@ export async function POST(req: Request) {
       const customer = await db.customer.findFirst({
         where: {
           id: resolvedCustomerId,
-          companyId: payload.companyId,
+          companyId: companyId,
         },
       });
 
@@ -82,7 +64,7 @@ export async function POST(req: Request) {
       }
     } else {
       const firstCustomer = await db.customer.findFirst({
-        where: { companyId: payload.companyId },
+        where: { companyId: companyId },
         orderBy: { createdAt: "desc" },
       });
       resolvedCustomerId = firstCustomer?.id ?? null;
@@ -94,7 +76,7 @@ export async function POST(req: Request) {
 
     const invoice = await db.invoice.create({
       data: {
-        companyId: payload.companyId,
+        companyId: companyId,
         customerId: resolvedCustomerId,
         invoiceNo: generateInvoiceNo(type),
         type,
@@ -111,8 +93,8 @@ export async function POST(req: Request) {
 
     await db.activityLog.create({
       data: {
-        companyId: payload.companyId,
-        userId: payload.userId,
+        companyId: companyId,
+        userId: userId,
         action: "CREATE",
         module: "invoices",
         message: `${invoice.invoiceNo} demo fatura oluşturuldu.`,
@@ -120,8 +102,8 @@ export async function POST(req: Request) {
     });
 
     await createNotification({
-      companyId: payload.companyId,
-      userId: payload.userId,
+      companyId: companyId,
+      userId: userId,
       type: status === "ERROR" ? "WARNING" : "INFO",
       category: "INVOICES",
       module: "invoices",

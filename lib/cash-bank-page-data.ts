@@ -104,8 +104,16 @@ export async function getCashBankPageData(
     orderBy: { createdAt: "desc" },
   });
 
-  const cashAccountsRaw = accounts.filter((account) => account.type === "CASH");
-  const bankAccountsRaw = accounts.filter((account) => account.type === "BANK");
+  const cashAccountsRaw = accounts.filter(
+    (account) => account.type === "CASH" || account.type === "POS"
+  );
+  const bankAccountsRaw = accounts.filter(
+    (account) =>
+      account.type === "BANK" ||
+      account.type === "CREDIT_CARD" ||
+      account.type === "OTHER" ||
+      account.type === "STATIC"
+  );
 
   const cashTotal = cashAccountsRaw.reduce(
     (sum, account) => sum + Number(account.balance),
@@ -188,19 +196,30 @@ export async function getCashBankPageData(
     id: account.id,
     name: account.name,
     type: account.type,
+    bankName: account.bankName,
+    branchName: account.branchName,
+    iban: account.iban,
+    accountNumber: account.accountNumber,
     balance: Number(account.balance),
     currency: account.currency,
     status: account.status,
+    isDefault: account.isDefault,
+    description: account.description,
   }));
 
   let bankAccounts: BankAccountRow[] = bankAccountsRaw.map((account) => ({
     id: account.id,
     name: account.name,
+    type: account.type,
     bankName: account.bankName,
+    branchName: account.branchName,
     iban: account.iban,
+    accountNumber: account.accountNumber,
     balance: Number(account.balance),
     currency: account.currency,
     status: account.status,
+    isDefault: account.isDefault,
+    description: account.description,
   }));
 
   if (options.q) {

@@ -2,12 +2,23 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ArrowLeft, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  Building2,
+  Filter,
+  Loader2,
+  Pencil,
+  Target,
+  Trash2,
+  User,
+  Users,
+} from "lucide-react";
+import { ActionCard } from "@/components/cards/action-card";
+import { StatCard } from "@/components/cards/stat-card";
 import {
   PerformanceTargetModal,
   type PerformanceTargetListItem,
 } from "@/components/reports/performance-target-modal";
-import { TEAM_CARD_CLASS } from "@/components/team/team-ui-tokens";
+import { TeamActionButton } from "@/components/team/team-action-button";
 import { formatMoney, formatNumber } from "@/lib/format-utils";
 
 type PerformanceTargetsClientProps = {
@@ -26,9 +37,11 @@ const SCOPE_LABELS = {
   company: "Firma geneli",
 } as const;
 
-function formatDate(value: string) {
-  return new Date(value).toLocaleDateString("tr-TR");
-}
+const SCOPE_BADGE_CLASS = {
+  employee: "bg-blue-50 text-blue-700",
+  department: "bg-violet-50 text-violet-700",
+  company: "bg-emerald-50 text-emerald-700",
+} as const;
 
 export function PerformanceTargetsClient({
   initialTargets,
@@ -56,10 +69,16 @@ export function PerformanceTargetsClient({
   const [modalError, setModalError] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const filteredCountLabel = useMemo(
-    () => `${formatNumber(targets.length)} hedef`,
-    [targets.length]
+  const scopeCounts = useMemo(
+    () => ({
+      employee: targets.filter((item) => item.scope === "employee").length,
+      department: targets.filter((item) => item.scope === "department").length,
+      company: targets.filter((item) => item.scope === "company").length,
+    }),
+    [targets]
   );
+
+  const hasFilters = Boolean(scope || department || employeeId);
 
   async function loadTargets() {
     setLoading(true);
@@ -212,231 +231,538 @@ export function PerformanceTargetsClient({
 
   return (
     <div className="space-y-5">
-      <Link
-        href="/reports/personnel-performance"
-        className="inline-flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-[#0f1f4d]"
-      >
-        <ArrowLeft size={16} />
-        Personel performansına dön
-      </Link>
-
-      <section className={TEAM_CARD_CLASS}>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h1 className="text-2xl font-black text-[#0f1f4d]">Performans Hedefleri</h1>
-            <p className="mt-2 text-sm text-slate-500">
-              Çalışan, departman ve firma geneli hedefleri dönem bazlı yönetin.
-            </p>
-          </div>
-          {canManageTargets ? (
-            <button
-              type="button"
-              onClick={openCreateModal}
-              className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#0f1f4d] px-4 text-xs font-black text-white"
-            >
-              <Plus className="h-4 w-4" />
-              Yeni Hedef
-            </button>
-          ) : null}
-        </div>
-
-        {isReadOnlyViewer ? (
-          <p className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
-            Salt okunur görünüm: hedefleri görüntüleyebilirsiniz; oluşturma ve
-            düzenleme yalnızca yöneticiler içindir.
-          </p>
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {canManageTargets ? (
+          <TeamActionButton
+            title="Yeni Hedef"
+            description="Performans hedefi oluştur"
+            onClick={openCreateModal}
+            icon={<Target size={22} strokeWidth={2.4} />}
+            gradient="bg-linear-to-br from-[#0f1f4d] to-[#1e3a8a]"
+          />
         ) : null}
 
-        <div className="mt-5 flex flex-wrap items-end gap-3">
-          <FilterField label="Başlangıç">
-            <input
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="h-10 rounded-xl border border-slate-200 px-3 text-sm"
-            />
-          </FilterField>
-          <FilterField label="Bitiş">
-            <input
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="h-10 rounded-xl border border-slate-200 px-3 text-sm"
-            />
-          </FilterField>
-          <FilterField label="Hedef tipi">
-            <select
-              value={scope}
-              onChange={(e) => setScope(e.target.value)}
-              className="h-10 rounded-xl border border-slate-200 px-3 text-sm"
-            >
-              <option value="">Tümü</option>
-              <option value="employee">Çalışan</option>
-              <option value="department">Departman</option>
-              <option value="company">Firma geneli</option>
-            </select>
-          </FilterField>
-          <FilterField label="Departman">
-            <select
-              value={department}
-              onChange={(e) => setDepartment(e.target.value)}
-              className="h-10 rounded-xl border border-slate-200 px-3 text-sm"
-            >
-              <option value="">Tümü</option>
-              {departments.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-          </FilterField>
-          <FilterField label="Çalışan">
-            <select
-              value={employeeId}
-              onChange={(e) => setEmployeeId(e.target.value)}
-              className="h-10 min-w-[180px] rounded-xl border border-slate-200 px-3 text-sm"
-            >
-              <option value="">Tümü</option>
-              {employees.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </FilterField>
-          <button
-            type="button"
-            disabled={loading}
-            onClick={loadTargets}
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#0f1f4d] px-4 text-xs font-black text-white disabled:opacity-50"
-          >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Filtrele
-          </button>
-        </div>
+        <ActionCard
+          title="Personel Performansı"
+          description="Performans raporuna dön"
+          href="/reports/personnel-performance"
+          icon={<Users size={22} strokeWidth={2.4} />}
+          gradient="bg-linear-to-br from-blue-500 to-blue-600"
+        />
+
+        <ActionCard
+          title="Departman Performansı"
+          description="Departman kırılımını gör"
+          href="/reports/personnel-performance/departments"
+          icon={<Building2 size={22} strokeWidth={2.4} />}
+          gradient="bg-linear-to-br from-violet-500 to-purple-600"
+        />
+
+        <ActionCard
+          title="Çalışanlar"
+          description="Personel listesine git"
+          href="/team"
+          icon={<User size={22} strokeWidth={2.4} />}
+          gradient="bg-linear-to-br from-emerald-500 to-green-600"
+        />
       </section>
 
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          title="Toplam Hedef"
+          value={formatNumber(targets.length)}
+          subtitle="Seçili dönemdeki kayıtlar"
+          icon={<Target size={18} />}
+          color="blue"
+        />
+        <StatCard
+          title="Çalışan Hedefi"
+          value={formatNumber(scopeCounts.employee)}
+          subtitle="Bireysel hedefler"
+          icon={<User size={18} />}
+          color="green"
+        />
+        <StatCard
+          title="Departman Hedefi"
+          value={formatNumber(scopeCounts.department)}
+          subtitle="Departman bazlı hedefler"
+          icon={<Building2 size={18} />}
+          color="purple"
+        />
+        <StatCard
+          title="Firma Geneli"
+          value={formatNumber(scopeCounts.company)}
+          subtitle="Genel şirket hedefleri"
+          icon={<Users size={18} />}
+          color="orange"
+        />
+      </section>
+
+      {isReadOnlyViewer ? (
+        <p className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+          Salt okunur görünüm: hedefleri görüntüleyebilirsiniz; oluşturma ve
+          düzenleme yalnızca yöneticiler içindir.
+        </p>
+      ) : null}
+
       {error ? (
-        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
+        <p className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
           {error}
         </p>
       ) : null}
 
-      <section className={[TEAM_CARD_CLASS, "overflow-x-auto"].join(" ")}>
-        <div className="mb-4 flex items-center justify-between">
-          <p className="text-sm font-bold text-slate-500">{filteredCountLabel}</p>
-        </div>
-        <table className="min-w-[1200px] w-full text-left text-sm">
-          <thead>
-            <tr className="border-b text-[11px] font-black uppercase text-slate-400">
-              <th className="py-2 pr-4">Hedef tipi</th>
-              <th className="py-2 pr-4">Kapsam</th>
-              <th className="py-2 pr-4">Dönem</th>
-              <th className="py-2 pr-4">Ciro hedefi</th>
-              <th className="py-2 pr-4">Satış hedefi</th>
-              <th className="py-2 pr-4">Tahsilat hedefi</th>
-              <th className="py-2 pr-4">Skor hedefi</th>
-              <th className="py-2 pr-4">Maks. izin</th>
-              <th className="py-2 pr-4">Güncelleme</th>
-              <th className="py-2">Aksiyonlar</th>
-            </tr>
-          </thead>
-          <tbody>
-            {targets.length === 0 ? (
-              <tr>
-                <td colSpan={10} className="py-8 text-center text-slate-400">
-                  Seçilen filtreler için hedef bulunamadı.
-                </td>
-              </tr>
-            ) : (
-              targets.map((target) => (
-                <tr key={target.id} className="border-b border-slate-50">
-                  <td className="py-3 pr-4 font-bold text-[#0f1f4d]">
-                    {SCOPE_LABELS[target.scope]}
-                  </td>
-                  <td className="py-3 pr-4">{getTargetSubject(target)}</td>
-                  <td className="py-3 pr-4">
-                    {formatDate(target.periodStart)} – {formatDate(target.periodEnd)}
-                  </td>
-                  <td className="py-3 pr-4">
-                    {target.revenueTarget != null
-                      ? formatMoney(target.revenueTarget)
-                      : "—"}
-                  </td>
-                  <td className="py-3 pr-4">
-                    {target.salesCountTarget != null
-                      ? formatNumber(target.salesCountTarget)
-                      : "—"}
-                  </td>
-                  <td className="py-3 pr-4">
-                    {target.collectionTarget != null
-                      ? formatMoney(target.collectionTarget)
-                      : "—"}
-                  </td>
-                  <td className="py-3 pr-4">
-                    {target.scoreTarget != null ? formatNumber(target.scoreTarget) : "—"}
-                  </td>
-                  <td className="py-3 pr-4">
-                    {target.maxLeaveDays != null
-                      ? formatNumber(target.maxLeaveDays)
-                      : "—"}
-                  </td>
-                  <td className="py-3 pr-4 text-slate-500">
-                    {target.updatedAt
-                      ? new Date(target.updatedAt).toLocaleString("tr-TR")
-                      : "—"}
-                  </td>
-                  <td className="py-3">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+          <div className="flex flex-col gap-3 border-b border-slate-100 p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-base font-black text-[#0f1f4d]">
+                  Performans Hedefleri
+                </h2>
+                <p className="mt-1 text-[12px] font-medium text-slate-500">
+                  {formatNumber(targets.length)} hedef listeleniyor
+                </p>
+              </div>
+
+              {canManageTargets ? (
+                <button
+                  type="button"
+                  onClick={openCreateModal}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#0f1f4d] px-4 text-[12px] font-black text-white transition hover:bg-[#16285f]"
+                >
+                  <Target size={14} />
+                  Yeni Hedef
+                </button>
+              ) : null}
+            </div>
+
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void loadTargets();
+              }}
+              className="flex w-full flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-end"
+            >
+              <FilterField label="Başlangıç">
+                <input
+                  type="date"
+                  value={from}
+                  onChange={(event) => setFrom(event.target.value)}
+                  className="h-10 w-full min-w-[140px] rounded-xl border border-slate-200 bg-white px-3 text-[12px] font-semibold text-[#0f1f4d] outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                />
+              </FilterField>
+
+              <FilterField label="Bitiş">
+                <input
+                  type="date"
+                  value={to}
+                  onChange={(event) => setTo(event.target.value)}
+                  className="h-10 w-full min-w-[140px] rounded-xl border border-slate-200 bg-white px-3 text-[12px] font-semibold text-[#0f1f4d] outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                />
+              </FilterField>
+
+              <FilterField label="Hedef tipi">
+                <select
+                  value={scope}
+                  onChange={(event) => setScope(event.target.value)}
+                  className="h-10 w-full min-w-[140px] rounded-xl border border-slate-200 bg-white px-3 text-[12px] font-semibold text-[#0f1f4d] outline-none"
+                >
+                  <option value="">Tümü</option>
+                  <option value="employee">Çalışan</option>
+                  <option value="department">Departman</option>
+                  <option value="company">Firma geneli</option>
+                </select>
+              </FilterField>
+
+              <FilterField label="Departman">
+                <select
+                  value={department}
+                  onChange={(event) => setDepartment(event.target.value)}
+                  className="h-10 w-full min-w-[150px] rounded-xl border border-slate-200 bg-white px-3 text-[12px] font-semibold text-[#0f1f4d] outline-none"
+                >
+                  <option value="">Tümü</option>
+                  {departments.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </FilterField>
+
+              <FilterField label="Çalışan">
+                <select
+                  value={employeeId}
+                  onChange={(event) => setEmployeeId(event.target.value)}
+                  className="h-10 w-full min-w-[180px] rounded-xl border border-slate-200 bg-white px-3 text-[12px] font-semibold text-[#0f1f4d] outline-none"
+                >
+                  <option value="">Tümü</option>
+                  {employees.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </FilterField>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#0f1f4d] px-4 text-[12px] font-black text-white transition hover:bg-[#16285f] disabled:opacity-60"
+              >
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                <Filter size={14} />
+                Filtrele
+              </button>
+            </form>
+          </div>
+
+          {targets.length === 0 ? (
+            <TargetsEmptyState
+              hasFilters={hasFilters}
+              canManageTargets={canManageTargets}
+              onCreate={openCreateModal}
+            />
+          ) : (
+            <>
+              <div className="hidden overflow-x-auto lg:block">
+                <table className="w-full min-w-[1100px] text-left">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-black text-[#24345f]/80">
+                      <th className="px-4 py-3">Hedef Tipi</th>
+                      <th className="px-4 py-3">Kapsam</th>
+                      <th className="px-4 py-3">Dönem</th>
+                      <th className="px-4 py-3">Ciro Hedefi</th>
+                      <th className="px-4 py-3">Satış Hedefi</th>
+                      <th className="px-4 py-3">Tahsilat</th>
+                      <th className="px-4 py-3">Skor</th>
+                      <th className="px-4 py-3">Maks. İzin</th>
+                      <th className="px-4 py-3 text-center">İşlem</th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-slate-100">
+                    {targets.map((target) => (
+                      <tr
+                        key={target.id}
+                        className="text-[12px] font-semibold text-[#24345f] transition hover:bg-slate-50/80"
+                      >
+                        <td className="px-4 py-3">
+                          <span
+                            className={[
+                              "inline-flex rounded-md px-2 py-1 text-[10px] font-black",
+                              SCOPE_BADGE_CLASS[target.scope],
+                            ].join(" ")}
+                          >
+                            {SCOPE_LABELS[target.scope]}
+                          </span>
+                        </td>
+
+                        <td className="px-4 py-3 font-extrabold text-[#0f1f4d]">
+                          {getTargetSubject(target)}
+                        </td>
+
+                        <td className="whitespace-nowrap px-4 py-3 text-[11px] text-slate-500">
+                          {formatDate(target.periodStart)} –{" "}
+                          {formatDate(target.periodEnd)}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {target.revenueTarget != null
+                            ? formatMoney(target.revenueTarget)
+                            : "—"}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {target.salesCountTarget != null
+                            ? formatNumber(target.salesCountTarget)
+                            : "—"}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {target.collectionTarget != null
+                            ? formatMoney(target.collectionTarget)
+                            : "—"}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {target.scoreTarget != null
+                            ? formatNumber(target.scoreTarget)
+                            : "—"}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {target.maxLeaveDays != null
+                            ? formatNumber(target.maxLeaveDays)
+                            : "—"}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {canManageTargets ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => openEditModal(target)}
+                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-[#24345f] transition hover:border-blue-100 hover:bg-blue-50 hover:text-blue-600"
+                                title="Düzenle"
+                              >
+                                <Pencil size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={deletingId === target.id}
+                                onClick={() => handleDelete(target)}
+                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-100 bg-white text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                                title="Sil"
+                              >
+                                {deletingId === target.id ? (
+                                  <Loader2 size={14} className="animate-spin" />
+                                ) : (
+                                  <Trash2 size={14} />
+                                )}
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="block text-center text-slate-400">
+                              —
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="space-y-3 border-t border-slate-100 p-4 lg:hidden">
+                {targets.map((target) => (
+                  <article
+                    key={target.id}
+                    className="rounded-2xl border border-slate-200/80 bg-slate-50/40 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <span
+                          className={[
+                            "inline-flex rounded-md px-2 py-1 text-[10px] font-black",
+                            SCOPE_BADGE_CLASS[target.scope],
+                          ].join(" ")}
+                        >
+                          {SCOPE_LABELS[target.scope]}
+                        </span>
+                        <p className="mt-2 truncate text-[14px] font-extrabold text-[#0f1f4d]">
+                          {getTargetSubject(target)}
+                        </p>
+                        <p className="mt-1 text-[11px] font-semibold text-slate-500">
+                          {formatDate(target.periodStart)} –{" "}
+                          {formatDate(target.periodEnd)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] font-semibold text-slate-500">
+                      <span>
+                        Ciro:{" "}
+                        {target.revenueTarget != null
+                          ? formatMoney(target.revenueTarget)
+                          : "—"}
+                      </span>
+                      <span>
+                        Satış:{" "}
+                        {target.salesCountTarget != null
+                          ? formatNumber(target.salesCountTarget)
+                          : "—"}
+                      </span>
+                      <span>
+                        Skor:{" "}
+                        {target.scoreTarget != null
+                          ? formatNumber(target.scoreTarget)
+                          : "—"}
+                      </span>
+                      <span>
+                        İzin:{" "}
+                        {target.maxLeaveDays != null
+                          ? formatNumber(target.maxLeaveDays)
+                          : "—"}
+                      </span>
+                    </div>
+
                     {canManageTargets ? (
-                      <div className="flex items-center gap-2">
+                      <div className="mt-3 flex gap-2">
                         <button
                           type="button"
                           onClick={() => openEditModal(target)}
-                          className="inline-flex h-8 items-center gap-1 rounded-lg border px-2 text-[11px] font-black text-[#0f1f4d]"
+                          className="inline-flex h-9 flex-1 items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white text-[11px] font-black text-[#0f1f4d]"
                         >
-                          <Pencil className="h-3.5 w-3.5" />
+                          <Pencil size={13} />
                           Düzenle
                         </button>
                         <button
                           type="button"
                           disabled={deletingId === target.id}
                           onClick={() => handleDelete(target)}
-                          className="inline-flex h-8 items-center gap-1 rounded-lg border border-red-100 px-2 text-[11px] font-black text-red-600 disabled:opacity-50"
+                          className="inline-flex h-9 items-center justify-center rounded-xl border border-red-100 bg-white px-4 text-[11px] font-black text-red-600 disabled:opacity-50"
                         >
-                          {deletingId === target.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-3.5 w-3.5" />
-                          )}
                           Sil
                         </button>
                       </div>
-                    ) : (
-                      <span className="text-slate-400">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+            </>
+          )}
+        </section>
+
+        <aside className="space-y-4">
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+            <p className="text-[12px] font-extrabold text-[#24345f]/80">
+              Hedef Dağılımı
+            </p>
+            <p className="mt-1 text-[11px] font-medium text-slate-500">
+              {formatPeriodLabel(from)} – {formatPeriodLabel(to)}
+            </p>
+
+            <div className="mt-4 space-y-3">
+              <SummaryRow
+                label="Toplam hedef"
+                value={formatNumber(targets.length)}
+                tone="blue"
+              />
+              <SummaryRow
+                label="Çalışan"
+                value={formatNumber(scopeCounts.employee)}
+              />
+              <SummaryRow
+                label="Departman"
+                value={formatNumber(scopeCounts.department)}
+                tone="violet"
+              />
+              <SummaryRow
+                label="Firma geneli"
+                value={formatNumber(scopeCounts.company)}
+                tone="emerald"
+              />
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200/80 bg-linear-to-br from-[#0f1f4d] to-[#1e3a8a] p-4 text-white shadow-[0_14px_30px_rgba(15,23,42,0.16)]">
+            <p className="text-[13px] font-black">Hedef Yönetimi</p>
+            <p className="mt-2 text-[12px] leading-6 text-white/80">
+              Çalışan, departman veya firma geneli için dönemsel ciro, satış ve
+              skor hedefleri tanımlayın.
+            </p>
+            {canManageTargets ? (
+              <button
+                type="button"
+                onClick={openCreateModal}
+                className="mt-4 inline-flex h-10 items-center justify-center rounded-xl bg-white px-4 text-[12px] font-black text-[#0f1f4d]"
+              >
+                Yeni Hedef Ekle
+              </button>
+            ) : (
+              <Link
+                href="/reports/personnel-performance"
+                className="mt-4 inline-flex h-10 items-center justify-center rounded-xl bg-white px-4 text-[12px] font-black text-[#0f1f4d]"
+              >
+                Performans Raporu
+              </Link>
             )}
-          </tbody>
-        </table>
-      </section>
+          </div>
+        </aside>
+      </div>
 
       {canManageTargets ? (
         <PerformanceTargetModal
-        open={modalOpen}
-        mode={modalMode}
-        saving={saving}
-        error={modalError}
-        periodStart={from}
-        periodEnd={to}
-        departments={departments}
-        employees={employees}
-        initialTarget={editingTarget}
-        onClose={() => setModalOpen(false)}
-        onSubmit={handleSubmit}
-      />
+          open={modalOpen}
+          mode={modalMode}
+          saving={saving}
+          error={modalError}
+          periodStart={from}
+          periodEnd={to}
+          departments={departments}
+          employees={employees}
+          initialTarget={editingTarget}
+          onClose={() => setModalOpen(false)}
+          onSubmit={handleSubmit}
+        />
       ) : null}
+    </div>
+  );
+}
+
+function TargetsEmptyState({
+  hasFilters,
+  canManageTargets,
+  onCreate,
+}: {
+  hasFilters: boolean;
+  canManageTargets: boolean;
+  onCreate: () => void;
+}) {
+  return (
+    <div className="px-5 py-16 text-center">
+      <div className="mx-auto max-w-sm">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-violet-50 text-violet-600">
+          <Target size={28} />
+        </div>
+
+        <p className="mt-4 text-lg font-black text-[#0f1f4d]">
+          {hasFilters
+            ? "Seçilen filtreler için hedef bulunamadı"
+            : "Henüz performans hedefi yok"}
+        </p>
+
+        <p className="mt-2 text-sm leading-6 text-slate-500">
+          {hasFilters
+            ? "Filtre kriterlerinizi değiştirerek tekrar deneyin."
+            : "İlk hedefinizi oluşturarak performans takibine başlayın."}
+        </p>
+
+        {canManageTargets ? (
+          <button
+            type="button"
+            onClick={onCreate}
+            className="mt-5 inline-flex h-11 items-center justify-center rounded-2xl bg-[#0f1f4d] px-5 text-sm font-black text-white"
+          >
+            İlk Hedefi Oluştur
+          </button>
+        ) : (
+          <Link
+            href="/reports/personnel-performance"
+            className="mt-5 inline-flex h-11 items-center justify-center rounded-2xl bg-[#0f1f4d] px-5 text-sm font-black text-white"
+          >
+            Performans Raporu
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SummaryRow({
+  label,
+  value,
+  tone = "slate",
+}: {
+  label: string;
+  value: string;
+  tone?: "slate" | "blue" | "violet" | "emerald";
+}) {
+  const valueClass =
+    tone === "blue"
+      ? "text-blue-600"
+      : tone === "violet"
+        ? "text-violet-600"
+        : tone === "emerald"
+          ? "text-emerald-600"
+          : "text-[#0f1f4d]";
+
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 last:border-b-0 last:pb-0">
+      <span className="text-[12px] font-semibold text-slate-500">{label}</span>
+      <span className={["text-[13px] font-black", valueClass].join(" ")}>
+        {value}
+      </span>
     </div>
   );
 }
@@ -449,9 +775,21 @@ function FilterField({
   children: React.ReactNode;
 }) {
   return (
-    <label className="space-y-1">
-      <span className="text-xs font-bold text-slate-500">{label}</span>
+    <label className="block space-y-1">
+      <span className="text-[11px] font-bold text-slate-500">{label}</span>
       {children}
     </label>
   );
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString("tr-TR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function formatPeriodLabel(value: string) {
+  return formatDate(value);
 }

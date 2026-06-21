@@ -6,7 +6,66 @@ import {
   normalizeImageUrl,
   productFormSchema,
   productToFormValues,
+  resolveInitialBarcodePayloadMode,
+  shouldIncludeBarcodeInJsonPayload,
 } from "./product-form-utils";
+
+describe("product barcode payload", () => {
+  it("create barcode olmadan barcode alanını payload'dan çıkarır", () => {
+    const payload = buildProductPayload(emptyProductFormValues, {
+      barcodeMode: "omit",
+    });
+
+    assert.equal("barcode" in payload, false);
+    assert.equal(shouldIncludeBarcodeInJsonPayload("omit"), false);
+  });
+
+  it("create barcode verilirse kaydeder", () => {
+    const payload = buildProductPayload(
+      { ...emptyProductFormValues, name: "Demo", barcode: "8690012345678" },
+      { barcodeMode: "include" }
+    );
+
+    assert.equal(payload.barcode, "8690012345678");
+  });
+
+  it("create toggle açık ama boş barkod null olur", () => {
+    const payload = buildProductPayload(
+      { ...emptyProductFormValues, name: "Demo", barcode: "" },
+      { barcodeMode: "include" }
+    );
+
+    assert.equal(payload.barcode, null);
+  });
+
+  it("update clear modu barcode null döner", () => {
+    const payload = buildProductPayload(
+      { ...emptyProductFormValues, name: "Demo", barcode: "8690012345678" },
+      { barcodeMode: "clear" }
+    );
+
+    assert.equal(payload.barcode, null);
+    assert.equal(shouldIncludeBarcodeInJsonPayload("clear"), true);
+  });
+
+  it("edit barkodu olan ürün include modu ile başlar", () => {
+    assert.equal(
+      resolveInitialBarcodePayloadMode("edit", "8690012345678"),
+      "include"
+    );
+    assert.equal(resolveInitialBarcodePayloadMode("edit", null), "omit");
+    assert.equal(resolveInitialBarcodePayloadMode("create", null), "omit");
+  });
+
+  it("productFormSchema null barcode kabul eder", () => {
+    const parsed = productFormSchema.safeParse({
+      name: "Ürün Adı",
+      barcode: null,
+    });
+
+    assert.equal(parsed.success, true);
+  });
+});
 
 describe("product-form-utils decimal prices", () => {
   it("buildProductPayload virgüllü fiyatları parse eder", () => {

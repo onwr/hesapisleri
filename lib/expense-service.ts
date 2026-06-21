@@ -1,5 +1,8 @@
 import { db } from "@/lib/prisma";
+import { invalidateDashboardCache } from "@/lib/dashboard-cache-invalidation";
 import { roundCashMoney } from "@/lib/cash-bank-account-utils";
+import { syncSupplierBalance } from "@/lib/supplier-balance-service";
+import { getSupplierDisplayName } from "@/lib/supplier-utils";
 import {
   ensureExpenseCategoryExists,
   getActiveExpenseCategoryNames,
@@ -53,24 +56,10 @@ export type SerializedExpenseDetail = {
   } | null;
 };
 
-export async function getExpenseFormAccounts(companyId: string) {
-  const accounts = await db.account.findMany({
-    where: { companyId, status: "ACTIVE" },
-    orderBy: [{ type: "asc" }, { name: "asc" }],
-    select: {
-      id: true,
-      name: true,
-      type: true,
-      balance: true,
-    },
-  });
+import { getActiveAccountOptions } from "@/lib/account-read-service";
 
-  return accounts.map((account) => ({
-    id: account.id,
-    name: account.name,
-    type: account.type,
-    balance: Number(account.balance),
-  }));
+export async function getExpenseFormAccounts(companyId: string) {
+  return getActiveAccountOptions(companyId);
 }
 
 export async function getExpenseCategoryOptions(companyId: string) {
@@ -147,6 +136,29 @@ function serializeExpenseDetail(expense: {
   };
 }
 
+async function resolveExpenseSupplier(
+  companyId: string,
+  data: { supplierId?: string; supplier?: string | null }
+) {
+  if (data.supplierId?.trim()) {
+    const supplier = await db.supplier.findFirst({
+      where: { id: data.supplierId.trim(), companyId, isActive: true },
+    });
+
+    if (supplier) {
+      return {
+        supplierId: supplier.id,
+        supplier: getSupplierDisplayName(supplier),
+      };
+    }
+  }
+
+  return {
+    supplierId: null as string | null,
+    supplier: data.supplier?.trim() || null,
+  };
+}
+
 export async function createExpenseRecord(input: {
   companyId: string;
   userId: string;
@@ -165,7 +177,7 @@ export async function createExpenseRecord(input: {
   const category = normalizeExpenseCategory(input.data.category);
   await ensureExpenseCategoryExists(input.companyId, category);
 
-  return db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     if (input.data.paymentStatus === "PAID") {
       const account = await tx.account.findFirst({
         where: {
@@ -184,13 +196,16 @@ export async function createExpenseRecord(input: {
       }
     }
 
+    const supplierFields = await resolveExpenseSupplier(input.companyId, input.data);
+
     const expense = await tx.expense.create({
       data: {
         companyId: input.companyId,
         userId: input.userId,
         title: input.data.title.trim(),
         category,
-        supplier: input.data.supplier?.trim() || null,
+        supplier: supplierFields.supplier,
+        supplierId: supplierFields.supplierId,
         amount,
         status: "APPROVED",
         paymentStatus: input.data.paymentStatus,
@@ -240,6 +255,16 @@ export async function createExpenseRecord(input: {
       data: expense,
     };
   });
+
+  if (result.ok && result.data.supplierId) {
+    await syncSupplierBalance(input.companyId, result.data.supplierId);
+  }
+
+  if (result.ok) {
+    invalidateDashboardCache(input.companyId, "expense-create");
+  }
+
+  return result;
 }
 
 export async function updateExpenseRecord(input: {
@@ -260,7 +285,7 @@ export async function updateExpenseRecord(input: {
   const category = normalizeExpenseCategory(input.data.category);
   await ensureExpenseCategoryExists(input.companyId, category);
 
-  return db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     const expense = await tx.expense.findFirst({
       where: {
         id: input.expenseId,
@@ -279,6 +304,8 @@ export async function updateExpenseRecord(input: {
       };
     }
 
+    const previousSupplierId = expense.supplierId;
+
     if (isCancelledExpense(expense.status)) {
       return {
         ok: false as const,
@@ -296,17 +323,21 @@ export async function updateExpenseRecord(input: {
       };
     }
 
+    const supplierFields = await resolveExpenseSupplier(input.companyId, input.data);
+
     const updateData: {
       title: string;
       category: string;
       supplier: string | null;
+      supplierId: string | null;
       date: Date;
       note: string | null;
       amount?: number;
     } = {
       title: input.data.title.trim(),
       category,
-      supplier: input.data.supplier?.trim() || null,
+      supplier: supplierFields.supplier,
+      supplierId: supplierFields.supplierId,
       date: expenseDate,
       note: input.data.note?.trim() || null,
     };
@@ -344,8 +375,20 @@ export async function updateExpenseRecord(input: {
     return {
       ok: true as const,
       data: updated,
+      previousSupplierId,
     };
   });
+
+  if (result.ok) {
+    const supplierIds = new Set(
+      [result.previousSupplierId, result.data.supplierId].filter(Boolean) as string[]
+    );
+    for (const supplierId of supplierIds) {
+      await syncSupplierBalance(input.companyId, supplierId);
+    }
+  }
+
+  return result;
 }
 
 export async function cancelExpenseRecord(input: {
@@ -353,7 +396,7 @@ export async function cancelExpenseRecord(input: {
   userId: string;
   expenseId: string;
 }) {
-  return db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     const expense = await tx.expense.findFirst({
       where: {
         id: input.expenseId,
@@ -421,6 +464,12 @@ export async function cancelExpenseRecord(input: {
       data: cancelled,
     };
   });
+
+  if (result.ok) {
+    invalidateDashboardCache(input.companyId, "expense-cancel");
+  }
+
+  return result;
 }
 
 export async function payExpenseRecord(input: {
@@ -441,7 +490,7 @@ export async function payExpenseRecord(input: {
     };
   }
 
-  return db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     const expense = await tx.expense.findFirst({
       where: {
         id: input.expenseId,
@@ -529,4 +578,10 @@ export async function payExpenseRecord(input: {
       data: updated,
     };
   });
+
+  if (result.ok) {
+    invalidateDashboardCache(input.companyId, "expense-pay");
+  }
+
+  return result;
 }

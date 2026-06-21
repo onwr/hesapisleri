@@ -1,13 +1,8 @@
 import { NextResponse } from "next/server";
+import { requireApiModuleAccess } from "@/lib/module-access";
 import { z } from "zod";
 import { db } from "@/lib/prisma";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import { cancelSaleById } from "@/lib/sale-cancel-service";
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
 
 type Props = {
   params: Promise<{
@@ -23,28 +18,15 @@ export async function GET(_req: Request, { params }: Props) {
   try {
     const { id } = await params;
 
-    const token = await getAuthToken();
+    const auth = await requireApiModuleAccess("sales");
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.userId || !payload.companyId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
-
+    const companyId = auth.companyId;
+    const userId = auth.userId;
     const sale = await db.sale.findFirst({
       where: {
         id,
-        companyId: payload.companyId,
+        companyId: companyId,
       },
       include: {
         customer: true,
@@ -84,24 +66,11 @@ export async function GET(_req: Request, { params }: Props) {
 export async function PATCH(req: Request, { params }: Props) {
   try {
     const { id } = await params;
-    const token = await getAuthToken();
+    const auth = await requireApiModuleAccess("sales");
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.userId || !payload.companyId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
-
+    const companyId = auth.companyId;
+    const userId = auth.userId;
     const body = await req.json();
     const parsed = patchSchema.safeParse(body);
 
@@ -114,8 +83,8 @@ export async function PATCH(req: Request, { params }: Props) {
 
     const result = await cancelSaleById(
       id,
-      payload.companyId,
-      payload.userId
+      companyId,
+      userId
     );
 
     if (!result.ok) {

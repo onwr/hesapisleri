@@ -1,43 +1,17 @@
 import { NextResponse } from "next/server";
+import { requireAuthenticatedApiSession } from "@/lib/module-access";
 import { db } from "@/lib/prisma";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import { resolveEffectiveRole } from "@/lib/permission-utils";
-
-type AuthPayload = {
-  userId: string;
-  email: string;
-  role: string;
-  companyId: string | null;
-};
 
 export async function GET() {
   try {
-    const token = await getAuthToken();
+    const auth = await requireAuthenticatedApiSession();
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Oturum bulunamadı.",
-        },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.userId) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Oturum geçersiz.",
-        },
-        { status: 401 }
-      );
-    }
+    const { session } = auth;
 
     const user = await db.user.findUnique({
-      where: { id: payload.userId },
+      where: { id: session.userId },
       include: {
         companyUsers: {
           include: {
@@ -58,11 +32,11 @@ export async function GET() {
     }
 
     const activeCompany =
-      user.companyUsers.find((item) => item.companyId === payload.companyId)
+      user.companyUsers.find((item) => item.companyId === session.companyId)
         ?.company ?? user.companyUsers[0]?.company ?? null;
 
     const activeMembership =
-      user.companyUsers.find((item) => item.companyId === payload.companyId) ??
+      user.companyUsers.find((item) => item.companyId === session.companyId) ??
       user.companyUsers[0] ??
       null;
 

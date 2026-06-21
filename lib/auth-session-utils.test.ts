@@ -15,6 +15,11 @@ describe("sanitizeRedirectPath", () => {
     assert.equal(sanitizeRedirectPath("//evil.com/path"), null);
   });
 
+  it("auth route hedefleri reddedilir", () => {
+    assert.equal(sanitizeRedirectPath("/login"), null);
+    assert.equal(sanitizeRedirectPath("/register"), null);
+  });
+
   it("boş değer null döner", () => {
     assert.equal(sanitizeRedirectPath(""), null);
     assert.equal(sanitizeRedirectPath(null), null);

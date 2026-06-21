@@ -11,7 +11,9 @@ export type ProactiveNotificationType =
   | "DUE_INVOICE"
   | "LATE_COLLECTION"
   | "DAILY_SUMMARY"
-  | "EMPLOYEE_PAYMENT_DUE";
+  | "EMPLOYEE_PAYMENT_DUE"
+  | "MEMBERSHIP_EXPIRING"
+  | "MEMBERSHIP_EXPIRED";
 
 export type DueInvoiceWindow = "d-3" | "d-1" | "d0";
 
@@ -293,7 +295,7 @@ export function buildLowStockNotificationInput(input: {
     category: "STOCK",
     module: "stocks",
     entityType: "PRODUCT",
-    actionUrl: "/stocks",
+    actionUrl: "/products/stocks",
     priority: "HIGH",
     dedupeKey: buildLowStockDedupeKey(input.companyId, input.dateKey),
     metadata: { lowStockCount: input.count },
@@ -393,6 +395,85 @@ export function buildEmployeePaymentDueNotificationInput(input: {
     metadata: {
       employeePaymentDueCount: input.count,
       window: input.window,
+    },
+  };
+}
+
+export type MembershipExpiryWindow = "d-7" | "d-3" | "d0";
+
+export const MEMBERSHIP_EXPIRY_WINDOWS: MembershipExpiryWindow[] = [
+  "d-7",
+  "d-3",
+  "d0",
+];
+
+export function buildMembershipExpiringDedupeKey(
+  companyId: string,
+  window: MembershipExpiryWindow,
+  dateKey: string
+) {
+  return `membership-expiring:${companyId}:${window}:${dateKey}`;
+}
+
+export function buildMembershipExpiredDedupeKey(
+  companyId: string,
+  dateKey: string
+) {
+  return `membership-expired:${companyId}:${dateKey}`;
+}
+
+export function getMembershipExpiryDateForWindow(
+  referenceDate: Date,
+  window: MembershipExpiryWindow
+) {
+  const today = startOfDay(referenceDate);
+  if (window === "d-7") return addDays(today, 7);
+  if (window === "d-3") return addDays(today, 3);
+  return today;
+}
+
+export function buildMembershipExpiringNotificationInput(input: {
+  companyId: string;
+  remainingDays: number;
+  window: MembershipExpiryWindow;
+  dateKey: string;
+}): ProactiveNotificationPayload {
+  return {
+    title: "Üyelik süresi yaklaşıyor",
+    message: `Üyeliğiniz ${input.remainingDays} gün içinde sona erecek. Kesintisiz kullanım için ödeme yapın.`,
+    category: "SYSTEM",
+    module: "settings",
+    entityType: "MEMBERSHIP",
+    actionUrl: "/settings/billing",
+    priority: input.window === "d0" ? "HIGH" : "NORMAL",
+    dedupeKey: buildMembershipExpiringDedupeKey(
+      input.companyId,
+      input.window,
+      input.dateKey
+    ),
+    metadata: {
+      remainingDays: input.remainingDays,
+      window: input.window,
+    },
+  };
+}
+
+export function buildMembershipExpiredNotificationInput(input: {
+  companyId: string;
+  dateKey: string;
+}): ProactiveNotificationPayload {
+  return {
+    title: "Üyelik süresi doldu",
+    message:
+      "Üyelik süreniz doldu. Kullanıma devam etmek için ödeme yapın.",
+    category: "SYSTEM",
+    module: "settings",
+    entityType: "MEMBERSHIP",
+    actionUrl: "/settings/billing",
+    priority: "CRITICAL",
+    dedupeKey: buildMembershipExpiredDedupeKey(input.companyId, input.dateKey),
+    metadata: {
+      expired: true,
     },
   };
 }

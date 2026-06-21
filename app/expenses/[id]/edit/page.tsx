@@ -3,47 +3,20 @@ import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { EditExpenseForm } from "@/components/expenses/edit-expense-form";
 import { AppShell } from "@/components/layout/app-shell";
-import { getAuthToken, verifyToken } from "@/lib/auth";
+import { guardPageModule } from "@/lib/module-access";
+
 import {
   getExpenseCategoryOptions,
   getExpenseDetail,
 } from "@/lib/expense-service";
-import { db } from "@/lib/prisma";
-
 type Props = {
   params: Promise<{ id: string }>;
 };
 
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
-
 export default async function EditExpensePage({ params }: Props) {
-  const { id } = await params;
-
-  const token = await getAuthToken();
-  if (!token) redirect("/login");
-
-  const payload = verifyToken<AuthPayload>(token);
-  if (!payload?.userId || !payload.companyId) redirect("/login");
-
-  const user = await db.user.findUnique({
-    where: { id: payload.userId },
-    include: {
-      companyUsers: {
-        include: { company: true },
-      },
-    },
-  });
-
-  if (!user) redirect("/login");
-
-  const company =
-    user.companyUsers.find((item) => item.companyId === payload.companyId)
-      ?.company ?? user.companyUsers[0]?.company;
-
-  if (!company) redirect("/login");
+  const session = await guardPageModule("expenses");
+  const company = session.company;
+const { id } = await params;
 
   const [expense, categories] = await Promise.all([
     getExpenseDetail(company.id, id),

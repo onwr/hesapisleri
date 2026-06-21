@@ -130,9 +130,9 @@ describe("employee detail dashboard UI", () => {
 });
 
 describe("settings users separation copy", () => {
-  it("Ayarlar kullanıcı paneli personel ayrımını belirtir", () => {
+  it("Ayarlar kullanıcı paneli personelden kullanıcı oluşturmayı vurgular", () => {
     const settings = read("components/settings/settings-users-panel.tsx");
-    assert.match(settings, /sisteme giriş yapan kullanıcılar/i);
-    assert.match(settings, /Personel kayıtları için Çalışanlar/i);
+    assert.match(settings, /personel kayıtlarından oluşturulur/i);
+    assert.match(settings, /Personelden Kullanıcı Oluştur/i);
   });
 });

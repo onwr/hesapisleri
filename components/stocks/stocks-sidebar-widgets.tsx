@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import {
+  buildStocksQuery,
   formatStockDateTime,
   formatStockNumber,
   getMovementSoftClass,
@@ -187,7 +188,7 @@ export function StocksSidebarWidgets({
           </h3>
 
           <Link
-            href="/stocks?tab=movements"
+            href={buildStocksQuery({ tab: "movements" })}
             className="text-[11px] font-black text-blue-600 hover:text-blue-700"
           >
             Tümünü Gör

@@ -1,47 +1,19 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { ArrowLeft, Users } from "lucide-react";
 import { CustomerGroupsManager } from "@/components/customers/customer-groups-manager";
 import { AppShell } from "@/components/layout/app-shell";
-import { getAuthToken, verifyToken } from "@/lib/auth";
+import { guardPageModule } from "@/lib/module-access";
+
 import {
   getCustomerGroupsWithStats,
   summarizeGroupsPage,
 } from "@/lib/customer-group-service";
 import { db } from "@/lib/prisma";
 
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
-
 export default async function CustomerGroupsPage() {
-  const token = await getAuthToken();
-  if (!token) redirect("/login");
-
-  const payload = verifyToken<AuthPayload>(token);
-  if (!payload?.userId || !payload.companyId) redirect("/login");
-
-  const user = await db.user.findUnique({
-    where: { id: payload.userId },
-    include: {
-      companyUsers: {
-        include: {
-          company: true,
-        },
-      },
-    },
-  });
-
-  if (!user) redirect("/login");
-
-  const company =
-    user.companyUsers.find((item) => item.companyId === payload.companyId)
-      ?.company ?? user.companyUsers[0]?.company;
-
-  if (!company) redirect("/login");
-
-  const [groups, customers] = await Promise.all([
+  const session = await guardPageModule("customers");
+  const company = session.company;
+const [groups, customers] = await Promise.all([
     getCustomerGroupsWithStats(company.id),
     db.customer.findMany({
       where: { companyId: company.id },

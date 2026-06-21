@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
+import { requireApiModuleAccess } from "@/lib/module-access";
 import { z } from "zod";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import {
   createCustomerGroup,
   getCustomerGroupsWithStats,
@@ -15,11 +15,6 @@ const groupColorSchema = z.enum([
   "cyan",
 ]);
 
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
-
 const createGroupSchema = z.object({
   name: z.string().trim().min(1, "Grup adı zorunludur."),
   color: groupColorSchema.optional(),
@@ -28,25 +23,12 @@ const createGroupSchema = z.object({
 
 export async function GET() {
   try {
-    const token = await getAuthToken();
+    const auth = await requireApiModuleAccess("customers");
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.userId || !payload.companyId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
-
-    const groups = await getCustomerGroupsWithStats(payload.companyId);
+    const companyId = auth.companyId;
+    const userId = auth.userId;
+    const groups = await getCustomerGroupsWithStats(companyId);
 
     return NextResponse.json({
       success: true,
@@ -67,24 +49,11 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const token = await getAuthToken();
+    const auth = await requireApiModuleAccess("customers");
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.userId || !payload.companyId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
-
+    const companyId = auth.companyId;
+    const userId = auth.userId;
     const body = await req.json();
     const parsed = createGroupSchema.safeParse(body);
 
@@ -99,7 +68,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const group = await createCustomerGroup(payload.companyId, parsed.data);
+    const group = await createCustomerGroup(companyId, parsed.data);
 
     return NextResponse.json({
       success: true,

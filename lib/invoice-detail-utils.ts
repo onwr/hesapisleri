@@ -1,9 +1,10 @@
+import type { InvoiceItem } from "@prisma/client";
 import { parseNormalInvoiceMeta } from "@/lib/normal-invoice-meta";
 import {
-  calculateInvoiceTotals,
-  formatMoney,
-  type InvoiceLineItem,
-} from "@/lib/invoice-form-utils";
+  buildStoredInvoiceTotals,
+  invoiceItemsToViewItems,
+} from "@/lib/invoice-snapshot-utils";
+import { formatMoney } from "@/lib/invoice-form-utils";
 import {
   formatInvoiceDate,
   getInvoiceStatusText,
@@ -17,6 +18,11 @@ export type InvoiceDetailRecord = {
   status: string;
   paymentStatus: string;
   total: number;
+  subtotal?: number;
+  totalDiscount?: number;
+  taxableAmount?: number;
+  totalVat?: number;
+  financialSnapshotStatus?: string;
   createdAt: Date;
   dueDate: Date | null;
   gibStatus: string | null;
@@ -34,6 +40,19 @@ export type InvoiceDetailRecord = {
     taxNo: string | null;
     address: string | null;
   };
+};
+
+export type InvoiceDetailViewItem = {
+  id: string;
+  productId?: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  vatRate: number;
+  lineNetAmount: number;
+  vatAmount: number;
+  lineGrossAmount: number;
+  discountAmount: number;
 };
 
 export function getInvoiceTypeLabel(type: string) {
@@ -69,28 +88,107 @@ export function getInvoiceEditHref(invoice: {
   return `/invoices/${invoice.id}`;
 }
 
-export function buildInvoiceDetailView(invoice: InvoiceDetailRecord) {
-  const { displayMessage, meta } = parseNormalInvoiceMeta(invoice.gibMessage);
-
-  const items: InvoiceLineItem[] =
-    meta?.items?.map((item, index) => ({
-      id: `item-${index}`,
+function metaItemsToViewItems(
+  meta: NonNullable<ReturnType<typeof parseNormalInvoiceMeta>["meta"]>
+): InvoiceDetailViewItem[] {
+  return (
+    meta.items?.map((item, index) => ({
+      id: `meta-item-${index}`,
       productId: item.productId,
       name: item.name,
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       vatRate: item.vatRate,
-    })) ?? [];
+      lineNetAmount:
+        item.lineNetAmount ??
+        item.quantity * item.unitPrice - (item.discountAmount ?? 0),
+      vatAmount:
+        item.vatAmount ??
+        ((item.lineNetAmount ?? item.quantity * item.unitPrice) * item.vatRate) /
+          100,
+      lineGrossAmount:
+        item.lineGrossAmount ??
+        (item.lineNetAmount ?? item.quantity * item.unitPrice) +
+          (item.vatAmount ?? 0),
+      discountAmount: item.discountAmount ?? 0,
+    })) ?? []
+  );
+}
 
-  const totals =
-    items.length > 0
-      ? calculateInvoiceTotals(items, meta?.discountAmount ?? 0)
-      : {
-          subtotal: invoice.total,
-          discount: 0,
-          vatTotal: 0,
-          total: invoice.total,
-        };
+function resolveTotalsFromMeta(
+  meta: NonNullable<ReturnType<typeof parseNormalInvoiceMeta>["meta"]>,
+  invoiceTotal: number
+) {
+  if (
+    meta.subtotal !== undefined &&
+    meta.totalVat !== undefined &&
+    meta.grandTotal !== undefined
+  ) {
+    return {
+      subtotal: meta.subtotal,
+      discount: meta.discountAmount ?? 0,
+      netSubtotal: meta.taxableAmount ?? meta.subtotal - (meta.discountAmount ?? 0),
+      vatTotal: meta.totalVat,
+      total: meta.grandTotal,
+    };
+  }
+
+  // TODO: remove after invoice snapshot backfill is complete
+  const items = metaItemsToViewItems(meta);
+  const subtotal = items.reduce(
+    (sum, item) => sum + item.quantity * item.unitPrice,
+    0
+  );
+
+  return {
+    subtotal,
+    discount: meta.discountAmount ?? 0,
+    netSubtotal: subtotal - (meta.discountAmount ?? 0),
+    vatTotal: items.reduce((sum, item) => sum + item.vatAmount, 0),
+    total: invoiceTotal,
+  };
+}
+
+export function buildInvoiceDetailView(
+  invoice: InvoiceDetailRecord,
+  options?: {
+    dbItems?: InvoiceItem[];
+  }
+) {
+  const { displayMessage, meta } = parseNormalInvoiceMeta(invoice.gibMessage);
+  const dbItems = options?.dbItems ?? [];
+
+  let items: InvoiceDetailViewItem[] = [];
+  let totals: {
+    subtotal: number;
+    discount: number;
+    netSubtotal: number;
+    vatTotal: number;
+    total: number;
+  };
+
+  if (dbItems.length > 0) {
+    items = invoiceItemsToViewItems(dbItems);
+    totals = buildStoredInvoiceTotals({
+      subtotal: invoice.subtotal ?? 0,
+      totalDiscount: invoice.totalDiscount ?? 0,
+      taxableAmount: invoice.taxableAmount ?? 0,
+      totalVat: invoice.totalVat ?? 0,
+      total: invoice.total,
+    });
+  } else if (meta?.items?.length) {
+    items = metaItemsToViewItems(meta);
+    totals = resolveTotalsFromMeta(meta, invoice.total);
+  } else {
+    items = [];
+    totals = {
+      subtotal: invoice.total,
+      discount: 0,
+      netSubtotal: invoice.total,
+      vatTotal: 0,
+      total: invoice.total,
+    };
+  }
 
   return {
     displayMessage,
@@ -104,7 +202,7 @@ export function buildInvoiceDetailView(invoice: InvoiceDetailRecord) {
     typeLabel: getInvoiceTypeLabel(invoice.type),
     statusLabel: getInvoiceStatusText(invoice.status),
     paymentLabel: getPaymentText(invoice.paymentStatus),
-    formattedTotal: formatMoney(invoice.total),
+    formattedTotal: formatMoney(totals.total),
     formattedSubtotal: formatMoney(totals.subtotal),
     formattedDiscount: formatMoney(totals.discount),
     formattedVat: formatMoney(totals.vatTotal),
@@ -119,5 +217,7 @@ export function buildInvoiceDetailView(invoice: InvoiceDetailRecord) {
           return fallback;
         })()
     ),
+    usesStoredSnapshot:
+      dbItems.length > 0 || invoice.financialSnapshotStatus === "COMPLETE",
   };
 }

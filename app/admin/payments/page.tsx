@@ -1,100 +1,143 @@
 import Link from "next/link";
-import { AdminNavTabs } from "@/components/admin/admin-nav-tabs";
-import { AdminPageHeader } from "@/components/admin/admin-page-header";
+import {
+  Banknote,
+  Calendar,
+  CircleAlert,
+  Clock,
+  RotateCcw,
+} from "lucide-react";
+import { AdminMembershipPaymentActions } from "@/components/admin/admin-membership-payment-actions";
+import { AdminPageContainer } from "@/components/admin/layout/admin-page-container";
+import { AdminPageHeader } from "@/components/admin/layout/admin-page-header";
+import { AdminStatCard } from "@/components/admin/layout/admin-stat-card";
+import {
+  appPanelClass,
+  appTableClass,
+  appTableHeadClass,
+  appTableRowClass,
+} from "@/lib/admin-ui";
 import { formatAdminDate, formatAdminMoney } from "@/lib/admin-utils";
-import { db } from "@/lib/prisma";
-
-const cardClassName =
-  "rounded-[22px] border border-slate-200/70 bg-white p-5 shadow-[0_10px_26px_rgba(15,23,42,0.035)]";
+import { getAdminPaymentsSummary } from "@/lib/admin-service";
+import { listAdminMembershipPayments } from "@/lib/membership-service";
 
 function getPaymentStatusClass(status: string) {
   if (status === "PAID") return "bg-emerald-100 text-emerald-700";
   if (status === "PENDING") return "bg-orange-100 text-orange-700";
   if (status === "FAILED") return "bg-rose-100 text-rose-700";
+  if (status === "CANCELLED") return "bg-slate-100 text-slate-700";
+  if (status === "REFUNDED") return "bg-violet-100 text-violet-700";
   return "bg-slate-100 text-slate-700";
 }
 
 export default async function AdminPaymentsPage() {
-  const payments = await db.membershipPayment.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 100,
-    include: { company: true },
-  });
-
-  const paidTotal = payments
-    .filter((item) => item.status === "PAID")
-    .reduce((sum, item) => sum + Number(item.amount), 0);
-
-  const pendingCount = payments.filter((item) => item.status === "PENDING").length;
+  const [payments, summary] = await Promise.all([
+    listAdminMembershipPayments(),
+    getAdminPaymentsSummary(),
+  ]);
 
   return (
-    <div>
+    <AdminPageContainer size="full">
       <AdminPageHeader
         title="Üyelik Ödemeleri"
-        description="Platform üyelik ödemelerini ve tahsilat durumlarını izleyin."
+        description="Platform üyelik ödemelerini onaylayın ve tahsilat durumlarını izleyin."
       />
-      <AdminNavTabs />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <div className={cardClassName}>
-          <p className="text-[12px] font-bold text-slate-500">Toplam Tahsilat</p>
-          <p className="mt-2 text-[24px] font-extrabold text-[#0f1f4d]">
-            {formatAdminMoney(paidTotal)}
-          </p>
-        </div>
-        <div className={cardClassName}>
-          <p className="text-[12px] font-bold text-slate-500">Bekleyen Ödeme</p>
-          <p className="mt-2 text-[24px] font-extrabold text-orange-600">
-            {pendingCount}
-          </p>
-        </div>
-        <div className={cardClassName}>
-          <p className="text-[12px] font-bold text-slate-500">Kayıt Sayısı</p>
-          <p className="mt-2 text-[24px] font-extrabold text-[#0f1f4d]">
-            {payments.length}
-          </p>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <AdminStatCard
+          title="Toplam Tahsilat"
+          value={formatAdminMoney(summary.paidTotal)}
+          icon={Banknote}
+          tone="green"
+        />
+        <AdminStatCard
+          title="Bu Ay Tahsilat"
+          value={formatAdminMoney(summary.monthPaid)}
+          icon={Calendar}
+          tone="blue"
+        />
+        <AdminStatCard
+          title="Bekleyen"
+          value={String(summary.pending)}
+          icon={Clock}
+          tone="amber"
+        />
+        <AdminStatCard
+          title="Başarısız"
+          value={String(summary.failed)}
+          icon={CircleAlert}
+          tone="red"
+        />
+        <AdminStatCard
+          title="İade"
+          value={String(summary.refunded)}
+          icon={RotateCcw}
+          tone="purple"
+        />
       </div>
 
-      <div className={cardClassName}>
+      <div className={`${appPanelClass} p-4`}>
         <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-[13px]">
+          <table className={appTableClass}>
             <thead>
-              <tr className="border-b border-slate-100 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+              <tr className={appTableHeadClass}>
                 <th className="px-3 py-2">Firma</th>
-                <th className="px-3 py-2">Dönem</th>
+                <th className="px-3 py-2">Plan/Dönem</th>
                 <th className="px-3 py-2">Tutar</th>
                 <th className="px-3 py-2">Durum</th>
-                <th className="px-3 py-2">Ödeme Tarihi</th>
+                <th className="px-3 py-2">Provider</th>
+                <th className="px-3 py-2">Ödeme Tipi</th>
+                <th className="px-3 py-2">Merchant OID</th>
+                <th className="px-3 py-2">Test</th>
+                <th className="px-3 py-2">Tarih</th>
+                <th className="px-3 py-2">İşlemler</th>
               </tr>
             </thead>
             <tbody>
               {payments.map((payment) => (
-                <tr key={payment.id} className="border-b border-slate-50 last:border-0">
+                <tr key={payment.id} className={appTableRowClass}>
                   <td className="px-3 py-3">
                     <Link
-                      href={`/admin/companies/${payment.companyId}`}
-                      className="font-bold text-blue-600 hover:underline"
+                      href={`/admin/companies/${payment.company.id}`}
+                      className="font-bold text-slate-800 hover:underline"
                     >
                       {payment.company.name}
                     </Link>
                   </td>
                   <td className="px-3 py-3 text-slate-600">
-                    {formatAdminDate(payment.periodStart)} -{" "}
-                    {formatAdminDate(payment.periodEnd)}
+                    {payment.planName}
+                    <p className="text-[11px] text-slate-400">{payment.periodLabel}</p>
                   </td>
-                  <td className="px-3 py-3 font-bold text-[#0f1f4d]">
-                    {formatAdminMoney(Number(payment.amount))}
+                  <td className="px-3 py-3 font-bold text-slate-900">
+                    {formatAdminMoney(payment.amount)}
                   </td>
                   <td className="px-3 py-3">
                     <span
-                      className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${getPaymentStatusClass(payment.status)}`}
+                      className={`rounded-md px-2 py-0.5 text-[11px] font-bold ${getPaymentStatusClass(payment.status)}`}
                     >
-                      {payment.status}
+                      {payment.statusLabel}
                     </span>
                   </td>
+                  <td className="px-3 py-3 text-slate-600">
+                    {payment.provider ?? "—"}
+                  </td>
+                  <td className="px-3 py-3 text-slate-600">
+                    {payment.type ?? "—"}
+                  </td>
+                  <td className="px-3 py-3 font-mono text-[11px] text-slate-500">
+                    {payment.merchantOid ?? payment.paymentRef ?? "—"}
+                  </td>
                   <td className="px-3 py-3 text-slate-500">
-                    {formatAdminDate(payment.paidAt)}
+                    {payment.testMode ? "Test" : "Canlı"}
+                  </td>
+                  <td className="px-3 py-3 text-slate-500">
+                    {formatAdminDate(payment.paidAt ?? payment.createdAt)}
+                  </td>
+                  <td className="px-3 py-3">
+                    <AdminMembershipPaymentActions
+                      paymentId={payment.id}
+                      status={payment.status}
+                      amountMinor={payment.amountMinor}
+                    />
                   </td>
                 </tr>
               ))}
@@ -102,6 +145,6 @@ export default async function AdminPaymentsPage() {
           </table>
         </div>
       </div>
-    </div>
+    </AdminPageContainer>
   );
 }

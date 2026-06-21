@@ -19,6 +19,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { AppLoadingScreen } from "@/components/layout/app-loading-screen";
+import { SaleLineEditFields } from "@/components/sales/sale-line-edit-fields";
 import { WarehouseSelectField } from "@/components/shared/warehouse-select-field";
 import {
   buildProductsListUrl,
@@ -26,12 +27,19 @@ import {
 } from "@/lib/sale-warehouse-ui-utils";
 import { formatMoney } from "@/lib/format-utils";
 import { parseTurkishMoneyInput } from "@/lib/money-input-utils";
+import {
+  calculateLineSubtotal,
+  calculateSaleTotals,
+  parseSaleDiscountValueInput,
+  type SaleDiscountType,
+  validateSaleDiscountInput,
+  validateSaleLineItems,
+} from "@/lib/sale-calculation-utils";
 
 const SALES_HERO_CLASS =
   "rounded-[24px] border border-slate-200/70 bg-white p-5 shadow-[0_10px_26px_rgba(15,23,42,0.035)] sm:p-6";
 const SALES_FORM_SECTION_CLASS =
   "rounded-[22px] border border-slate-200/70 bg-white shadow-[0_10px_26px_rgba(15,23,42,0.035)]";
-const STOCK_INSUFFICIENT_MESSAGE = "Bu ürün için yeterli stok bulunmuyor.";
 
 type Customer = {
   id: string;
@@ -93,6 +101,9 @@ export default function NewSalePage() {
   >("PAID");
   const [paidAmountInput, setPaidAmountInput] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"CASH" | "BANK">("CASH");
+  const [discountType, setDiscountType] = useState<SaleDiscountType>("AMOUNT");
+  const [discountValueInput, setDiscountValueInput] = useState("0");
+  const [discountNote, setDiscountNote] = useState("");
   const [note, setNote] = useState("");
 
   const [productSearch, setProductSearch] = useState("");
@@ -230,18 +241,19 @@ export default function NewSalePage() {
     });
   }, [products, productSearch]);
 
-  const subtotal = useMemo(() => {
-    return cart.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
-  }, [cart]);
+  const discountValue = useMemo(() => {
+    const parsed = parseSaleDiscountValueInput(discountValueInput, discountType);
+    return parsed ?? 0;
+  }, [discountValueInput, discountType]);
 
-  const vatTotal = useMemo(() => {
-    return cart.reduce((sum, item) => {
-      const itemTotal = item.quantity * item.unitPrice;
-      return sum + (itemTotal * item.vatRate) / 100;
-    }, 0);
-  }, [cart]);
+  const totals = useMemo(() => {
+    return calculateSaleTotals(cart, {
+      type: discountType,
+      value: discountValue,
+    });
+  }, [cart, discountType, discountValue]);
 
-  const total = subtotal + vatTotal;
+  const { subtotal, vatTotal, discount, total } = totals;
   const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const paidAmount = useMemo(() => {
@@ -256,29 +268,11 @@ export default function NewSalePage() {
   const collectedAmount = paidAmount;
   const remainingAmount = Math.max(0, total - collectedAmount);
 
-  function showStockLimitError(stock: number) {
-    if (stock <= 0) {
-      setError(STOCK_INSUFFICIENT_MESSAGE);
-      return;
-    }
-
-    setError(`Bu ürün için stokta en fazla ${stock} adet var.`);
-  }
-
   function addToCart(product: Product) {
     const availableStock = getSaleProductStock(
       product,
       warehouseEnabled && Boolean(selectedWarehouseId)
     );
-
-    if (availableStock <= 0) return;
-
-    const existing = cart.find((item) => item.productId === product.id);
-
-    if (existing && existing.quantity >= existing.stock) {
-      showStockLimitError(existing.stock);
-      return;
-    }
 
     const price = Number(product.sellPrice);
 
@@ -313,14 +307,6 @@ export default function NewSalePage() {
   }
 
   function increaseQuantity(productId: string) {
-    const item = cart.find((entry) => entry.productId === productId);
-    if (!item) return;
-
-    if (item.quantity >= item.stock) {
-      showStockLimitError(item.stock);
-      return;
-    }
-
     setError("");
     setCart((prev) =>
       prev.map((entry) =>
@@ -353,12 +339,30 @@ export default function NewSalePage() {
     setCart((prev) => prev.filter((item) => item.productId !== productId));
   }
 
+  function updateCartItem(
+    productId: string,
+    patch: Partial<Pick<CartItem, "unitPrice" | "vatRate">>
+  ) {
+    setCart((prev) =>
+      prev.map((item) =>
+        item.productId === productId ? { ...item, ...patch } : item
+      )
+    );
+  }
+
   async function handleSaveSale() {
     setSaving(true);
     setError("");
 
     if (cart.length === 0) {
       setError("Satış oluşturmak için en az bir ürün ekleyin.");
+      setSaving(false);
+      return;
+    }
+
+    const lineError = validateSaleLineItems(cart);
+    if (lineError) {
+      setError(lineError);
       setSaving(false);
       return;
     }
@@ -375,6 +379,26 @@ export default function NewSalePage() {
         setSaving(false);
         return;
       }
+    }
+
+    const discountError = validateSaleDiscountInput(totals.gross, {
+      type: discountType,
+      value: discountValue,
+    });
+
+    if (discountError) {
+      setError(discountError);
+      setSaving(false);
+      return;
+    }
+
+    if (
+      discountValueInput.trim() &&
+      parseSaleDiscountValueInput(discountValueInput, discountType) === null
+    ) {
+      setError("İndirim tutarı geçersiz.");
+      setSaving(false);
+      return;
     }
 
     try {
@@ -398,6 +422,9 @@ export default function NewSalePage() {
                 : collectedAmount,
           paymentMethod,
           note,
+          discountType,
+          discountValue: discountValue,
+          discountNote: discountNote.trim() || undefined,
           items: cart.map((item) => ({
             productId: item.productId,
             name: item.name,
@@ -663,6 +690,58 @@ export default function NewSalePage() {
                   </div>
                 ) : null}
 
+                <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  <p className="text-[12px] font-black text-[#0f1f4d]">İndirim</p>
+
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                        İndirim Türü
+                      </label>
+                      <select
+                        value={discountType}
+                        onChange={(event) => {
+                          setDiscountType(event.target.value as SaleDiscountType);
+                          setDiscountValueInput("0");
+                        }}
+                        className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-[12px] font-bold text-[#0f1f4d] outline-none focus:border-blue-200 focus:ring-4 focus:ring-blue-50"
+                      >
+                        <option value="AMOUNT">Tutar</option>
+                        <option value="PERCENT">Yüzde</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                        {discountType === "PERCENT"
+                          ? "İndirim Yüzdesi"
+                          : "İndirim Tutarı"}
+                      </label>
+                      <input
+                        value={discountValueInput}
+                        onChange={(event) =>
+                          setDiscountValueInput(event.target.value)
+                        }
+                        inputMode="decimal"
+                        placeholder={discountType === "PERCENT" ? "Örn. 10" : "0"}
+                        className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-[12px] font-bold text-[#0f1f4d] outline-none focus:border-blue-200 focus:ring-4 focus:ring-blue-50"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <label className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                      İndirim Notu
+                    </label>
+                    <input
+                      value={discountNote}
+                      onChange={(event) => setDiscountNote(event.target.value)}
+                      placeholder="Opsiyonel"
+                      className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-[12px] font-medium text-[#0f1f4d] outline-none focus:border-blue-200 focus:ring-4 focus:ring-blue-50"
+                    />
+                  </div>
+                </div>
+
                 {paymentStatus !== "UNPAID" ? (
                   <div className="mt-4">
                     <label className="text-[11px] font-black uppercase tracking-wide text-slate-400">
@@ -713,20 +792,13 @@ export default function NewSalePage() {
                     product,
                     warehouseEnabled && Boolean(selectedWarehouseId)
                   );
-                  const isOutOfStock = displayStock <= 0;
 
                   return (
                     <button
                       key={product.id}
                       type="button"
                       onClick={() => addToCart(product)}
-                      disabled={isOutOfStock}
-                      className={[
-                        "group rounded-2xl border p-4 text-left transition",
-                        isOutOfStock
-                          ? "cursor-not-allowed border-slate-100 bg-slate-50 opacity-60"
-                          : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-blue-100 hover:bg-blue-50/30 hover:shadow-[0_14px_30px_rgba(37,99,235,0.10)]",
-                      ].join(" ")}
+                      className="group rounded-2xl border border-slate-200 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-blue-100 hover:bg-blue-50/30 hover:shadow-[0_14px_30px_rgba(37,99,235,0.10)]"
                     >
                       <div className="mb-4 flex items-start justify-between gap-3">
                         <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-linear-to-br from-blue-50 to-violet-50 text-blue-600">
@@ -812,7 +884,7 @@ export default function NewSalePage() {
 
               <div className="max-h-[360px] space-y-3 overflow-y-auto p-4">
                 {cart.map((item) => {
-                  const atStockLimit = item.quantity >= item.stock;
+                  const hasStockWarning = item.quantity > item.stock;
 
                   return (
                     <div
@@ -825,12 +897,17 @@ export default function NewSalePage() {
                             {item.name}
                           </p>
 
-                          <p className="mt-1 text-[11px] font-medium text-slate-500">
-                            {formatMoney(item.unitPrice)} · KDV %{item.vatRate}
+                          <p className="mt-1 text-[10px] font-semibold text-slate-400">
+                            Bu satışa özel fiyat
                           </p>
 
                           <p className="mt-1 text-[10px] font-semibold text-slate-400">
                             Stok: {item.stock} adet
+                            {hasStockWarning ? (
+                              <span className="ml-1 text-amber-600">
+                                · Bu işlem sonrası stok eksiye düşebilir.
+                              </span>
+                            ) : null}
                           </p>
                         </div>
 
@@ -841,6 +918,21 @@ export default function NewSalePage() {
                         >
                           <Trash2 size={15} />
                         </button>
+                      </div>
+
+                      <div className="mt-3">
+                        <SaleLineEditFields
+                          key={item.productId}
+                          unitPrice={item.unitPrice}
+                          vatRate={item.vatRate}
+                          onUnitPriceChange={(value) =>
+                            updateCartItem(item.productId, { unitPrice: value })
+                          }
+                          onVatRateChange={(value) =>
+                            updateCartItem(item.productId, { vatRate: value })
+                          }
+                          compact
+                        />
                       </div>
 
                       <div className="mt-3 flex items-center justify-between">
@@ -860,20 +952,14 @@ export default function NewSalePage() {
                           <button
                             type="button"
                             onClick={() => increaseQuantity(item.productId)}
-                            disabled={atStockLimit}
-                            className={[
-                              "flex h-7 w-7 items-center justify-center rounded-lg",
-                              atStockLimit
-                                ? "cursor-not-allowed bg-blue-600/50 text-white opacity-50"
-                                : "bg-blue-600 text-white",
-                            ].join(" ")}
+                            className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600 text-white"
                           >
                             <Plus size={14} />
                           </button>
                         </div>
 
                         <p className="text-[13px] font-black text-[#0f1f4d]">
-                          {formatMoney(item.quantity * item.unitPrice)}
+                          {formatMoney(calculateLineSubtotal(item))}
                         </p>
                       </div>
                     </div>
@@ -900,6 +986,12 @@ export default function NewSalePage() {
               <div className="border-t border-slate-100 p-4">
                 <div className="space-y-3 rounded-2xl bg-slate-50 p-4">
                   <SummaryLine label="Ara Toplam" value={formatMoney(subtotal)} />
+                  {discount > 0 ? (
+                    <SummaryLine
+                      label="İndirim"
+                      value={`-${formatMoney(discount)}`}
+                    />
+                  ) : null}
                   <SummaryLine label="KDV" value={formatMoney(vatTotal)} />
 
                   <div className="h-px bg-slate-200" />

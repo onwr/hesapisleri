@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import {
   AlertCircle,
   ArrowRight,
@@ -13,6 +12,8 @@ import {
   Truck,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
+import { guardPageModule } from "@/lib/module-access";
+
 import { MarketplaceLogo } from "@/components/orders/marketplace-logo";
 import { OrdersRowActions } from "@/components/orders/orders-row-actions";
 import {
@@ -20,10 +21,8 @@ import {
   OrdersTableToolbar,
 } from "@/components/orders/orders-table-controls";
 import { OrdersSidebarWidgets } from "@/components/orders/orders-sidebar-widgets";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import { endOfMonth, startOfMonth } from "@/lib/dashboard-metrics";
 import { getMarketplaceName } from "@/lib/marketplace-logos";
-import { db } from "@/lib/prisma";
 import { getOrdersPageData } from "@/lib/orders-page-data";
 import {
   buildOrdersQuery,
@@ -37,11 +36,6 @@ import {
   parseSearchQuery,
   parseSourceChannelFilter,
 } from "@/lib/orders-page-utils";
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
 
 type OrdersPageProps = {
   searchParams: Promise<{
@@ -79,35 +73,10 @@ const colorClassMap = {
 };
 
 export default async function OrdersPage({ searchParams }: OrdersPageProps) {
+  const session = await guardPageModule("orders");
+  const company = session.company;
   const params = await searchParams;
-  const token = await getAuthToken();
-
-  if (!token) redirect("/login");
-
-  const payload = verifyToken<AuthPayload>(token);
-
-  if (!payload?.userId || !payload.companyId) redirect("/login");
-
-  const user = await db.user.findUnique({
-    where: { id: payload.userId },
-    include: {
-      companyUsers: {
-        include: {
-          company: true,
-        },
-      },
-    },
-  });
-
-  if (!user) redirect("/login");
-
-  const company =
-    user.companyUsers.find((item) => item.companyId === payload.companyId)
-      ?.company ?? user.companyUsers[0]?.company;
-
-  if (!company) redirect("/login");
-
-  const now = new Date();
+const now = new Date();
   const activeTab = parseOrderTab(params.tab);
   const currentPage = parsePage(params.page);
   const searchQuery = parseSearchQuery(params.q);

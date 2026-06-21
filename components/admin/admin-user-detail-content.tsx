@@ -1,3 +1,4 @@
+import { AdminPageContainer } from "@/components/admin/layout/admin-page-container";
 import type { ReactNode } from "react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { AdminUserActions } from "@/components/admin/admin-user-actions";
@@ -20,6 +21,7 @@ export function AdminUserDetailContent({
   currentUserId: string;
 }) {
   return (
+    <AdminPageContainer size="full">
     <div>
       <AdminPageHeader
         title={user.name}
@@ -117,6 +119,7 @@ export function AdminUserDetailContent({
         </div>
       </div>
     </div>
+    </AdminPageContainer>
   );
 }
 

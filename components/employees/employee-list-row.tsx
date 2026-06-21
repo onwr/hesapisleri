@@ -11,9 +11,12 @@ import { EmployeeActionsModal } from "@/components/employees/employee-actions-mo
 import { EmployeeAvatar } from "@/components/employees/employee-avatar";
 import { TEAM_LIST_ROW_CLASS } from "@/components/team/team-ui-tokens";
 import {
+  formatEmployeeLedgerSummary,
   formatEmployeePaymentSummary,
   formatEmployeePerformanceSummary,
+  formatEmployeeSalarySummary,
 } from "@/lib/employee-page-utils";
+import { getEmployeeLedgerBalanceTone } from "@/lib/employee-ledger-utils";
 import { getEmployeeStatusBadgeClass } from "@/lib/employee-utils";
 import type { SerializedEmployee } from "@/lib/employee-page-types";
 
@@ -105,7 +108,25 @@ export function EmployeeListRow({
           </span>
         </div>
 
-        <div className="flex shrink-0 flex-col gap-1 text-[12px] font-bold text-[#0f1f4d] sm:min-w-[130px]">
+        <div className="flex shrink-0 flex-col gap-1 text-[12px] font-bold text-[#0f1f4d] sm:min-w-[150px]">
+          <span>Net {formatEmployeeSalarySummary(employee)}</span>
+          <span
+            className={[
+              "text-[11px] font-semibold",
+              getEmployeeLedgerBalanceTone(employee.currentBalance ?? 0) ===
+              "debt"
+                ? "text-emerald-600"
+                : getEmployeeLedgerBalanceTone(employee.currentBalance ?? 0) ===
+                    "credit"
+                  ? "text-amber-600"
+                  : "text-slate-500",
+            ].join(" ")}
+          >
+            Cari {formatEmployeeLedgerSummary(employee)}
+          </span>
+        </div>
+
+        <div className="hidden shrink-0 flex-col gap-1 text-[12px] font-bold text-[#0f1f4d] md:flex md:min-w-[130px]">
           <span>{formatEmployeePerformanceSummary(employee)}</span>
           <span className="text-[11px] font-semibold text-slate-500">
             {formatEmployeePaymentSummary(employee)}

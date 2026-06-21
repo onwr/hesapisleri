@@ -34,7 +34,7 @@ export function DashboardIncomeChart({ data }: DashboardIncomeChartProps) {
         Gelir - Gider Durumu
       </h3>
 
-      <div className="flex h-[205px] items-center gap-7">
+      <div className="flex h-[205px] items-center gap-7 max-md:h-auto max-md:flex-col max-md:gap-4">
         <div className="relative h-[165px] w-[165px] shrink-0">
           {hasData ? (
             <ResponsiveContainer width="100%" height="100%">

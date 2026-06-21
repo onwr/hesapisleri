@@ -1,3 +1,4 @@
+import { calculateProductStockValue } from "@/lib/inventory-value-utils";
 import {
   formatDateInputValue,
   parseDateParam,
@@ -6,6 +7,14 @@ import {
 } from "@/lib/sales-page-utils";
 import { startOfDay } from "@/lib/dashboard-metrics";
 import { formatMovementQuantityDisplay } from "@/lib/stock-movement-utils";
+
+export const PRODUCTS_STOCKS_PATH = "/products/stocks";
+export const PRODUCTS_STOCKS_WAREHOUSES_PATH = "/products/stocks/warehouses";
+
+export function buildProductsStocksWarehouseHref(warehouseId: string, edit = false) {
+  const base = `${PRODUCTS_STOCKS_WAREHOUSES_PATH}/${warehouseId}`;
+  return edit ? `${base}?edit=1` : base;
+}
 
 export type StockTabKey =
   | "all"
@@ -26,6 +35,7 @@ export type StockProductRow = {
   criticalLevel: number;
   stockValue: number;
   sellPrice: number;
+  buyPrice: number;
   statusLabel: string;
   statusBadgeClass: string;
   stockTextClass: string;
@@ -130,7 +140,7 @@ export function resolveProductMinStock(minStock?: number | null) {
 }
 
 export function isLowStock(stock: number, minStock: number) {
-  return stock > 0 && stock <= minStock;
+  return stock <= minStock;
 }
 
 export function isSufficientStock(stock: number, minStock: number) {
@@ -250,6 +260,14 @@ export function formatMovementQuantityForDisplay(type: string, quantity: number)
 }
 
 export function getStockStatus(stock: number, minStock = DEFAULT_MIN_STOCK_FALLBACK) {
+  if (stock < 0) {
+    return {
+      label: "Eksi Stok",
+      badgeClass: "bg-rose-100 text-rose-800",
+      textClass: "text-rose-600",
+    };
+  }
+
   if (stock <= 0) {
     return {
       label: "Stokta Yok",
@@ -302,6 +320,7 @@ export function mapProductToStockRow(
     stock: number;
     minStock?: number | null;
     sellPrice: unknown;
+    buyPrice?: unknown;
     imageUrl: string | null;
     category: { name: string } | null;
   },
@@ -319,8 +338,13 @@ export function mapProductToStockRow(
     categoryName,
     stock: product.stock,
     criticalLevel,
-    stockValue: product.stock * Number(product.sellPrice),
+    stockValue: calculateProductStockValue({
+      productType: "STOCK",
+      stock: product.stock,
+      buyPrice: product.buyPrice,
+    }),
     sellPrice: Number(product.sellPrice),
+    buyPrice: Number(product.buyPrice ?? 0),
     statusLabel: stockStatus.label,
     statusBadgeClass: stockStatus.badgeClass,
     stockTextClass: stockStatus.textClass,
@@ -367,12 +391,19 @@ export function mapTransferToRow(transfer: {
   product: { id: string; name: string };
   fromWarehouse: { name: string };
   toWarehouse: { name: string };
+  items?: Array<{ productId: string; quantity: number }>;
 }): StockTransferRow {
+  const itemCount = transfer.items?.length ?? 1;
+  const productName =
+    itemCount > 1
+      ? `${transfer.product.name} +${itemCount - 1} ürün`
+      : transfer.product.name;
+
   return {
     id: transfer.id,
     transferNo: transfer.transferNo,
     productId: transfer.product.id,
-    productName: transfer.product.name,
+    productName,
     fromWarehouseName: transfer.fromWarehouse.name,
     toWarehouseName: transfer.toWarehouse.name,
     quantity: transfer.quantity,
@@ -406,8 +437,8 @@ export function mapWarehouseToRow(
     productCount: metrics.productCount,
     totalStock: metrics.totalStock,
     totalValue: metrics.totalValue,
-    detailHref: `/stocks/warehouses/${warehouse.id}`,
-    editHref: `/stocks/warehouses/${warehouse.id}?edit=1`,
+    detailHref: buildProductsStocksWarehouseHref(warehouse.id),
+    editHref: buildProductsStocksWarehouseHref(warehouse.id, true),
   };
 }
 
@@ -556,6 +587,7 @@ export function buildStocksQuery(params: {
   from?: Date | string;
   to?: Date | string;
   q?: string | null;
+  productId?: string | null;
 }) {
   const search = new URLSearchParams();
 
@@ -587,8 +619,12 @@ export function buildStocksQuery(params: {
     search.set("q", params.q);
   }
 
+  if (params.productId) {
+    search.set("productId", params.productId);
+  }
+
   const query = search.toString();
-  return query ? `/stocks?${query}` : "/stocks";
+  return query ? `${PRODUCTS_STOCKS_PATH}?${query}` : PRODUCTS_STOCKS_PATH;
 }
 
 export function buildStocksExportQuery(params: {
@@ -596,6 +632,7 @@ export function buildStocksExportQuery(params: {
   from?: Date | string;
   to?: Date | string;
   q?: string | null;
+  productId?: string | null;
 }) {
   const search = new URLSearchParams();
 
@@ -621,6 +658,10 @@ export function buildStocksExportQuery(params: {
 
   if (params.q) {
     search.set("q", params.q);
+  }
+
+  if (params.productId) {
+    search.set("productId", params.productId);
   }
 
   const query = search.toString();

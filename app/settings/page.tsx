@@ -2,6 +2,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { SettingsCenter } from "@/components/settings/settings-center";
 import { getAppSession } from "@/lib/app-session";
 import {
+  canManageMembership,
   canManageSettings,
   canManageUsers,
 } from "@/lib/permission-utils";
@@ -23,6 +24,10 @@ export default async function SettingsPage() {
           session.companyUser.isOwner
         )}
         canManageSettings={canManageSettings(
+          session.effectiveRole,
+          session.companyUser.isOwner
+        )}
+        canManageMembership={canManageMembership(
           session.effectiveRole,
           session.companyUser.isOwner
         )}

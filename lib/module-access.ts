@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { redirect } from "next/navigation";
 import { getAuthToken, verifyToken } from "@/lib/auth";
-import { getSuperAdminSession } from "@/lib/admin-auth";
+import { getSuperAdminSession, isPlatformSuperAdminUser } from "@/lib/admin-auth";
 import { getAppSession, type AppSession } from "@/lib/app-session";
 import {
   canAccessModule,
+  canManageAccounts,
   canManageDirectory,
+  canManageSuppliers,
+  canManageWarehouses,
   type AppModule,
 } from "@/lib/permission-utils";
 import {
@@ -100,7 +103,7 @@ export async function requireModuleAccess(input: {
       role: companyUser.role,
       isOwner: companyUser.isOwner,
     }),
-    isSuperAdmin: companyUser.user.role === "SUPER_ADMIN",
+    isSuperAdmin: isPlatformSuperAdminUser(companyUser.user),
   };
 
   assertModuleAccess(session, input.module);
@@ -244,6 +247,52 @@ export async function requireApiEmployeesPermission(
   return auth;
 }
 
+export async function requireApiWarehouseRead() {
+  return requireAnyApiModuleAccess(["products", "stocks"]);
+}
+
+export async function requireApiWarehouseManage() {
+  const auth = await requireApiWarehouseRead();
+  if ("error" in auth) return auth;
+
+  if (
+    !canManageWarehouses(
+      auth.session.effectiveRole,
+      auth.session.companyUser.isOwner
+    )
+  ) {
+    return {
+      error: NextResponse.json(
+        { success: false, message: "Bu işlem için yetkiniz yok." },
+        { status: 403 }
+      ),
+    };
+  }
+
+  return auth;
+}
+
+export async function requireApiSupplierManage() {
+  const auth = await requireApiModuleAccess("suppliers");
+  if ("error" in auth) return auth;
+
+  if (
+    !canManageSuppliers(
+      auth.session.effectiveRole,
+      auth.session.companyUser.isOwner
+    )
+  ) {
+    return {
+      error: NextResponse.json(
+        { success: false, message: "Bu işlem için yetkiniz yok." },
+        { status: 403 }
+      ),
+    };
+  }
+
+  return auth;
+}
+
 export async function requireApiDirectoryManage() {
   const auth = await requireApiModuleAccess("directory");
   if ("error" in auth) return auth;
@@ -265,6 +314,117 @@ export async function requireApiDirectoryManage() {
   return auth;
 }
 
+export async function requireApiCashBankRead() {
+  return requireAnyApiModuleAccess([
+    "cash-bank",
+    "pos",
+    "expenses",
+    "settings",
+    "sales",
+    "invoices",
+  ]);
+}
+
+export async function requireApiCashBankManage() {
+  const auth = await requireApiCashBankRead();
+  if ("error" in auth) return auth;
+
+  if (
+    !canManageAccounts(
+      auth.session.effectiveRole,
+      auth.session.companyUser.isOwner
+    )
+  ) {
+    return {
+      error: NextResponse.json(
+        { success: false, message: "Bu işlem için yetkiniz yok." },
+        { status: 403 }
+      ),
+    };
+  }
+
+  return auth;
+}
+
+type SessionAuthPayload = {
+  userId: string;
+  companyId: string | null;
+};
+
+export type AuthenticatedApiSession = {
+  userId: string;
+  companyId: string | null;
+  user: NonNullable<Awaited<ReturnType<typeof db.user.findUnique>>>;
+};
+
+export async function requireAuthenticatedApiSession(): Promise<
+  | { session: AuthenticatedApiSession }
+  | { error: NextResponse }
+> {
+  const token = await getAuthToken();
+
+  if (!token) {
+    return {
+      error: NextResponse.json(
+        { success: false, message: "Oturum bulunamadı." },
+        { status: 401 }
+      ),
+    };
+  }
+
+  const payload = verifyToken<SessionAuthPayload>(token);
+
+  if (!payload?.userId) {
+    return {
+      error: NextResponse.json(
+        { success: false, message: "Oturum geçersiz." },
+        { status: 401 }
+      ),
+    };
+  }
+
+  const user = await db.user.findUnique({
+    where: { id: payload.userId },
+  });
+
+  if (!user || user.status !== "ACTIVE") {
+    return {
+      error: NextResponse.json(
+        { success: false, message: "Kullanıcı bulunamadı." },
+        { status: 401 }
+      ),
+    };
+  }
+
+  return {
+    session: {
+      userId: payload.userId,
+      companyId: payload.companyId ?? null,
+      user,
+    },
+  };
+}
+
+export async function getOptionalAuthenticatedApiSession(): Promise<AuthenticatedApiSession | null> {
+  const token = await getAuthToken();
+  if (!token) return null;
+
+  const payload = verifyToken<SessionAuthPayload>(token);
+  if (!payload?.userId) return null;
+
+  const user = await db.user.findUnique({
+    where: { id: payload.userId },
+  });
+
+  if (!user || user.status !== "ACTIVE") return null;
+
+  return {
+    userId: user.id,
+    companyId: payload.companyId ?? null,
+    user,
+  };
+}
+
 export function getModuleForPath(pathname: string): AppModule | null {
   if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) {
     return "dashboard";
@@ -273,6 +433,9 @@ export function getModuleForPath(pathname: string): AppModule | null {
   if (pathname === "/sales" || pathname.startsWith("/sales/")) return "sales";
   if (pathname === "/customers" || pathname.startsWith("/customers/")) {
     return "customers";
+  }
+  if (pathname === "/suppliers" || pathname.startsWith("/suppliers/")) {
+    return "suppliers";
   }
   if (pathname === "/directory" || pathname.startsWith("/directory/")) {
     return "directory";

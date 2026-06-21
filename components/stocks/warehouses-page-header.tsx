@@ -4,8 +4,15 @@ import Link from "next/link";
 import { useState } from "react";
 import { ArrowLeft, Plus } from "lucide-react";
 import { WarehouseCreateModal } from "@/components/stocks/warehouse-create-modal";
+import { PRODUCTS_STOCKS_PATH } from "@/lib/stocks-page-utils";
 
-export function WarehousesPageHeader() {
+type WarehousesPageHeaderProps = {
+  backHref?: string;
+};
+
+export function WarehousesPageHeader({
+  backHref = PRODUCTS_STOCKS_PATH,
+}: WarehousesPageHeaderProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -14,15 +21,15 @@ export function WarehousesPageHeader() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-start gap-4">
             <Link
-              href="/stocks"
+              href={backHref}
               className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200"
             >
               <ArrowLeft size={18} />
             </Link>
             <div>
-              <h1 className="text-2xl font-black text-[#0f1f4d]">Depolar</h1>
+              <h2 className="text-lg font-black text-[#0f1f4d]">Depolar</h2>
               <p className="mt-1 text-sm text-slate-500">
-                Depo, raf ve stok dağılımınızı yönetin.
+                Yeni depo ekleyin veya mevcut depoları düzenleyin.
               </p>
             </div>
           </div>

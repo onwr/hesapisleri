@@ -3,6 +3,7 @@ import {
   CompanyUsersError,
   removeCompanyUser,
   updateCompanyUserRole,
+  updateCompanyUserStatus,
 } from "@/lib/company-users-service";
 import { changeCompanyUserRoleSchema } from "@/lib/company-users-utils";
 import { requireApiModuleAccess } from "@/lib/module-access";
@@ -35,16 +36,37 @@ export async function PATCH(req: Request, context: RouteContext) {
 
     const { companyUserId } = await context.params;
 
-    const user = await updateCompanyUserRole({
-      companyId,
-      userId,
-      companyUserId,
-      role: parsed.data.role,
-    });
+    let user;
+    if (parsed.data.role) {
+      user = await updateCompanyUserRole({
+        companyId,
+        userId,
+        companyUserId,
+        role: parsed.data.role,
+      });
+    }
+
+    if (parsed.data.status) {
+      user = await updateCompanyUserStatus({
+        companyId,
+        userId,
+        companyUserId,
+        status: parsed.data.status,
+      });
+    }
+
+    if (!user) {
+      return NextResponse.json(
+        { success: false, message: "Güncellenecek alan belirtilmelidir." },
+        { status: 400 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
-      message: "Kullanıcı rolü güncellendi.",
+      message: parsed.data.status
+        ? "Kullanıcı durumu güncellendi."
+        : "Kullanıcı rolü güncellendi.",
       data: { user },
     });
   } catch (error) {

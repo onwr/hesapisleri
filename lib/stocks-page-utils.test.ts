@@ -90,7 +90,8 @@ describe("stocks-page-utils", () => {
     assert.equal(isLowStock(6, 5), false);
     assert.equal(isLowStock(5, 5), true);
     assert.equal(isLowStock(4, 5), true);
-    assert.equal(isLowStock(0, 5), false);
+    assert.equal(isLowStock(0, 5), true);
+    assert.equal(isLowStock(-2, 5), true);
   });
 
   it("mapProductToStockRow minStock kullanır", () => {

@@ -13,7 +13,7 @@ import {
   canManageUsers,
 } from "../lib/permission-utils";
 import { db } from "../lib/prisma";
-import { getSidebarMenuItems } from "../lib/sidebar-menu";
+import { getSidebarVisibleHrefs } from "../lib/sidebar-menu";
 import { activeSaleStatusFilter } from "../lib/sale-query-utils";
 import {
   SaleStockValidationError,
@@ -356,33 +356,26 @@ async function testPosStockGuard(ctx: DemoContext) {
     select: { id: true, name: true, stock: true },
   });
 
-  try {
-    await db.$transaction(async (tx) => {
-      await validateSaleItemsStock(tx, ctx.companyId, [
-        {
-          productId: product.id,
-          quantity: product.stock + 50,
-          name: product.name,
-        },
-      ]);
-    });
-    fail("Stok aşımı engeli", "hata fırlatılmadı");
-  } catch (error) {
-    if (error instanceof SaleStockValidationError) {
-      pass("Stok aşımı engeli", error.message.slice(0, 60));
-    } else {
-      fail("Stok aşımı engeli", String(error));
-    }
-  }
+  const warnings = await db.$transaction(async (tx) =>
+    validateSaleItemsStock(tx, ctx.companyId, [
+      {
+        productId: product.id,
+        quantity: product.stock + 50,
+        name: product.name,
+      },
+    ])
+  );
+
+  assertTrue("Stok aşımı uyarı üretmeli", warnings.length > 0);
+  pass("Stok aşımı uyarısı", warnings[0]?.message.slice(0, 60) ?? "ok");
 
   const posProducts = await db.product.count({
     where: {
       companyId: ctx.companyId,
       status: "ACTIVE",
-      stock: { gt: 0 },
     },
   });
-  assertMin("POS için aktif stoklu ürün", posProducts, 20);
+  assertMin("POS için aktif ürün", posProducts, 20);
 }
 
 async function testAiAssistant(ctx: DemoContext) {
@@ -448,8 +441,8 @@ async function testRbac(ctx: DemoContext) {
   );
   assertTrue("STAFF kullanıcı yönetemez", !canManageUsers("STAFF"));
 
-  const accountantMenu = getSidebarMenuItems("ACCOUNTANT").map((item) => item.href);
-  const staffMenu = getSidebarMenuItems("STAFF").map((item) => item.href);
+  const accountantMenu = getSidebarVisibleHrefs("ACCOUNTANT");
+  const staffMenu = getSidebarVisibleHrefs("STAFF");
 
   assertTrue(
     "ACCOUNTANT sidebar'da POS yok",

@@ -3,7 +3,7 @@
 import type { FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   ArrowDownLeft,
   ArrowLeft,
@@ -30,16 +30,27 @@ type AccountOption = {
   balance: number;
 };
 
+type SupplierOption = {
+  id: string;
+  label: string;
+};
+
 type NewExpenseFormProps = {
   accounts: AccountOption[];
   categories: string[];
+  initialSupplierId?: string;
 };
 
-export function NewExpenseForm({ accounts, categories }: NewExpenseFormProps) {
+export function NewExpenseForm({
+  accounts,
+  categories,
+  initialSupplierId = "",
+}: NewExpenseFormProps) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [supplierOptions, setSupplierOptions] = useState<SupplierOption[]>([]);
 
   const [form, setForm] = useState({
     title: "",
@@ -47,12 +58,24 @@ export function NewExpenseForm({ accounts, categories }: NewExpenseFormProps) {
       ? "Diğer"
       : (categories[0] ?? ""),
     supplier: "",
+    supplierId: initialSupplierId,
     amount: "",
     date: new Date().toISOString().split("T")[0],
     note: "",
     paymentStatus: "UNPAID" as ExpensePaymentStatus,
     accountId: "",
   });
+
+  useEffect(() => {
+    fetch("/api/suppliers/options")
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success) {
+          setSupplierOptions(data.data ?? []);
+        }
+      })
+      .catch(() => undefined);
+  }, []);
 
   const selectedAccount = useMemo(
     () => accounts.find((account) => account.id === form.accountId),
@@ -105,6 +128,7 @@ export function NewExpenseForm({ accounts, categories }: NewExpenseFormProps) {
           title: form.title.trim(),
           category: form.category.trim() || undefined,
           supplier: form.supplier.trim() || undefined,
+          supplierId: form.supplierId || undefined,
           amount: parsedAmount,
           date: form.date,
           note: form.note.trim() || undefined,
@@ -205,13 +229,27 @@ export function NewExpenseForm({ accounts, categories }: NewExpenseFormProps) {
                   </select>
                 </Field>
 
-                <Field label="Tedarikçi / Firma">
-                  <input
-                    value={form.supplier}
-                    onChange={(event) => updateForm("supplier", event.target.value)}
+                <Field label="Tedarikçi">
+                  <select
+                    value={form.supplierId}
+                    onChange={(event) => updateForm("supplierId", event.target.value)}
                     className={inputClass(false)}
-                    placeholder="Opsiyonel"
-                  />
+                  >
+                    <option value="">Tedarikçi seçin (opsiyonel)</option>
+                    {supplierOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  {!form.supplierId ? (
+                    <input
+                      value={form.supplier}
+                      onChange={(event) => updateForm("supplier", event.target.value)}
+                      className={`${inputClass(false)} mt-2`}
+                      placeholder="Veya serbest metin girin"
+                    />
+                  ) : null}
                 </Field>
               </div>
 

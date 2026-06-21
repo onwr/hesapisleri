@@ -1,20 +1,13 @@
 import { NextResponse } from "next/server";
+import { requireApiModuleAccess } from "@/lib/module-access";
 import { z } from "zod";
 import { createNotification } from "@/lib/notification-service";
 import { db } from "@/lib/prisma";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import {
   StorageConfigError,
   StorageUploadError,
   resolveUploadedImageUrl,
 } from "@/lib/storage/cdn";
-
-type AuthPayload = {
-  userId: string;
-  email: string;
-  role: string;
-  companyId: string | null;
-};
 
 const CDN_COMPANY_FOLDER = "hesapisleri/companies";
 
@@ -34,30 +27,11 @@ const updateCompanySchema = z.object({
 
 export async function PUT(req: Request) {
   try {
-    const token = await getAuthToken();
+    const auth = await requireApiModuleAccess("settings");
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Oturum bulunamadı.",
-        },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.userId || !payload.companyId) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Oturum geçersiz.",
-        },
-        { status: 401 }
-      );
-    }
-
+    const companyId = auth.companyId;
+    const userId = auth.userId;
     const body = await req.json();
     const parsed = updateCompanySchema.safeParse(body);
 
@@ -77,8 +51,8 @@ export async function PUT(req: Request) {
 
     const companyUser = await db.companyUser.findFirst({
       where: {
-        userId: payload.userId,
-        companyId: payload.companyId,
+        userId: userId,
+        companyId: companyId,
       },
     });
 
@@ -95,13 +69,13 @@ export async function PUT(req: Request) {
     const resolvedLogoUrl = logoUrl
       ? await resolveUploadedImageUrl(
           logoUrl,
-          `${CDN_COMPANY_FOLDER}/${payload.companyId}`
+          `${CDN_COMPANY_FOLDER}/${companyId}`
         )
       : null;
 
     const company = await db.company.update({
       where: {
-        id: payload.companyId,
+        id: companyId,
       },
       data: {
         name,
@@ -117,7 +91,7 @@ export async function PUT(req: Request) {
     await db.activityLog.create({
       data: {
         companyId: company.id,
-        userId: payload.userId,
+        userId: userId,
         action: "UPDATE",
         module: "company",
         message: "Firma bilgileri güncellendi.",
@@ -126,7 +100,7 @@ export async function PUT(req: Request) {
 
     await createNotification({
       companyId: company.id,
-      userId: payload.userId,
+      userId: userId,
       type: "SUCCESS",
       category: "SYSTEM",
       module: "settings",

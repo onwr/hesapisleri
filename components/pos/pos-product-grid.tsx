@@ -1,12 +1,11 @@
 "use client";
 
-import { Plus, ShoppingBag } from "lucide-react";
+import { Plus, ShoppingBag, Sparkles } from "lucide-react";
 import { ProductThumbnail } from "@/components/products/product-thumbnail";
 import { POS_PRODUCT_CARD_CLASS } from "@/components/pos/pos-ui-tokens";
 import {
   getPosProductStock,
-  isPosProductLowStock,
-  isPosProductOutOfStock,
+  getPosStockBadge,
   type PosGridProduct,
 } from "@/lib/pos-page-utils";
 
@@ -16,6 +15,26 @@ type PosProductGridProps = {
   formatMoney: (value: number) => string;
   showWarehouseStock?: boolean;
 };
+
+function getProductCardAccent(productType?: "STOCK" | "SERVICE") {
+  if (productType === "SERVICE") {
+    return {
+      topBar: "bg-linear-to-r from-cyan-500 to-blue-500",
+      addButton:
+        "bg-linear-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600",
+      typeBadge: "bg-cyan-50 text-cyan-700",
+      typeLabel: "Hizmet",
+    };
+  }
+
+  return {
+    topBar: "bg-linear-to-r from-emerald-500 to-teal-500",
+    addButton:
+      "bg-linear-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600",
+    typeBadge: "bg-emerald-50 text-emerald-700",
+    typeLabel: "Ürün",
+  };
+}
 
 export function PosProductGrid({
   products,
@@ -43,40 +62,44 @@ export function PosProductGrid({
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
       {products.map((product) => {
         const displayStock = getPosProductStock(product, showWarehouseStock);
-        const outOfStock = isPosProductOutOfStock(product, showWarehouseStock);
-        const lowStock = isPosProductLowStock(product, showWarehouseStock);
+        const stockBadge = getPosStockBadge(displayStock, product.productType);
+        const accent = getProductCardAccent(product.productType);
 
         return (
-          <article
-            key={product.id}
-            className={[
-              POS_PRODUCT_CARD_CLASS,
-              outOfStock ? "cursor-not-allowed opacity-60" : "",
-            ].join(" ")}
-          >
-            <div className="mb-3 flex items-start justify-between gap-3">
+          <article key={product.id} className={POS_PRODUCT_CARD_CLASS}>
+            <div className={["absolute inset-x-0 top-0 h-1", accent.topBar].join(" ")} />
+
+            <div className="mb-3 flex items-start justify-between gap-3 pt-1">
               <ProductThumbnail
                 imageUrl={product.imageUrl}
                 alt={product.name}
                 size={52}
                 iconSize={22}
                 rounded="2xl"
-                dimmed={outOfStock}
                 className="border border-slate-200/70 bg-blue-50/50"
               />
 
-              <span
-                className={[
-                  "rounded-full px-2.5 py-1 text-[10px] font-black",
-                  outOfStock
-                    ? "bg-slate-100 text-slate-500"
-                    : lowStock
-                      ? "bg-amber-50 text-amber-700"
-                      : "bg-emerald-50 text-emerald-700",
-                ].join(" ")}
-              >
-                {outOfStock ? "Stok yok" : `${displayStock} stok`}
-              </span>
+              <div className="flex flex-col items-end gap-1.5">
+                <span
+                  className={[
+                    "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black",
+                    accent.typeBadge,
+                  ].join(" ")}
+                >
+                  {product.productType === "SERVICE" ? (
+                    <Sparkles size={10} />
+                  ) : null}
+                  {accent.typeLabel}
+                </span>
+                <span
+                  className={[
+                    "rounded-full px-2.5 py-1 text-[10px] font-black",
+                    stockBadge.className,
+                  ].join(" ")}
+                >
+                  {stockBadge.label}
+                </span>
+              </div>
             </div>
 
             <p className="line-clamp-2 font-extrabold text-[#0f1f4d]">
@@ -102,11 +125,13 @@ export function PosProductGrid({
               <button
                 type="button"
                 onClick={() => onAdd(product)}
-                disabled={outOfStock}
-                className="inline-flex h-10 items-center gap-1.5 rounded-2xl bg-[#0f1f4d] px-3 text-xs font-black text-white transition hover:bg-[#162a5c] disabled:bg-slate-200 disabled:text-slate-500"
+                className={[
+                  "inline-flex h-10 items-center gap-1.5 rounded-2xl px-3 text-xs font-black text-white transition",
+                  accent.addButton,
+                ].join(" ")}
               >
                 <Plus size={14} />
-                Sepete Ekle
+                Ekle
               </button>
             </div>
           </article>

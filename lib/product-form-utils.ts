@@ -3,12 +3,36 @@ import {
   formatMoneyInput,
   parseProductMoneyInput,
 } from "@/lib/money-input-utils";
+import {
+  normalizeServiceProductFields,
+  parseProductType,
+  type ProductTypeKey,
+} from "@/lib/product-type-utils";
 
 export const PRODUCT_UNIT_TYPES = [
   "PIECE",
   "KG",
   "METER",
   "LITER",
+  "PACK",
+  "HOUR",
+  "DAY",
+  "JOB",
+] as const;
+
+export const STOCK_PRODUCT_UNIT_TYPES = [
+  "PIECE",
+  "KG",
+  "METER",
+  "LITER",
+  "PACK",
+] as const;
+
+export const SERVICE_PRODUCT_UNIT_TYPES = [
+  "PIECE",
+  "HOUR",
+  "DAY",
+  "JOB",
   "PACK",
 ] as const;
 
@@ -20,16 +44,20 @@ export const PRODUCT_UNIT_LABELS: Record<ProductUnitType, string> = {
   METER: "Metre",
   LITER: "Litre",
   PACK: "Paket",
+  HOUR: "Saat",
+  DAY: "Gün",
+  JOB: "İşlem",
 };
 
 export const DEFAULT_CATEGORY_NAME = "Genel";
 export const DEFAULT_MIN_STOCK = 10;
 
 export const productFormSchema = z.object({
+  productType: z.enum(["STOCK", "SERVICE"]).default("STOCK"),
   name: z.string().min(2, "Ürün adı en az 2 karakter olmalıdır."),
   categoryName: z.string().optional(),
   sku: z.string().optional(),
-  barcode: z.string().optional(),
+  barcode: z.string().nullable().optional(),
   description: z.string().optional(),
   imageUrl: z.string().nullable().optional(),
   status: z.enum(["ACTIVE", "PASSIVE"]).default("ACTIVE"),
@@ -47,6 +75,7 @@ export const productUpdateSchema = productFormSchema.omit({ stock: true });
 export type ProductFormInput = z.infer<typeof productFormSchema>;
 
 export type ProductFormValues = {
+  productType: ProductTypeKey;
   name: string;
   categoryName: string;
   sku: string;
@@ -64,6 +93,7 @@ export type ProductFormValues = {
 };
 
 export const emptyProductFormValues: ProductFormValues = {
+  productType: "STOCK",
   name: "",
   categoryName: DEFAULT_CATEGORY_NAME,
   sku: "",
@@ -95,12 +125,33 @@ export function normalizeCategoryName(value?: string | null) {
   return trimmed && trimmed.length > 0 ? trimmed : DEFAULT_CATEGORY_NAME;
 }
 
-export function buildProductPayload(form: ProductFormValues): ProductFormInput {
-  return {
+export type ProductBarcodePayloadMode = "omit" | "include" | "clear";
+
+export type BuildProductPayloadOptions = {
+  barcodeMode?: ProductBarcodePayloadMode;
+};
+
+export function resolveInitialBarcodePayloadMode(
+  mode: "create" | "edit",
+  barcode?: string | null
+): ProductBarcodePayloadMode {
+  if (mode === "create") {
+    return "omit";
+  }
+
+  return normalizeOptionalText(barcode) ? "include" : "omit";
+}
+
+export function buildProductPayload(
+  form: ProductFormValues,
+  options?: BuildProductPayloadOptions
+): ProductFormInput {
+  const productType = parseProductType(form.productType);
+  const payload: ProductFormInput = {
+    productType,
     name: form.name.trim(),
     categoryName: normalizeCategoryName(form.categoryName),
     sku: normalizeOptionalText(form.sku) ?? undefined,
-    barcode: normalizeOptionalText(form.barcode) ?? undefined,
     description: normalizeOptionalText(form.description) ?? undefined,
     imageUrl: normalizeImageUrl(form.imageUrl),
     status: form.status,
@@ -112,6 +163,29 @@ export function buildProductPayload(form: ProductFormValues): ProductFormInput {
     sellPrice: parseProductMoneyInput(form.sellPrice),
     vatRate: Number(form.vatRate || 20),
   };
+
+  const barcodeMode = options?.barcodeMode ?? "include";
+
+  if (productType === "SERVICE") {
+    return normalizeServiceProductFields({
+      ...payload,
+      barcode: null,
+    });
+  }
+
+  if (barcodeMode === "clear") {
+    payload.barcode = null;
+  } else if (barcodeMode === "include") {
+    payload.barcode = normalizeOptionalText(form.barcode) ?? null;
+  }
+
+  return payload;
+}
+
+export function shouldIncludeBarcodeInJsonPayload(
+  barcodeMode: ProductBarcodePayloadMode
+) {
+  return barcodeMode === "include" || barcodeMode === "clear";
 }
 
 export function mapProductFieldErrors(
@@ -155,6 +229,12 @@ export function formatProfitMargin(margin: number) {
   }).format(margin)}`;
 }
 
+export function getUnitTypesForProductType(productType: ProductTypeKey) {
+  return productType === "SERVICE"
+    ? SERVICE_PRODUCT_UNIT_TYPES
+    : STOCK_PRODUCT_UNIT_TYPES;
+}
+
 export function getStockStatusLabel(stock: number, minStock: number) {
   if (stock <= 0) {
     return {
@@ -177,6 +257,7 @@ export function getStockStatusLabel(stock: number, minStock: number) {
 }
 
 export function productToFormValues(product: {
+  productType?: ProductTypeKey | string | null;
   name: string;
   sku: string | null;
   barcode: string | null;
@@ -193,6 +274,7 @@ export function productToFormValues(product: {
   category?: { name: string } | null;
 }): ProductFormValues {
   return {
+    productType: parseProductType(product.productType),
     name: product.name,
     categoryName: product.category?.name ?? DEFAULT_CATEGORY_NAME,
     sku: product.sku ?? "",

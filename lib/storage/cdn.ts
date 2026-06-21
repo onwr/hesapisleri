@@ -2,12 +2,31 @@
  * CDN Storage Service — resimleri uzak CDN (upload.php) üzerine yükler.
  */
 
-export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-export const ALLOWED_IMAGE_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-]);
+import "server-only";
+
+import { randomUUID } from "node:crypto";
+import {
+  ImageOptimizerError,
+  optimizeUploadedImage,
+} from "@/lib/uploads/image-optimizer";
+import {
+  ALLOWED_IMAGE_TYPES,
+  ALLOWED_TAX_CERTIFICATE_TYPES,
+  MAX_IMAGE_BYTES,
+  MAX_TAX_CERTIFICATE_BYTES,
+  validateImageFile,
+  validateTaxCertificateFile,
+} from "@/lib/storage/upload-validation";
+
+export { ImageOptimizerError } from "@/lib/uploads/image-optimizer";
+export {
+  ALLOWED_IMAGE_TYPES,
+  ALLOWED_TAX_CERTIFICATE_TYPES,
+  MAX_IMAGE_BYTES,
+  MAX_TAX_CERTIFICATE_BYTES,
+  validateImageFile,
+  validateTaxCertificateFile,
+} from "@/lib/storage/upload-validation";
 
 export class StorageConfigError extends Error {
   constructor(message = "CDN yapılandırması eksik") {
@@ -80,25 +99,41 @@ async function uploadBufferToCdn(
   return null;
 }
 
-export function validateImageFile(file: File) {
-  if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-    throw new Error("Sadece JPEG, PNG veya WebP yükleyebilirsiniz");
-  }
-  if (file.size > MAX_IMAGE_BYTES) {
-    throw new Error("Dosya boyutu 5MB'dan küçük olmalıdır");
-  }
-}
-
 export async function saveFileFromBuffer(
   buffer: Buffer,
   mimeType: string,
   folder: string,
-  fileName?: string
+  fileName?: string,
+  options?: { skipOptimization?: boolean }
 ): Promise<string | null> {
   try {
-    return await uploadBufferToCdn(buffer, mimeType, folder, fileName);
+    let uploadBuffer = buffer;
+    let uploadMime = mimeType;
+    let uploadName = fileName;
+
+    if (!options?.skipOptimization && ALLOWED_IMAGE_TYPES.has(mimeType)) {
+      try {
+        const optimized = await optimizeUploadedImage(buffer);
+        uploadBuffer = optimized.buffer;
+        uploadMime = optimized.mimeType;
+        uploadName = fileName?.replace(/\.[^.]+$/, ".webp") ?? `${randomUUID()}.webp`;
+      } catch (error) {
+        if (error instanceof ImageOptimizerError) {
+          throw error;
+        }
+        throw new ImageOptimizerError("Görsel optimize edilemedi.");
+      }
+    }
+
+    return await uploadBufferToCdn(
+      uploadBuffer,
+      uploadMime,
+      folder,
+      uploadName
+    );
   } catch (error) {
     if (error instanceof StorageConfigError) throw error;
+    if (error instanceof ImageOptimizerError) throw error;
     console.error("Storage save error:", error);
     return null;
   }
@@ -110,6 +145,16 @@ export async function saveFileFromWebFile(
   fileName?: string
 ): Promise<string | null> {
   validateImageFile(file);
+  const buffer = Buffer.from(await file.arrayBuffer());
+  return saveFileFromBuffer(buffer, file.type, folder, fileName);
+}
+
+export async function saveTaxCertificateFromWebFile(
+  file: File,
+  folder: string,
+  fileName?: string
+): Promise<string | null> {
+  validateTaxCertificateFile(file);
   const buffer = Buffer.from(await file.arrayBuffer());
   return saveFileFromBuffer(buffer, file.type, folder, fileName);
 }
@@ -142,7 +187,14 @@ export async function saveFile(
       throw new Error("Dosya boyutu 5MB'dan küçük olmalıdır");
     }
 
-    return await uploadBufferToCdn(buffer, type, folder);
+    const optimized = await optimizeUploadedImage(buffer);
+
+    return await uploadBufferToCdn(
+      optimized.buffer,
+      optimized.mimeType,
+      folder,
+      `${randomUUID()}.webp`
+    );
   } catch (error) {
     if (error instanceof StorageConfigError) throw error;
     console.error("Storage save error:", error);

@@ -1,18 +1,19 @@
 import { NextResponse } from "next/server";
+import { requireApiModuleAccess } from "@/lib/module-access";
 import { z } from "zod";
 import { createNotification } from "@/lib/notification-service";
 import { db } from "@/lib/prisma";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import {
   generateInvoiceNo,
   getMockGibMeta,
   resolveInvoiceStatusForType,
 } from "@/lib/invoices/mock-gib";
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
+import { persistInvoiceFinancialSnapshot } from "@/lib/invoice-snapshot-service";
+import {
+  buildInvoiceSnapshotData,
+  saleItemToInvoiceLineInput,
+} from "@/lib/invoice-snapshot-utils";
+import { invalidateDashboardCache } from "@/lib/dashboard-cache-invalidation";
 
 const createFromSaleSchema = z.object({
   saleId: z.string().min(1, "Satış seçilmelidir."),
@@ -24,24 +25,11 @@ const createFromSaleSchema = z.object({
 
 export async function POST(req: Request) {
   try {
-    const token = await getAuthToken();
+    const auth = await requireApiModuleAccess("invoices");
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.userId || !payload.companyId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
-
+    const companyId = auth.companyId;
+    const userId = auth.userId;
     const body = await req.json();
     const parsed = createFromSaleSchema.safeParse(body);
 
@@ -62,10 +50,13 @@ export async function POST(req: Request) {
     const sale = await db.sale.findFirst({
       where: {
         id: saleId,
-        companyId: payload.companyId,
+        companyId: companyId,
       },
       include: {
         invoice: true,
+        items: {
+          orderBy: { createdAt: "asc" },
+        },
       },
     });
 
@@ -86,31 +77,49 @@ export async function POST(req: Request) {
       );
     }
 
+    const lineItems = sale.items.map((item) => saleItemToInvoiceLineInput(item));
+    const snapshot = buildInvoiceSnapshotData(lineItems, Number(sale.discount));
     const gib = getMockGibMeta(type, status);
 
-    const invoice = await db.invoice.create({
-      data: {
-        companyId: payload.companyId,
-        customerId: sale.customerId,
-        saleId: sale.id,
-        invoiceNo: generateInvoiceNo(type),
-        type,
-        status,
-        total: sale.total,
-        paymentStatus: sale.paymentStatus,
-        gibStatus: gib.gibStatus,
-        gibMessage: gib.gibMessage,
-      },
-      include: {
-        customer: true,
-        sale: true,
-      },
+    const invoice = await db.$transaction(async (tx) => {
+      const createdInvoice = await tx.invoice.create({
+        data: {
+          companyId: companyId!,
+          customerId: sale.customerId,
+          saleId: sale.id,
+          invoiceNo: generateInvoiceNo(type),
+          type,
+          status,
+          subtotal: snapshot.header.subtotal,
+          totalDiscount: snapshot.header.totalDiscount,
+          taxableAmount: snapshot.header.taxableAmount,
+          totalVat: snapshot.header.totalVat,
+          total: snapshot.header.grandTotal,
+          financialSnapshotStatus: "COMPLETE",
+          paymentStatus: sale.paymentStatus,
+          paidAmount: sale.paidAmount,
+          gibStatus: gib.gibStatus,
+          gibMessage: gib.gibMessage,
+        },
+        include: {
+          customer: true,
+          sale: true,
+        },
+      });
+
+      await persistInvoiceFinancialSnapshot(tx, {
+        invoiceId: createdInvoice.id,
+        items: lineItems,
+        invoiceDiscountAmount: Number(sale.discount),
+      });
+
+      return createdInvoice;
     });
 
     await db.activityLog.create({
       data: {
-        companyId: payload.companyId,
-        userId: payload.userId,
+        companyId: companyId,
+        userId: userId,
         action: "CREATE",
         module: "invoices",
         message: `${invoice.invoiceNo} satıştan fatura oluşturuldu.`,
@@ -118,8 +127,8 @@ export async function POST(req: Request) {
     });
 
     await createNotification({
-      companyId: payload.companyId,
-      userId: payload.userId,
+      companyId: companyId,
+      userId: userId,
       type: status === "ERROR" ? "WARNING" : "SUCCESS",
       category: "INVOICES",
       module: "invoices",
@@ -129,6 +138,8 @@ export async function POST(req: Request) {
       title: "Satıştan fatura oluşturuldu",
       message: `${invoice.invoiceNo} numaralı fatura kaydı oluşturuldu.`,
     });
+
+    invalidateDashboardCache(companyId, "invoice-create-from-sale");
 
     return NextResponse.json({
       success: true,

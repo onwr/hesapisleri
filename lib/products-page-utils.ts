@@ -20,6 +20,7 @@ export type ProductTableRow = {
   status: string;
   imageUrl: string | null;
   isService: boolean;
+  productType: "STOCK" | "SERVICE";
   mappedChannels: Array<"TRENDYOL" | "HEPSIBURADA">;
 };
 
@@ -85,10 +86,15 @@ export function parseSearchQuery(value?: string | null) {
 }
 
 export function isServiceProduct(product: {
-  name: string;
+  productType?: string | null;
+  name?: string;
   description?: string | null;
   categoryName?: string | null;
 }) {
+  if (product.productType) {
+    return product.productType === "SERVICE";
+  }
+
   const haystack = [product.name, product.description, product.categoryName]
     .filter(Boolean)
     .join(" ")
@@ -174,6 +180,10 @@ export {
 } from "@/lib/format-utils";
 
 export function getStockLevelStyle(stock: number) {
+  if (stock < 0) {
+    return "text-rose-700";
+  }
+
   if (stock <= 0) {
     return "text-rose-500";
   }

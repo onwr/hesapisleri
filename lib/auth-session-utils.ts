@@ -1,5 +1,9 @@
 import type { NextResponse } from "next/server";
-import { signToken } from "@/lib/auth";
+import { signSessionToken } from "@/lib/auth/jwt";
+import {
+  AUTH_COOKIE_NAME,
+  getAuthCookieOptions,
+} from "@/lib/auth/auth-cookie";
 
 export type AuthTokenPayload = {
   userId: string;
@@ -8,20 +12,12 @@ export type AuthTokenPayload = {
   companyId: string | null;
 };
 
-export function getAuthCookieOptions() {
-  return {
-    httpOnly: true,
-    sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-  };
-}
+export { getAuthCookieOptions };
 
 export function attachAuthCookie(
   response: NextResponse,
   payload: AuthTokenPayload
 ) {
-  const token = signToken(payload);
-  response.cookies.set("hesapisleri_token", token, getAuthCookieOptions());
+  const token = signSessionToken(payload);
+  response.cookies.set(AUTH_COOKIE_NAME, token, getAuthCookieOptions());
 }

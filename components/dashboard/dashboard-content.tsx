@@ -10,20 +10,25 @@ import {
   Building2,
   CalendarClock,
   Clock3,
-  CreditCard,
   FileText,
   Lightbulb,
-  Package,
   ReceiptText,
   ShoppingCart,
   TrendingUp,
-  Users,
   Wallet,
 } from "lucide-react";
 import { ActionCard } from "@/components/cards/action-card";
 import { StatCard } from "@/components/cards/stat-card";
 import { DashboardIncomeChart } from "@/components/dashboard/dashboard-income-chart";
+import { DashboardExchangeRates } from "@/components/dashboard/dashboard-exchange-rates";
+import { DashboardAiAssistantPanel } from "@/components/dashboard/dashboard-ai-assistant-panel";
+import { DashboardShortcutsPanel } from "@/components/dashboard/dashboard-shortcuts-panel";
+import {
+  DashboardNotificationsPanel,
+  type DashboardNotificationItem,
+} from "@/components/dashboard/dashboard-notifications-panel";
 import { DashboardOnboardingAlert } from "@/components/dashboard/dashboard-onboarding-alert";
+import { DashboardMembershipAlert } from "@/components/dashboard/dashboard-membership-alert";
 import { DashboardSalesChart } from "@/components/dashboard/dashboard-sales-chart";
 import {
   dashboardFadeUp,
@@ -32,6 +37,7 @@ import {
   listStagger,
 } from "@/components/dashboard/dashboard-motion";
 import { formatMoney } from "@/lib/dashboard-metrics";
+import type { ExchangeRateDisplay } from "@/lib/exchange-rate-utils";
 import {
   resolveDashboardStatLinks,
   type DashboardStatLinks,
@@ -41,6 +47,11 @@ type ActivityTagColor = "green" | "blue" | "orange" | "purple" | "slate";
 
 export type DashboardContentProps = {
   showOnboardingAlert: boolean;
+  membershipAlert?: {
+    type: "expired" | "expiring";
+    message: string;
+    actionUrl: string;
+  } | null;
   firstName: string;
   monthLabel: string;
   todaySales: number;
@@ -63,9 +74,12 @@ export type DashboardContentProps = {
   recentActivities: Array<{
     id: string;
     title: string;
+    description: string | null;
+    amountLabel: string | null;
     tag: string;
     tagColor: ActivityTagColor;
     time: string;
+    href?: string | null;
   }>;
   accounts: Array<{
     id: string;
@@ -84,7 +98,16 @@ export type DashboardContentProps = {
     href: string;
   }>;
   statLinks?: DashboardStatLinks;
-  aiInsight: string;
+  aiInsights: string[];
+  actionNotifications: DashboardNotificationItem[];
+  notificationSummary: {
+    unread: number;
+    critical: number;
+    high: number;
+  };
+  exchangeRates: ExchangeRateDisplay | null;
+  userId: string;
+  companyId: string;
 };
 
 const tagColorMap: Record<ActivityTagColor, string> = {
@@ -104,17 +127,9 @@ const listRowClassName =
 const emptyStateClassName =
   "rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-[13px] font-medium text-slate-500";
 
-const shortcuts = [
-  { label: "Yeni Müşteri", href: "/customers/new", icon: Users },
-  { label: "Ürün Listesi", href: "/products", icon: Package },
-  { label: "Fatura Listesi", href: "/invoices", icon: FileText },
-  { label: "Stok Durumu", href: "/stocks", icon: Box },
-  { label: "Cari Hesaplar", href: "/customers", icon: CreditCard },
-  { label: "Kasa Hareketleri", href: "/cash-bank", icon: TrendingUp },
-];
-
 export function DashboardContent({
   showOnboardingAlert,
+  membershipAlert = null,
   monthLabel,
   todaySales,
   todaySalesChange,
@@ -131,7 +146,12 @@ export function DashboardContent({
   accounts,
   upcomingPayments,
   statLinks,
-  aiInsight,
+  aiInsights,
+  actionNotifications,
+  notificationSummary,
+  exchangeRates,
+  userId,
+  companyId,
 }: DashboardContentProps) {
   const links = resolveDashboardStatLinks(statLinks);
 
@@ -159,11 +179,19 @@ export function DashboardContent({
 
   return (
     <motion.div
-      className="space-y-4"
+      className="space-y-4 max-md:min-w-0"
       variants={dashboardStagger}
       initial="hidden"
       animate="visible"
     >
+      {membershipAlert ? (
+        <DashboardMembershipAlert
+          type={membershipAlert.type}
+          message={membershipAlert.message}
+          actionUrl={membershipAlert.actionUrl}
+        />
+      ) : null}
+
       {showOnboardingAlert ? <DashboardOnboardingAlert /> : null}
 
       <motion.section
@@ -276,7 +304,7 @@ export function DashboardContent({
         </motion.div>
       </motion.section>
 
-      <div className="grid gap-4 xl:grid-cols-[1fr_280px] 2xl:grid-cols-[1fr_300px]">
+      <div className="grid gap-4 max-md:min-w-0 xl:grid-cols-[1fr_280px] 2xl:grid-cols-[1fr_300px]">
         <motion.div className="space-y-4" variants={dashboardStagger}>
           <motion.div
             className="grid gap-4 lg:grid-cols-[1.08fr_0.92fr]"
@@ -305,9 +333,78 @@ export function DashboardContent({
                 </Link>
               </div>
 
-              <motion.div className="space-y-3" variants={listStagger}>
+              <div className="space-y-3 md:hidden">
                 {recentActivities.length === 0 ? (
-                  <p className={emptyStateClassName}>Henüz kayıt bulunmuyor</p>
+                  <div className={emptyStateClassName}>
+                    <p className="text-[13px] font-extrabold text-[#0f1f4d]">
+                      Henüz işlem yok
+                    </p>
+                    <p className="mt-1 text-[12px] font-medium text-slate-500">
+                      Satış, gider, ürün veya stok işlemleri yaptıkça burada görünecek.
+                    </p>
+                  </div>
+                ) : (
+                  recentActivities.slice(0, 4).map((activity) => {
+                    const card = (
+                      <div className="rounded-xl border border-slate-200/70 bg-slate-50/70 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p
+                              className="truncate text-[12px] font-extrabold text-[#0f1f4d]"
+                              title={activity.title}
+                            >
+                              {activity.title}
+                            </p>
+                            {activity.description ? (
+                              <p
+                                className="mt-1 truncate text-[11px] font-medium text-slate-500"
+                                title={activity.description}
+                              >
+                                {activity.description}
+                              </p>
+                            ) : null}
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <span
+                                className={`rounded-md px-2 py-1 text-[10px] font-extrabold ${tagColorMap[activity.tagColor]}`}
+                              >
+                                {activity.tag}
+                              </span>
+                              <span className="text-[10.5px] font-medium text-slate-400">
+                                {activity.time}
+                              </span>
+                            </div>
+                          </div>
+
+                          {activity.amountLabel ? (
+                            <span className="shrink-0 whitespace-nowrap text-[12px] font-extrabold text-[#0f1f4d]">
+                              {activity.amountLabel}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+
+                    return activity.href ? (
+                      <Link key={activity.id} href={activity.href} className="block">
+                        {card}
+                      </Link>
+                    ) : (
+                      <div key={activity.id}>{card}</div>
+                    );
+                  })
+                )}
+              </div>
+
+              <motion.div className="hidden space-y-3 md:block" variants={listStagger}>
+                {recentActivities.length === 0 ? (
+                  <div className={emptyStateClassName}>
+                    <p className="text-[13px] font-extrabold text-[#0f1f4d]">
+                      Henüz işlem yok
+                    </p>
+                    <p className="mt-1 text-[12px] font-medium text-slate-500">
+                      Satış, gider, ürün veya stok işlemleri yaptıkça burada görünecek.
+                    </p>
+                  </div>
                 ) : (
                   recentActivities.slice(0, 4).map((activity, index) => {
                     const activityIconStyles = [
@@ -326,12 +423,8 @@ export function DashboardContent({
                             ? Wallet
                             : ReceiptText;
 
-                    return (
-                      <motion.div
-                        key={activity.id}
-                        variants={dashboardFadeUp}
-                        className="grid grid-cols-[34px_1fr_auto_auto] items-center gap-3 rounded-2xl transition hover:bg-slate-50"
-                      >
+                    const rowContent = (
+                      <>
                         <div
                           className={[
                             "flex h-9 w-9 items-center justify-center rounded-full",
@@ -346,15 +439,11 @@ export function DashboardContent({
                             {activity.title}
                           </p>
 
-                          <p className="mt-0.5 truncate text-[10.5px] font-medium leading-4 text-slate-500">
-                            {activity.tag === "Satış"
-                              ? "Müşteri: Mehmet Kaya"
-                              : activity.tag === "Fatura"
-                                ? "Fatura No: FTR-2026-00035"
-                                : activity.tag === "Tahsilat"
-                                  ? "Müşteri: ABC Ltd. Şti."
-                                  : "Açıklama: Kırtasiye Alımı"}
-                          </p>
+                          {activity.description ? (
+                            <p className="mt-0.5 truncate text-[10.5px] font-medium leading-4 text-slate-500">
+                              {activity.description}
+                            </p>
+                          ) : null}
                         </div>
 
                         <span
@@ -364,20 +453,39 @@ export function DashboardContent({
                         </span>
 
                         <div className="min-w-[92px] text-right">
-                          <p className="text-[12px] font-extrabold tracking-[-0.01em] text-[#0f1f4d]">
-                            {activity.tag === "Satış"
-                              ? "₺3.250,00"
-                              : activity.tag === "Fatura"
-                                ? "₺7.800,00"
-                                : activity.tag === "Tahsilat"
-                                  ? "₺5.000,00"
-                                  : "₺350,00"}
-                          </p>
+                          {activity.amountLabel ? (
+                            <p className="text-[12px] font-extrabold tracking-[-0.01em] text-[#0f1f4d]">
+                              {activity.amountLabel}
+                            </p>
+                          ) : null}
 
-                          <p className="mt-0.5 text-[10.5px] font-medium text-slate-400">
+                          <p
+                            className={[
+                              "text-[10.5px] font-medium text-slate-400",
+                              activity.amountLabel ? "mt-0.5" : "",
+                            ].join(" ")}
+                          >
                             {activity.time}
                           </p>
                         </div>
+                      </>
+                    );
+
+                    return activity.href ? (
+                      <Link
+                        key={activity.id}
+                        href={activity.href}
+                        className="grid grid-cols-[34px_1fr_auto_auto] items-center gap-3 rounded-2xl transition hover:bg-slate-50"
+                      >
+                        {rowContent}
+                      </Link>
+                    ) : (
+                      <motion.div
+                        key={activity.id}
+                        variants={dashboardFadeUp}
+                        className="grid grid-cols-[34px_1fr_auto_auto] items-center gap-3 rounded-2xl transition hover:bg-slate-50"
+                      >
+                        {rowContent}
                       </motion.div>
                     );
                   })
@@ -457,6 +565,13 @@ export function DashboardContent({
                 )}
               </motion.div>
             </motion.div>
+          </motion.div>
+
+          <motion.div variants={dashboardFadeUp}>
+            <DashboardNotificationsPanel
+              items={actionNotifications}
+              summary={notificationSummary}
+            />
           </motion.div>
         </motion.div>
 
@@ -547,100 +662,17 @@ export function DashboardContent({
             </motion.div>
           </motion.div>
 
-          {/* Akıllı Asistan */}
-          <motion.div
-            variants={dashboardFadeUp}
-            className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]"
-          >
-            <div className="mb-3 flex items-center gap-2">
-              <Image
-                src="/robot.png"
-                alt="Akıllı Asistan"
-                width={40}
-                height={40}
-                className="h-10 w-10 shrink-0 object-contain"
-              />
-
-              <h3 className="text-[15px] font-extrabold text-[#0f1f4d]">
-                Akıllı Asistan
-              </h3>
-            </div>
-
-            <div className="rounded-2xl bg-linear-to-br from-blue-50 via-slate-50 to-violet-50 p-4">
-              <p className="text-[12px] font-medium leading-5 text-[#24345f]">
-                {aiInsight}
-              </p>
-            </div>
-
-            <Link
-              href="/ai-assistant"
-              className="mt-3 inline-flex h-8 items-center justify-center rounded-lg border border-blue-100 bg-white px-4 text-[11px] font-bold text-blue-600 shadow-sm transition hover:bg-blue-50"
-            >
-              Detayları Gör
-            </Link>
-
-            <div className="mt-4 flex items-center justify-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#0f1f4d]" />
-              <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
-              <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
-              <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
-              <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
-            </div>
+          <motion.div variants={dashboardFadeUp}>
+            <DashboardAiAssistantPanel insights={aiInsights} />
           </motion.div>
 
           {/* Kısayollarım */}
-          <motion.div
-            variants={dashboardFadeUp}
-            className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]"
-          >
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <h3 className="text-[15px] font-extrabold text-[#0f1f4d]">
-                Kısayollarım
-              </h3>
+          <motion.div variants={dashboardFadeUp}>
+            <DashboardShortcutsPanel userId={userId} companyId={companyId} />
+          </motion.div>
 
-              <button
-                type="button"
-                className="text-[11px] font-bold text-blue-600 hover:text-blue-700"
-              >
-                Düzenle
-              </button>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3">
-              {shortcuts.slice(0, 6).map((item, index) => {
-                const Icon = item.icon;
-
-                const shortcutStyles = [
-                  "bg-violet-50 text-violet-600",
-                  "bg-orange-50 text-orange-500",
-                  "bg-blue-50 text-blue-500",
-                  "bg-purple-50 text-purple-500",
-                  "bg-amber-50 text-amber-500",
-                  "bg-emerald-50 text-emerald-600",
-                ];
-
-                return (
-                  <Link
-                    key={item.href + item.label}
-                    href={item.href}
-                    className="group flex flex-col items-center gap-2 text-center"
-                  >
-                    <div
-                      className={[
-                        "flex h-12 w-12 items-center justify-center rounded-2xl transition group-hover:scale-105",
-                        shortcutStyles[index % shortcutStyles.length],
-                      ].join(" ")}
-                    >
-                      <Icon size={21} strokeWidth={2.4} />
-                    </div>
-
-                    <span className="line-clamp-1 text-[10px] font-bold text-[#24345f]">
-                      {item.label}
-                    </span>
-                  </Link>
-                );
-              })}
-            </div>
+          <motion.div variants={dashboardFadeUp}>
+            <DashboardExchangeRates data={exchangeRates} />
           </motion.div>
         </motion.div>
       </div>

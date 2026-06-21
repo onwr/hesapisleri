@@ -727,6 +727,7 @@ async function createCompletedSale(
 
     await applyCustomerDebtFromDocument(
       tx,
+      ctx.companyId,
       input.customerId,
       totals.total,
       payment.paidAmount
@@ -852,6 +853,7 @@ async function createManualInvoice(
 
     await applyCustomerDebtFromDocument(
       tx,
+      ctx.companyId,
       input.customerId,
       input.total,
       payment.paidAmount
@@ -1023,7 +1025,7 @@ async function seedSalesAndInvoices(ctx: DemoContext) {
   });
 
   await db.$transaction(async (tx) => {
-    await applyCustomerCollection(tx, creditCustomerId, 5000);
+    await applyCustomerCollection(tx, ctx.companyId, creditCustomerId, 5000);
   });
 
   await db.activityLog.create({

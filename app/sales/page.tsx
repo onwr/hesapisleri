@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import {
   CalendarDays,
   CheckCircle2,
@@ -12,14 +11,14 @@ import {
   Wallet,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
+import { guardPageModule } from "@/lib/module-access";
+
 import { SalesRowActions } from "@/components/sales/sales-row-actions";
 import {
   SalesTablePagination,
   SalesTableToolbar,
 } from "@/components/sales/sales-table-controls";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import { endOfMonth, startOfMonth } from "@/lib/dashboard-metrics";
-import { db } from "@/lib/prisma";
 import { formatShortDateTime, getSalesPageData } from "@/lib/sales-page-data";
 import {
   normalizeDateRange,
@@ -30,11 +29,6 @@ import {
 } from "@/lib/sales-page-utils";
 import { getInvoiceCollectionAccounts } from "@/lib/invoice-service";
 import { formatMoney } from "@/lib/format-utils";
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
 
 type SalesPageProps = {
   searchParams: Promise<{
@@ -133,35 +127,10 @@ const colorClassMap = {
 };
 
 export default async function SalesPage({ searchParams }: SalesPageProps) {
+  const session = await guardPageModule("sales");
+  const company = session.company;
   const params = await searchParams;
-  const token = await getAuthToken();
-
-  if (!token) redirect("/login");
-
-  const payload = verifyToken<AuthPayload>(token);
-
-  if (!payload?.userId || !payload.companyId) redirect("/login");
-
-  const user = await db.user.findUnique({
-    where: { id: payload.userId },
-    include: {
-      companyUsers: {
-        include: {
-          company: true,
-        },
-      },
-    },
-  });
-
-  if (!user) redirect("/login");
-
-  const company =
-    user.companyUsers.find((item) => item.companyId === payload.companyId)
-      ?.company ?? user.companyUsers[0]?.company;
-
-  if (!company) redirect("/login");
-
-  const now = new Date();
+const now = new Date();
   const activeTab = parseSalesTab(params.tab);
   const currentPage = parsePage(params.page);
   const defaultFrom = startOfMonth(now);

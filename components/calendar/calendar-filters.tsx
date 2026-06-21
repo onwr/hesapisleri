@@ -11,7 +11,6 @@ import {
   Wallet,
 } from "lucide-react";
 import {
-  CALENDAR_FILTER_CARD_CLASS,
   CALENDAR_INPUT_CLASS,
 } from "@/components/calendar/calendar-ui-tokens";
 import type { CalendarExtendedFilterState } from "@/lib/calendar-ui-utils";
@@ -19,6 +18,7 @@ import type { CalendarExtendedFilterState } from "@/lib/calendar-ui-utils";
 type CalendarFiltersProps = {
   filters: CalendarExtendedFilterState;
   onChange: (filters: CalendarExtendedFilterState) => void;
+  embedded?: boolean;
 };
 
 const TYPE_ITEMS: Array<{
@@ -57,8 +57,12 @@ const TYPE_ITEMS: Array<{
   },
 ];
 
-export function CalendarFilters({ filters, onChange }: CalendarFiltersProps) {
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+export function CalendarFilters({
+  filters,
+  onChange,
+  embedded = false,
+}: CalendarFiltersProps) {
+  const [advancedOpen, setAdvancedOpen] = useState(true);
 
   function update<K extends keyof CalendarExtendedFilterState>(
     key: K,
@@ -67,21 +71,8 @@ export function CalendarFilters({ filters, onChange }: CalendarFiltersProps) {
     onChange({ ...filters, [key]: value });
   }
 
-  return (
-    <div className={CALENDAR_FILTER_CARD_CLASS}>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[13px] font-extrabold text-[#0f1f4d]">Filtreler</p>
-        <button
-          type="button"
-          onClick={() => setAdvancedOpen((prev) => !prev)}
-          className="inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-500 transition hover:bg-slate-50 hover:text-[#0f1f4d]"
-        >
-          {advancedOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          {advancedOpen ? "Gelişmiş gizle" : "Gelişmiş filtreler"}
-        </button>
-      </div>
-
-      <div className="space-y-4">
+  const filterBody = (
+    <div className="space-y-4">
         <div>
           <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">
             Etkinlik tipi
@@ -265,6 +256,11 @@ export function CalendarFilters({ filters, onChange }: CalendarFiltersProps) {
           </div>
         ) : null}
       </div>
-    </div>
   );
+
+  if (embedded) {
+    return filterBody;
+  }
+
+  return null;
 }

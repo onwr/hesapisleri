@@ -9,7 +9,12 @@ export type ProductSortKey =
   | "price_asc"
   | "price_desc";
 
-export type ProductStockBadgeKey = "in_stock" | "low_stock" | "out_of_stock" | "service";
+export type ProductStockBadgeKey =
+  | "in_stock"
+  | "low_stock"
+  | "out_of_stock"
+  | "negative_stock"
+  | "service";
 
 export const PRODUCT_STOCK_FILTER_LABELS: Record<ProductStockFilterKey, string> = {
   all: "Tümü",
@@ -33,7 +38,7 @@ export const MARKETPLACE_CHANNEL_LABELS: Record<MarketplaceChannel, string> = {
 
 export const PRODUCT_FORM_SECTIONS = [
   "Temel Bilgiler",
-  "Fiyatlandırma",
+  "Fiyat Bilgileri",
   "Stok & Barkod",
   "Durum",
 ] as const;
@@ -65,6 +70,20 @@ export function parseProductSort(value?: string | null): ProductSortKey {
   return "recent";
 }
 
+export function getProductTypeBadge(productType: "STOCK" | "SERVICE") {
+  if (productType === "SERVICE") {
+    return {
+      label: "Hizmet",
+      className: "bg-indigo-50 text-indigo-700 ring-indigo-100",
+    };
+  }
+
+  return {
+    label: "Stoklu",
+    className: "bg-slate-100 text-slate-700 ring-slate-200",
+  };
+}
+
 export function getProductStockBadge(input: {
   stock: number;
   minStock: number;
@@ -75,6 +94,14 @@ export function getProductStockBadge(input: {
       key: "service",
       label: "Hizmet",
       className: "bg-indigo-50 text-indigo-700 ring-indigo-100",
+    };
+  }
+
+  if (input.stock < 0) {
+    return {
+      key: "negative_stock",
+      label: "Eksi Stok",
+      className: "bg-rose-100 text-rose-800 ring-rose-200",
     };
   }
 
@@ -155,7 +182,7 @@ export function matchesProductStockFilter(
   }
 
   if (filter === "low_stock") {
-    return product.stock > 0 && product.stock <= product.minStock;
+    return product.stock <= product.minStock;
   }
 
   return product.stock <= 0;

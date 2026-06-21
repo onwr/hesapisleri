@@ -1,3 +1,4 @@
+import { calculateProductStockValue } from "@/lib/inventory-value-utils";
 import { db } from "@/lib/prisma";
 import { DEFAULT_CATEGORY_NAME } from "@/lib/product-form-utils";
 import {
@@ -9,13 +10,24 @@ import { isServiceProduct } from "@/lib/products-page-utils";
 
 type ProductForStats = {
   categoryId: string | null;
+  productType?: "STOCK" | "SERVICE" | null;
   name: string;
   description: string | null;
   stock: number;
   minStock: number;
+  buyPrice?: unknown;
   sellPrice: unknown;
   status: string;
 };
+
+function isStatsServiceProduct(product: ProductForStats, categoryName: string) {
+  return isServiceProduct({
+    productType: product.productType,
+    name: product.name,
+    description: product.description,
+    categoryName,
+  });
+}
 
 type ProductCategoryRecord = {
   id: string;
@@ -67,13 +79,9 @@ export function computeCategoryStats(
 
   for (const product of members) {
     totalStock += product.stock;
-    stockValue += product.stock * Number(product.sellPrice);
+    stockValue += calculateProductStockValue(product);
 
-    const service = isServiceProduct({
-      name: product.name,
-      description: product.description,
-      categoryName,
-    });
+    const service = isStatsServiceProduct(product, categoryName);
 
     if (!service && product.stock <= product.minStock) {
       lowStockCount += 1;
@@ -104,11 +112,7 @@ export function summarizeProductCategoriesPage(
       categories.find((category) => category.id === product.categoryId)?.name ??
       DEFAULT_CATEGORY_NAME;
 
-    const service = isServiceProduct({
-      name: product.name,
-      description: product.description,
-      categoryName,
-    });
+    const service = isStatsServiceProduct(product, categoryName);
 
     if (!service && product.stock <= product.minStock) {
       lowStockProducts += 1;
@@ -168,6 +172,8 @@ export async function getProductCategoriesWithStats(companyId: string) {
         description: true,
         stock: true,
         minStock: true,
+        buyPrice: true,
+        productType: true,
         sellPrice: true,
         status: true,
       },

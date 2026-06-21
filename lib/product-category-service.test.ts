@@ -41,7 +41,8 @@ describe("product category stats", () => {
       description: null,
       stock: 3,
       minStock: 2,
-      sellPrice: 1000,
+      buyPrice: 1000,
+      sellPrice: 1500,
       status: "ACTIVE",
     },
     {

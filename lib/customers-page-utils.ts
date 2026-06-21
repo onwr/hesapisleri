@@ -13,6 +13,7 @@ export type CustomerTableRow = {
   phone: string | null;
   email: string | null;
   taxNo: string | null;
+  taxOffice: string | null;
   group: string;
   groupColor: string | null;
   balance: number;

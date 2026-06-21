@@ -30,11 +30,12 @@ describe("notification cron utils", () => {
     const count = countLowStockProducts([
       { stock: 5, minStock: 10, status: "ACTIVE" },
       { stock: 0, minStock: 10, status: "ACTIVE" },
+      { stock: -2, minStock: 10, status: "ACTIVE" },
       { stock: 3, minStock: 5, status: "ACTIVE" },
       { stock: 2, minStock: 5, status: "INACTIVE" },
     ]);
 
-    assert.equal(count, 2);
+    assert.equal(count, 4);
   });
 
   it("filterInvoicesDueOnWindow yarın vadesi dolacak faturaları bulur", () => {
@@ -121,7 +122,7 @@ describe("notification cron utils", () => {
     assert.equal(payload.category, "STOCK");
     assert.equal(payload.module, "stocks");
     assert.equal(payload.entityType, "PRODUCT");
-    assert.equal(payload.actionUrl, "/stocks");
+    assert.equal(payload.actionUrl, "/products/stocks");
     assert.equal(payload.priority, "HIGH");
     assert.equal(payload.dedupeKey, "low-stock:c1:2026-06-08");
   });

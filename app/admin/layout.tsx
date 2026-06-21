@@ -1,14 +1,26 @@
-import { AppShell } from "@/components/layout/app-shell";
-import { ModuleGuardLayout } from "@/lib/guard-layout";
+import { getAuthToken, verifyToken } from "@/lib/auth";
+import { getSuperAdminSession } from "@/lib/admin-auth";
+import { AdminShell } from "@/components/admin/layout/admin-shell";
 
-export default function AdminLayout({
+type AuthPayload = {
+  userId: string;
+  companyId: string | null;
+};
+
+export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { user } = await getSuperAdminSession();
+
+  const token = await getAuthToken();
+  const payload = token ? verifyToken<AuthPayload>(token) : null;
+  const companyId = payload?.companyId ?? null;
+
   return (
-    <ModuleGuardLayout module="admin">
-      <AppShell>{children}</AppShell>
-    </ModuleGuardLayout>
+    <AdminShell user={user} companyId={companyId}>
+      {children}
+    </AdminShell>
   );
 }

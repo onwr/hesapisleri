@@ -1,6 +1,7 @@
 import { createNotification } from "@/lib/notification-service";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/prisma";
+import { invalidateDashboardCache } from "@/lib/dashboard-cache-invalidation";
 import { reverseCustomerDebtFromDocument } from "@/lib/customer-balance-utils";
 import { buildStockReturnEntries } from "@/lib/sale-cancel-stock-utils";
 import {
@@ -153,6 +154,7 @@ export async function reverseSaleEffects(
 
   await reverseCustomerDebtFromDocument(
     tx,
+    companyId,
     sale.customerId,
     Number(sale.total),
     Number(sale.paidAmount)
@@ -234,6 +236,8 @@ export async function cancelSaleById(
   await db.$transaction(async (tx) => {
     await reverseSaleEffects(tx, { sale, companyId, userId });
   });
+
+  invalidateDashboardCache(companyId, "sale-cancel");
 
   return {
     ok: true as const,

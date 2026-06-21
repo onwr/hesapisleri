@@ -1,42 +1,14 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { ArrowLeft, Grid2X2 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
+import { guardPageModule } from "@/lib/module-access";
+
 import { ExpenseCategoriesManager } from "@/components/expenses/expense-categories-manager";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import { getExpenseCategoriesWithStats } from "@/lib/expense-category-service";
-import { db } from "@/lib/prisma";
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
-
 export default async function ExpenseCategoriesPage() {
-  const token = await getAuthToken();
-  if (!token) redirect("/login");
-
-  const payload = verifyToken<AuthPayload>(token);
-  if (!payload?.userId || !payload.companyId) redirect("/login");
-
-  const user = await db.user.findUnique({
-    where: { id: payload.userId },
-    include: {
-      companyUsers: {
-        include: { company: true },
-      },
-    },
-  });
-
-  if (!user) redirect("/login");
-
-  const company =
-    user.companyUsers.find((item) => item.companyId === payload.companyId)
-      ?.company ?? user.companyUsers[0]?.company;
-
-  if (!company) redirect("/login");
-
-  const { categories, summary } = await getExpenseCategoriesWithStats(
+  const session = await guardPageModule("expenses");
+  const company = session.company;
+const { categories, summary } = await getExpenseCategoriesWithStats(
     company.id
   );
 

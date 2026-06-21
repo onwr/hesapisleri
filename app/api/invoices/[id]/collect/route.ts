@@ -4,6 +4,7 @@ import {
   collectInvoicePayment,
   collectInvoiceSchema,
 } from "@/lib/invoice-service";
+import { invalidateDashboardCache } from "@/lib/dashboard-cache-invalidation";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -48,6 +49,8 @@ export async function POST(req: Request, { params }: Props) {
         { status: result.status }
       );
     }
+
+    invalidateDashboardCache(companyId, "invoice-collect");
 
     return NextResponse.json({
       success: true,

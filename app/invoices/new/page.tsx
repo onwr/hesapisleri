@@ -275,20 +275,6 @@ export default function NewInvoicePage() {
   }
 
   function addProductToItems(product: CatalogProduct) {
-    if (product.stock <= 0) {
-      setError(`${product.name} stokta yok.`);
-      return;
-    }
-
-    const usedQty = getUsedProductQuantity(items, product.id);
-
-    if (usedQty >= product.stock) {
-      setError(
-        `${product.name} için stok limiti doldu. Maksimum ${product.stock} adet eklenebilir.`
-      );
-      return;
-    }
-
     const price = Number(product.sellPrice);
 
     setError("");
@@ -840,6 +826,7 @@ export default function NewInvoicePage() {
                           type="number"
                           min="0"
                           step="0.01"
+                          title="Bu değişiklik ürün kartındaki satış fiyatını değiştirmez."
                           className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-[12px] font-medium text-[#24345f] outline-none transition focus:border-blue-200 focus:ring-4 focus:ring-blue-50"
                           placeholder="Birim fiyat"
                         />

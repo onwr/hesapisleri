@@ -63,24 +63,10 @@ export type SerializedInvoiceDetail = {
   canCancel: boolean;
 };
 
-export async function getInvoiceCollectionAccounts(companyId: string) {
-  const accounts = await db.account.findMany({
-    where: { companyId, status: "ACTIVE" },
-    orderBy: [{ type: "asc" }, { name: "asc" }],
-    select: {
-      id: true,
-      name: true,
-      type: true,
-      balance: true,
-    },
-  });
+import { getActiveAccountOptions } from "@/lib/account-read-service";
 
-  return accounts.map((account) => ({
-    id: account.id,
-    name: account.name,
-    type: account.type,
-    balance: Number(account.balance),
-  }));
+export async function getInvoiceCollectionAccounts(companyId: string) {
+  return getActiveAccountOptions(companyId);
 }
 
 export async function getInvoiceDetailForPage(companyId: string, invoiceId: string) {
@@ -297,7 +283,12 @@ export async function collectInvoicePayment(input: {
     }
 
     if (invoice.customerId) {
-      await applyCustomerCollection(tx, invoice.customerId, collectAmount);
+      await applyCustomerCollection(
+        tx,
+        input.companyId,
+        invoice.customerId,
+        collectAmount
+      );
     }
 
     await tx.activityLog.create({

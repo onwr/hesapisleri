@@ -1,3 +1,4 @@
+import { getStockMovementWarning } from "@/lib/stock-policy";
 import { z } from "zod";
 
 export const STOCK_MOVEMENT_REQUEST_TYPES = [
@@ -27,6 +28,7 @@ export const stockMovementRequestSchema = z.object({
   note: z.string().optional(),
   warehouseLocation: z.string().optional(),
   movementDate: z.string().optional(),
+  supplierId: z.string().optional(),
 });
 
 export type StockMovementRequestInput = z.infer<
@@ -37,6 +39,7 @@ export type StockMovementCalculation = {
   newStock: number;
   movementQuantity: number;
   dbType: StockMovementRequestType;
+  warning?: string;
 };
 
 export function normalizeMovementNote(value?: string | null) {
@@ -80,16 +83,13 @@ export function calculateStockMovement(
     }
 
     const newStock = currentStock - quantity;
-    if (newStock < 0) {
-      return {
-        error: "Stok eksiye düşemez. Maksimum çıkış miktarı mevcut stok kadar olabilir.",
-      };
-    }
+    const warning = getStockMovementWarning(currentStock, newStock);
 
     return {
       newStock,
       movementQuantity: quantity,
       dbType: "OUT",
+      ...(warning ? { warning } : {}),
     };
   }
 
@@ -99,14 +99,13 @@ export function calculateStockMovement(
     }
 
     const newStock = currentStock + quantity;
-    if (newStock < 0) {
-      return { error: "Bu düzeltme stok miktarını eksiye düşürür." };
-    }
+    const warning = getStockMovementWarning(currentStock, newStock);
 
     return {
       newStock,
       movementQuantity: quantity,
       dbType: "ADJUSTMENT",
+      ...(warning ? { warning } : {}),
     };
   }
 

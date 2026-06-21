@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { getMovementText } from "./stocks-page-utils";
-import { generateTransferNo } from "./warehouse-service";
+import { generateTransferNo } from "./warehouse-transfer-utils";
 
 describe("warehouse service utils", () => {
   it("generateTransferNo TRF formatı üretir", () => {

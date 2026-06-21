@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { sanitizeRedirectPath } from "@/lib/redirect-utils";
+import { useSearchParams } from "next/navigation";
+import { sanitizeAuthRedirectPath } from "@/lib/auth/auth-redirect";
 import { AnimatePresence } from "framer-motion";
 import {
   ArrowRight,
@@ -29,23 +29,67 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const TRANSITION_MIN_MS = 1000;
+const REDIRECT_TIMEOUT_MS = 12_000;
 const DEMO_EMAIL = "owner@demo.com";
 const DEMO_PASSWORD = "123456";
 
-export function LoginForm() {
-  const router = useRouter();
+type LoginFormProps = {
+  sessionExpired?: boolean;
+};
+
+export function LoginForm({ sessionExpired = false }: LoginFormProps) {
   const searchParams = useSearchParams();
-  const redirectPath = sanitizeRedirectPath(searchParams.get("redirect"));
+  const nextParam = searchParams.get("next") ?? searchParams.get("redirect");
+  const redirectPath = nextParam
+    ? sanitizeAuthRedirectPath(nextParam)
+    : null;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState(
+    sessionExpired
+      ? "Oturumunuz sona erdi. Lütfen tekrar giriş yapın."
+      : ""
+  );
   const [transitioning, setTransitioning] = useState(false);
   const [loaderPreset, setLoaderPreset] = useState<LoadingPreset>("login");
+  const [redirectTimedOut, setRedirectTimedOut] = useState(false);
+  const [pendingRedirectTo, setPendingRedirectTo] = useState<string | null>(
+    null
+  );
+  const redirectTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (redirectTimeoutRef.current) {
+        window.clearTimeout(redirectTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  function clearRedirectTimeout() {
+    if (redirectTimeoutRef.current) {
+      window.clearTimeout(redirectTimeoutRef.current);
+      redirectTimeoutRef.current = null;
+    }
+  }
+
+  function startRedirect(redirectTo: string) {
+    setPendingRedirectTo(redirectTo);
+    setTransitioning(true);
+    setLoaderPreset("loginRedirect");
+    setRedirectTimedOut(false);
+    clearRedirectTimeout();
+
+    redirectTimeoutRef.current = window.setTimeout(() => {
+      setRedirectTimedOut(true);
+    }, REDIRECT_TIMEOUT_MS);
+
+    window.location.replace(redirectTo);
+  }
 
   function fillDemoCredentials() {
     setEmail(DEMO_EMAIL);
@@ -55,11 +99,14 @@ export function LoginForm() {
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setLoading(true);
+
+    if (isSubmitting) {
+      return;
+    }
+
+    setIsSubmitting(true);
     setError("");
-
-    const loaderStartedAt = Date.now();
-
+    setRedirectTimedOut(false);
     setTransitioning(true);
     setLoaderPreset("login");
 
@@ -75,29 +122,29 @@ export function LoginForm() {
       if (!res.ok || !data.success) {
         setTransitioning(false);
         setError(data.message || "Giriş yapılamadı.");
-        setLoading(false);
+        setIsSubmitting(false);
         return;
       }
 
-      setLoaderPreset("loginRedirect");
-
-      const elapsed = Date.now() - loaderStartedAt;
-      await new Promise((resolve) =>
-        setTimeout(resolve, Math.max(0, TRANSITION_MIN_MS - elapsed))
-      );
-
       const defaultPath =
+        data.redirectTo ??
         data.data?.redirectTo ??
         (data.data?.user?.role === "SUPER_ADMIN" ? "/admin" : "/dashboard");
 
-      router.push(redirectPath ?? defaultPath);
-      router.refresh();
+      const destination = redirectPath ?? defaultPath;
+      startRedirect(destination);
     } catch {
       setTransitioning(false);
-      setError("Sunucuya bağlanırken bir hata oluştu.");
-      setLoading(false);
+      setError("Giriş işlemi tamamlanamadı. Lütfen tekrar deneyin.");
+      setIsSubmitting(false);
     }
   }
+
+  const submitLabel = isSubmitting
+    ? transitioning && loaderPreset === "loginRedirect"
+      ? "Panel açılıyor…"
+      : "Giriş yapılıyor…"
+    : "Giriş Yap";
 
   return (
     <>
@@ -158,7 +205,7 @@ export function LoginForm() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className={authInputClassName}
-                disabled={loading || transitioning}
+                disabled={isSubmitting}
                 required
               />
             </div>
@@ -181,13 +228,13 @@ export function LoginForm() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className={authInputWithToggleClassName}
-                disabled={loading || transitioning}
+                disabled={isSubmitting}
                 required
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((prev) => !prev)}
-                disabled={loading || transitioning}
+                disabled={isSubmitting}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                 aria-label={showPassword ? "Şifreyi gizle" : "Şifreyi göster"}
               >
@@ -219,13 +266,31 @@ export function LoginForm() {
 
           <AuthAlert message={error} />
 
+          {redirectTimedOut && pendingRedirectTo ? (
+            <div className="space-y-3 rounded-2xl border border-amber-100 bg-amber-50/80 p-4">
+              <p className="text-sm font-semibold text-amber-900">
+                Yönlendirme beklenenden uzun sürdü.
+              </p>
+              <Button
+                type="button"
+                className={authPrimaryButtonClassName}
+                onClick={() => window.location.replace(pendingRedirectTo)}
+              >
+                Panele Git
+              </Button>
+            </div>
+          ) : null}
+
           <Button
             type="submit"
-            disabled={loading || transitioning}
+            disabled={isSubmitting}
             className={authPrimaryButtonClassName}
           >
-            {loading ? (
-              <Loader2 className="size-4 animate-spin" />
+            {isSubmitting ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                {submitLabel}
+              </>
             ) : (
               <>
                 Giriş Yap

@@ -9,17 +9,24 @@ import {
   formatDateInputValue,
   REPORT_TAB_LABELS,
   type ReportTabKey,
+  type ReportViewKey,
 } from "@/lib/reports-page-utils";
 
 type ReportsPageControlsProps = {
   activeTab: ReportTabKey;
+  activeReport?: string | null;
   from: Date;
   to: Date;
 };
 
 const tabKeys = Object.keys(REPORT_TAB_LABELS) as ReportTabKey[];
 
-export function ReportsPageControls({ activeTab, from, to }: ReportsPageControlsProps) {
+export function ReportsPageControls({
+  activeTab,
+  activeReport = null,
+  from,
+  to,
+}: ReportsPageControlsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [fromDate, setFromDate] = useState(() => formatDateInputValue(from));
@@ -53,7 +60,8 @@ export function ReportsPageControls({ activeTab, from, to }: ReportsPageControls
     startTransition(() => {
       router.push(
         buildReportsQuery({
-          tab: activeTab,
+          tab: activeReport ? undefined : activeTab,
+          report: (activeReport as ReportViewKey | null) ?? null,
           from: nextFrom,
           to: nextTo,
         })
@@ -63,30 +71,36 @@ export function ReportsPageControls({ activeTab, from, to }: ReportsPageControls
 
   return (
     <section className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-      <div className="grid w-full grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 sm:grid-cols-3 xl:max-w-[620px] xl:grid-cols-5">
-        {tabKeys.map((tabKey) => {
-          const isActive = tabKey === activeTab;
+      {!activeReport ? (
+        <div className="grid w-full grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 sm:grid-cols-3 xl:max-w-[620px] xl:grid-cols-5">
+          {tabKeys.map((tabKey) => {
+            const isActive = tabKey === activeTab;
 
-          return (
-            <Link
-              key={tabKey}
-              href={buildReportsQuery({
-                tab: tabKey,
-                from,
-                to,
-              })}
-              className={[
-                "flex min-h-[40px] items-center justify-center px-2 py-2.5 text-center text-[11px] font-extrabold leading-tight transition xl:text-[12px]",
-                isActive
-                  ? "bg-blue-50 text-blue-600"
-                  : "bg-white text-slate-500 hover:bg-slate-50 hover:text-[#0f1f4d]",
-              ].join(" ")}
-            >
-              {REPORT_TAB_LABELS[tabKey]}
-            </Link>
-          );
-        })}
-      </div>
+            return (
+              <Link
+                key={tabKey}
+                href={buildReportsQuery({
+                  tab: tabKey,
+                  from,
+                  to,
+                })}
+                className={[
+                  "flex min-h-[40px] items-center justify-center px-2 py-2.5 text-center text-[11px] font-extrabold leading-tight transition xl:text-[12px]",
+                  isActive
+                    ? "bg-blue-50 text-blue-600"
+                    : "bg-white text-slate-500 hover:bg-slate-50 hover:text-[#0f1f4d]",
+                ].join(" ")}
+              >
+                {REPORT_TAB_LABELS[tabKey]}
+              </Link>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="text-[12px] font-semibold text-slate-500">
+          Seçili rapor için tarih aralığını güncelleyebilirsiniz.
+        </div>
+      )}
 
       <form
         onSubmit={handleFilterSubmit}

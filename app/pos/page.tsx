@@ -11,10 +11,8 @@ import {
   ScanBarcode,
   Search,
   ShoppingCart,
-  TrendingUp,
   Wallet,
 } from "lucide-react";
-import { StatCard } from "@/components/cards/stat-card";
 import {
   PosCartPanel,
   type PosCartItem,
@@ -22,15 +20,20 @@ import {
 import { PosCategoryFilter } from "@/components/pos/pos-category-filter";
 import { PosPaymentModal } from "@/components/pos/pos-payment-modal";
 import { PosProductGrid } from "@/components/pos/pos-product-grid";
+import { PosQuickActions } from "@/components/pos/pos-quick-actions";
 import { PosReceipt, printPosReceipt } from "@/components/pos/pos-receipt";
 import { PosStaffHeader } from "@/components/pos/pos-staff-header";
+import { PosSummaryMetrics } from "@/components/pos/pos-summary-metrics";
 import {
+  POS_BARCODE_INPUT_CLASS,
   POS_CARD_CLASS,
+  POS_GRADIENT_CHECKOUT_CLASS,
   POS_HERO_CLASS,
   POS_INPUT_CLASS,
 } from "@/components/pos/pos-ui-tokens";
 import { WarehouseSelectField } from "@/components/shared/warehouse-select-field";
 import { formatMoney } from "@/lib/format-utils";
+import type { PosQuickActionKey } from "@/lib/pos-page-ui-utils";
 import {
   filterPosProducts,
   findPosProductByCode,
@@ -48,6 +51,7 @@ import {
   buildProductsListUrl,
   getSaleProductStock,
 } from "@/lib/sale-warehouse-ui-utils";
+import { usePosKeyboardShortcuts } from "@/hooks/use-pos-keyboard-shortcuts";
 
 type Customer = { id: string; name: string };
 
@@ -62,6 +66,7 @@ type Product = {
   id: string;
   name: string;
   stock: number;
+  productType?: "STOCK" | "SERVICE";
   warehouseStock?: number;
   sellPrice: string | number;
   vatRate: number;
@@ -277,24 +282,55 @@ export default function PosPage() {
     [cart, discount]
   );
 
+  const cartItemCount = useMemo(
+    () => cart.reduce((sum, item) => sum + item.quantity, 0),
+    [cart]
+  );
+
+  function handleQuickAction(key: PosQuickActionKey) {
+    if (key === "barcode") {
+      barcodeRef.current?.focus();
+      return;
+    }
+
+    if (key === "stock") {
+      setSelectedCategoryId("");
+      setQuickFilter("stock");
+      setSearch("");
+      return;
+    }
+
+    if (key === "service") {
+      setSelectedCategoryId("");
+      setQuickFilter("service");
+      setSearch("");
+      return;
+    }
+
+    if (key === "discount") {
+      if (window.innerWidth < 1280) {
+        setMobileCartOpen(true);
+      }
+      window.setTimeout(() => {
+        document.getElementById("pos-discount-input")?.focus();
+      }, 120);
+      return;
+    }
+
+    if (key === "payment") {
+      openPaymentModal();
+    }
+  }
+
   function addToCart(product: Product) {
     setError("");
     setSuccessReceipt(null);
     const availableStock = getPosProductStock(product, useWarehouseStock);
-
-    if (availableStock <= 0) {
-      setError(`${product.name} stokta yok.`);
-      return;
-    }
-
     const price = Number(product.sellPrice);
+
     setCart((prev) => {
       const existing = prev.find((item) => item.productId === product.id);
       if (existing) {
-        if (existing.quantity + 1 > availableStock) {
-          setError(`${product.name} için yeterli stok yok.`);
-          return prev;
-        }
         return prev.map((item) =>
           item.productId === product.id
             ? { ...item, quantity: item.quantity + 1, stock: availableStock }
@@ -319,10 +355,6 @@ export default function PosPage() {
     setCart((prev) =>
       prev.map((item) => {
         if (item.productId !== productId) return item;
-        if (item.quantity + 1 > item.stock) {
-          setError(`${item.name} için yeterli stok yok.`);
-          return item;
-        }
         return { ...item, quantity: item.quantity + 1 };
       })
     );
@@ -342,6 +374,17 @@ export default function PosPage() {
 
   function removeFromCart(productId: string) {
     setCart((prev) => prev.filter((item) => item.productId !== productId));
+  }
+
+  function updateCartItem(
+    productId: string,
+    patch: Partial<Pick<PosCartItem, "unitPrice" | "vatRate">>
+  ) {
+    setCart((prev) =>
+      prev.map((item) =>
+        item.productId === productId ? { ...item, ...patch } : item
+      )
+    );
   }
 
   function clearCart() {
@@ -375,15 +418,40 @@ export default function PosPage() {
     barcodeRef.current?.focus();
   }
 
-  function openPaymentModal() {
+  function openPaymentModal(method?: PosPaymentMethod) {
     if (cart.length === 0) {
       setError("Satışı tamamlamak için sepete ürün ekleyin.");
       return;
     }
     setError("");
+    if (method) {
+      setPaymentMethod(method);
+    }
     setReceivedAmount(String(totals.total));
     setPaymentOpen(true);
   }
+
+  const openCashPaymentModal = useCallback(() => {
+    if (cart.length === 0) {
+      setError("Satışı tamamlamak için sepete ürün ekleyin.");
+      return;
+    }
+    setError("");
+    setPaymentMethod("CASH");
+    setReceivedAmount(String(totals.total));
+    setPaymentOpen(true);
+  }, [cart.length, totals.total]);
+
+  const openCardPaymentModal = useCallback(() => {
+    if (cart.length === 0) {
+      setError("Satışı tamamlamak için sepete ürün ekleyin.");
+      return;
+    }
+    setError("");
+    setPaymentMethod("CARD");
+    setReceivedAmount(String(totals.total));
+    setPaymentOpen(true);
+  }, [cart.length, totals.total]);
 
   async function handleCheckout() {
     setCheckingOut(true);
@@ -440,6 +508,12 @@ export default function PosPage() {
         paymentStatus: data.data?.paymentStatus || "PAID",
       });
 
+      if (data.warning) {
+        setError(data.warning);
+      } else {
+        setError("");
+      }
+
       setCart([]);
       setDiscount("0");
       setNote("");
@@ -464,6 +538,19 @@ export default function PosPage() {
       setCheckingOut(false);
     }
   }
+
+  usePosKeyboardShortcuts({
+    enabled: !loading && !successReceipt,
+    paymentOpen,
+    checkingOut,
+    cartEmpty: cart.length === 0,
+    onCashPayment: openCashPaymentModal,
+    onCardPayment: openCardPaymentModal,
+    onFocusBarcode: () => barcodeRef.current?.focus(),
+    onClearCart: clearCart,
+    onCloseModal: () => setPaymentOpen(false),
+    onConfirmPayment: () => void handleCheckout(),
+  });
 
   if (loading) {
     return (
@@ -514,9 +601,9 @@ export default function PosPage() {
         ) : null}
 
         <section className={`${POS_HERO_CLASS} mb-4`}>
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-indigo-500 to-violet-600 text-white shadow-[0_10px_24px_rgba(79,70,229,0.25)]">
                 <ScanBarcode size={22} />
               </div>
               <div>
@@ -524,7 +611,8 @@ export default function PosPage() {
                   Hızlı Satış
                 </h1>
                 <p className="mt-2 max-w-xl text-sm leading-6 text-slate-500">
-                  Ürünleri seçin, ödemeyi alın ve satışı tamamlayın.
+                  Ürün, hizmet ve barkodlu satış işlemlerinizi hızlıca
+                  tamamlayın.
                 </p>
                 {!isPosStaff ? (
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -540,34 +628,30 @@ export default function PosPage() {
                     >
                       Satışlar
                     </Link>
+                    <Link
+                      href="/cash-bank"
+                      className="inline-flex h-9 items-center gap-1.5 rounded-2xl border border-orange-200 bg-orange-50 px-3 text-xs font-bold text-orange-700 hover:bg-orange-100"
+                    >
+                      <Wallet size={14} />
+                      Kasa-Banka
+                    </Link>
                   </div>
                 ) : null}
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
-              <StatCard
-                title="Bugünkü Satış"
-                value={String(stats.todaySalesCount)}
-                subtitle={formatMoney(stats.todaySalesTotal)}
-                icon={<TrendingUp size={18} />}
-                color="blue"
-              />
-              <StatCard
-                title="Kasadaki Toplam"
-                value={formatMoney(stats.cashBalanceTotal)}
-                subtitle="Nakit kasa bakiyesi"
-                icon={<Wallet size={18} />}
-                color="green"
-              />
-              <StatCard
-                title="Satış Yapan"
-                value={employeeName ?? userName}
-                subtitle={companyName}
-                icon={<ScanBarcode size={18} />}
-                color="purple"
-              />
+            <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+              <span className="inline-flex h-9 items-center rounded-full border border-indigo-100 bg-indigo-50 px-3 text-xs font-bold text-indigo-700">
+                Bugün: {stats.todaySalesCount} satış
+              </span>
+              <span className="inline-flex h-9 items-center rounded-full border border-orange-100 bg-orange-50 px-3 text-xs font-bold text-orange-700">
+                Sepet: {cart.length} kalem
+              </span>
             </div>
+          </div>
+
+          <div className="mt-4">
+            <PosQuickActions onAction={handleQuickAction} />
           </div>
         </section>
 
@@ -611,6 +695,14 @@ export default function PosPage() {
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
           <section className={`${POS_CARD_CLASS} p-4 sm:p-5`}>
+            <PosSummaryMetrics
+              todaySalesCount={stats.todaySalesCount}
+              todaySalesTotal={stats.todaySalesTotal}
+              cartTotal={totals.total}
+              cartLineCount={cart.length}
+              cartItemCount={cartItemCount}
+            />
+
             <div className="mb-4 grid gap-3 lg:grid-cols-[1fr_220px]">
               <div className="relative">
                 <Search
@@ -620,14 +712,14 @@ export default function PosPage() {
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Ürün adı, barkod veya SKU ara..."
+                  placeholder="Ürün, hizmet, SKU veya barkod ara"
                   className={`${POS_INPUT_CLASS} pl-11`}
                 />
               </div>
               <form onSubmit={handleBarcodeSubmit} className="relative">
                 <Barcode
                   size={16}
-                  className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                  className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-indigo-500"
                 />
                 <input
                   ref={barcodeRef}
@@ -635,7 +727,7 @@ export default function PosPage() {
                   onChange={(e) => setBarcode(e.target.value)}
                   autoFocus
                   placeholder="Barkod okut..."
-                  className={`${POS_INPUT_CLASS} pl-11`}
+                  className={`${POS_BARCODE_INPUT_CLASS} pl-11`}
                 />
               </form>
             </div>
@@ -679,10 +771,17 @@ export default function PosPage() {
               subtotal={totals.subtotal}
               vatTotal={totals.vatTotal}
               discount={discount}
+              discountAmount={totals.discount}
               total={totals.total}
               error={error}
               checkingOut={checkingOut}
               onDiscountChange={setDiscount}
+              onUnitPriceChange={(productId, value) =>
+                updateCartItem(productId, { unitPrice: value })
+              }
+              onVatRateChange={(productId, value) =>
+                updateCartItem(productId, { vatRate: value })
+              }
               onIncrease={increaseQuantity}
               onDecrease={decreaseQuantity}
               onRemove={removeFromCart}
@@ -698,7 +797,10 @@ export default function PosPage() {
         <button
           type="button"
           onClick={() => setMobileCartOpen(true)}
-          className="flex h-14 items-center gap-2 rounded-2xl bg-[#0f1f4d] px-5 text-sm font-black text-white shadow-[0_14px_30px_rgba(15,31,77,0.2)]"
+          className={[
+            "flex h-14 items-center gap-2 rounded-2xl px-5 text-sm font-black text-white shadow-[0_14px_30px_rgba(249,115,22,0.28)]",
+            POS_GRADIENT_CHECKOUT_CLASS,
+          ].join(" ")}
         >
           <ShoppingCart size={20} />
           Sepet ({cart.length}) · {formatMoney(totals.total)}
@@ -719,10 +821,17 @@ export default function PosPage() {
               subtotal={totals.subtotal}
               vatTotal={totals.vatTotal}
               discount={discount}
+              discountAmount={totals.discount}
               total={totals.total}
               error={error}
               checkingOut={checkingOut}
               onDiscountChange={setDiscount}
+              onUnitPriceChange={(productId, value) =>
+                updateCartItem(productId, { unitPrice: value })
+              }
+              onVatRateChange={(productId, value) =>
+                updateCartItem(productId, { vatRate: value })
+              }
               onIncrease={increaseQuantity}
               onDecrease={decreaseQuantity}
               onRemove={removeFromCart}

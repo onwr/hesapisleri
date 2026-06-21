@@ -39,7 +39,7 @@ export function AppTopbar({
     >
       <div className="flex w-full items-center justify-between gap-5">
         <div className="min-w-[220px]">
-          <h1 className="text-[22px] font-extrabold leading-tight tracking-[-0.03em] text-[#0f1f4d]">
+          <h1 className="md:text-[22px] text-[12px] font-extrabold leading-tight tracking-[-0.03em] text-[#0f1f4d]">
             Hoş geldin, {firstName}! 👋
           </h1>
 

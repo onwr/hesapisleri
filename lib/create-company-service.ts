@@ -1,5 +1,6 @@
 import type { Company, Prisma } from "@prisma/client";
 import { createNotification } from "@/lib/notification-service";
+import { DEFAULT_MEMBERSHIP_PLAN_CODE } from "@/lib/membership-service";
 import { db } from "@/lib/prisma";
 import { DEFAULT_COMPANY_SETTINGS } from "@/lib/settings-utils";
 
@@ -105,6 +106,23 @@ export async function createCompanyForUser(
     },
   });
 
+  const defaultPlan = await tx.membershipPlan.findFirst({
+    where: { code: DEFAULT_MEMBERSHIP_PLAN_CODE, isActive: true },
+  });
+
+  if (defaultPlan) {
+    await tx.companySubscription.create({
+      data: {
+        companyId: company.id,
+        planId: defaultPlan.id,
+        status: "TRIAL",
+        currentPeriodStart: now,
+        currentPeriodEnd: trialEnd,
+        trialEndsAt: trialEnd,
+      },
+    });
+  }
+
   await tx.warehouse.create({
     data: {
       companyId: company.id,
@@ -124,6 +142,7 @@ export async function createCompanyForUser(
         balance: 0,
         currency,
         status: "ACTIVE",
+        isDefault: true,
       },
       {
         companyId: company.id,

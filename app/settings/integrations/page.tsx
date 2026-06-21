@@ -8,6 +8,7 @@ import {
   getMarketplaceIntegration,
   listMarketplaceSyncRuns,
 } from "@/lib/marketplace/marketplace-integration-service";
+import { getEDocumentIntegrationSummary } from "@/lib/e-document/e-document-integration-service";
 import { db } from "@/lib/prisma";
 
 export default async function SettingsIntegrationsPage() {
@@ -16,9 +17,10 @@ export default async function SettingsIntegrationsPage() {
     redirect("/unauthorized");
   }
 
-  const [trendyol, hepsiburada, runs, warehouses] = await Promise.all([
+  const [trendyol, hepsiburada, eDocument, runs, warehouses] = await Promise.all([
     getMarketplaceIntegration(session.company.id, "TRENDYOL"),
     getMarketplaceIntegration(session.company.id, "HEPSIBURADA"),
+    getEDocumentIntegrationSummary(session.company.id),
     listMarketplaceSyncRuns({
       companyId: session.company.id,
       limit: 20,
@@ -32,7 +34,7 @@ export default async function SettingsIntegrationsPage() {
 
   const connectedCount = [trendyol, hepsiburada].filter(
     (item) => item?.status === "CONNECTED"
-  ).length;
+  ).length + (eDocument.status === "CONNECTED" && eDocument.providerConnectionReady ? 1 : 0);
   const errorCount = runs.filter(
     (run: { status: string }) =>
       run.status === "FAILED" || run.status === "PARTIAL_SUCCESS"
@@ -55,6 +57,7 @@ export default async function SettingsIntegrationsPage() {
         <IntegrationsCenter
           initialTrendyol={trendyol}
           initialHepsiburada={hepsiburada}
+          initialEDocument={eDocument}
           initialRuns={runs}
           warehouses={warehouses}
         />

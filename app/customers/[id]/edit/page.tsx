@@ -1,6 +1,6 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
+import { guardPageModule } from "@/lib/module-access";
 import { db } from "@/lib/prisma";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import { EditCustomerForm } from "./edit-customer-form";
 
 type Props = {
@@ -9,24 +9,15 @@ type Props = {
   }>;
 };
 
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
-
 export default async function EditCustomerPage({ params }: Props) {
+  const session = await guardPageModule("customers");
+  const company = session.company;
   const { id } = await params;
-
-  const token = await getAuthToken();
-  if (!token) redirect("/login");
-
-  const payload = verifyToken<AuthPayload>(token);
-  if (!payload?.userId || !payload.companyId) redirect("/login");
 
   const customer = await db.customer.findFirst({
     where: {
       id,
-      companyId: payload.companyId,
+      companyId: company.id,
     },
   });
 
@@ -40,6 +31,11 @@ export default async function EditCustomerPage({ params }: Props) {
         phone: customer.phone,
         email: customer.email,
         taxNo: customer.taxNo,
+        taxOffice: customer.taxOffice,
+        taxCertificateUrl: customer.taxCertificateUrl,
+        taxCertificateFileName: customer.taxCertificateFileName,
+        taxCertificateMimeType: customer.taxCertificateMimeType,
+        taxCertificateSize: customer.taxCertificateSize,
         address: customer.address,
         group: customer.group,
       }}

@@ -197,6 +197,14 @@ export async function upsertMarketplaceIntegration(input: {
     },
   });
 
+  if (!existing) {
+    const { requireCompanyFeature, requireCompanyLimit } = await import(
+      "@/lib/billing/entitlements/entitlement-enforcement-service"
+    );
+    await requireCompanyFeature(input.companyId, "MARKETPLACE");
+    await requireCompanyLimit(input.companyId, "MAX_MARKETPLACES", { incrementBy: 1 });
+  }
+
   let adapter: MarketplaceAdapter;
   let credentialsEncrypted: string;
   let supplierId: string | null = null;

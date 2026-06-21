@@ -198,7 +198,12 @@ export function PosPaymentModal({
                 Onaylanıyor...
               </>
             ) : (
-              "Satışı Onayla"
+              <>
+                Satışı Onayla{" "}
+                <kbd className="hidden rounded border border-white/30 px-1 text-[10px] font-semibold xl:inline">
+                  Ctrl+↵
+                </kbd>
+              </>
             )}
           </button>
         </div>

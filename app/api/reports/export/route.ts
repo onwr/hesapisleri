@@ -7,6 +7,7 @@ import {
   normalizeDateRange,
   parseDateParam,
   parseReportTab,
+  parseReportView,
 } from "@/lib/reports-page-utils";
 
 function escapeCsv(value: string | number) {
@@ -26,13 +27,14 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const now = new Date();
   const activeTab = parseReportTab(searchParams.get("tab"));
+  const activeReport = parseReportView(searchParams.get("report"));
   const { from, to } = normalizeDateRange(
     parseDateParam(searchParams.get("from")) ?? startOfMonth(now),
     parseDateParam(searchParams.get("to")) ?? endOfMonth(now)
   );
 
   const data = await getReportsPageData(companyId, {
-    tab: activeTab,
+    tab: activeReport ? "all" : activeTab,
     from,
     to,
   });

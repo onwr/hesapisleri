@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
+import { requireApiModuleAccess } from "@/lib/module-access";
 import { z } from "zod";
 import { createNotification } from "@/lib/notification-service";
 import { db } from "@/lib/prisma";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import { calculateInvoiceTotals } from "@/lib/invoice-form-utils";
 import { applyCustomerDebtFromDocument } from "@/lib/customer-balance-utils";
 import { resolveSalePayment } from "@/lib/sale-payment-utils";
@@ -14,11 +14,9 @@ import {
   generateInvoiceNo,
   getMockGibMeta,
 } from "@/lib/invoices/mock-gib";
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
+import { persistInvoiceFinancialSnapshot } from "@/lib/invoice-snapshot-service";
+import { calculateInvoiceLineSnapshots } from "@/lib/invoice-tax-calculation-utils";
+import { invalidateDashboardCache } from "@/lib/dashboard-cache-invalidation";
 
 const invoiceItemSchema = z.object({
   name: z.string().min(1, "Ürün / hizmet adı zorunludur."),
@@ -58,24 +56,11 @@ function parseDateInput(value?: string) {
 
 export async function POST(req: Request) {
   try {
-    const token = await getAuthToken();
+    const auth = await requireApiModuleAccess("invoices");
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.userId || !payload.companyId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
-
+    const companyId = auth.companyId;
+    const userId = auth.userId;
     const body = await req.json();
     const parsed = createNormalInvoiceSchema.safeParse(body);
 
@@ -106,7 +91,7 @@ export async function POST(req: Request) {
       const customer = await db.customer.findFirst({
         where: {
           id: customerId,
-          companyId: payload.companyId,
+          companyId: companyId,
         },
       });
 
@@ -118,16 +103,59 @@ export async function POST(req: Request) {
       }
     }
 
-    const lineItems = items.map((item) => ({
-      id: crypto.randomUUID(),
-      productId: item.productId,
-      name: item.name,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      vatRate: item.vatRate,
-    }));
+    const productIds = items
+      .map((item) => item.productId)
+      .filter((id): id is string => Boolean(id));
 
-    const totals = calculateInvoiceTotals(lineItems, discountAmount);
+    const products =
+      productIds.length > 0
+        ? await db.product.findMany({
+            where: {
+              companyId: companyId,
+              id: { in: productIds },
+            },
+            select: {
+              id: true,
+              name: true,
+              sku: true,
+              barcode: true,
+              unitType: true,
+            },
+          })
+        : [];
+
+    const productMap = new Map(products.map((product) => [product.id, product]));
+
+    const lineItems = items.map((item) => {
+      const product = item.productId
+        ? productMap.get(item.productId)
+        : undefined;
+
+      return {
+        productId: item.productId,
+        productName: item.name,
+        sku: product?.sku ?? null,
+        barcode: product?.barcode ?? null,
+        unit: product?.unitType ?? null,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        vatRate: item.vatRate,
+      };
+    });
+
+    const totals = calculateInvoiceTotals(
+      lineItems.map((item) => ({
+        id: crypto.randomUUID(),
+        name: item.productName,
+        ...item,
+      })),
+      discountAmount
+    );
+    const lineSnapshots = calculateInvoiceLineSnapshots(
+      lineItems,
+      discountAmount
+    );
+
     const status = action === "DRAFT" ? "DRAFT" : "SENT";
     const gib = getMockGibMeta("NORMAL", status);
 
@@ -166,24 +194,37 @@ export async function POST(req: Request) {
       currency,
       invoiceDate: invoiceDate ?? new Date().toISOString().slice(0, 10),
       discountAmount: totals.discount,
-      items: lineItems.map((item) => ({
-        name: item.name,
+      subtotal: totals.subtotal,
+      taxableAmount: totals.taxableAmount,
+      totalVat: totals.totalVat,
+      grandTotal: totals.grandTotal,
+      items: lineItems.map((item, index) => ({
+        name: item.productName,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         vatRate: item.vatRate,
         productId: item.productId,
+        lineNetAmount: lineSnapshots[index]!.lineNetAmount,
+        vatAmount: lineSnapshots[index]!.vatAmount,
+        lineGrossAmount: lineSnapshots[index]!.lineGrossAmount,
+        discountAmount: lineSnapshots[index]!.discountAmount,
       })),
     };
 
     const invoice = await db.$transaction(async (tx) => {
       const createdInvoice = await tx.invoice.create({
         data: {
-          companyId: payload.companyId!,
+          companyId: companyId!,
           customerId: customerId || null,
           invoiceNo: generateInvoiceNo("NORMAL"),
           type: "NORMAL",
           status,
+          subtotal: totals.subtotal,
+          totalDiscount: totals.discount,
+          taxableAmount: totals.taxableAmount,
+          totalVat: totals.totalVat,
           total: totals.total,
+          financialSnapshotStatus: "COMPLETE",
           paymentStatus,
           paidAmount: invoicePaidAmount,
           dueDate: parseDateInput(dueDate),
@@ -195,9 +236,16 @@ export async function POST(req: Request) {
         },
       });
 
+      await persistInvoiceFinancialSnapshot(tx, {
+        invoiceId: createdInvoice.id,
+        items: lineItems,
+        invoiceDiscountAmount: discountAmount,
+      });
+
       if (action !== "DRAFT" && customerId) {
         await applyCustomerDebtFromDocument(
           tx,
+          companyId!,
           customerId,
           totals.total,
           invoicePaidAmount
@@ -206,8 +254,8 @@ export async function POST(req: Request) {
 
       await tx.activityLog.create({
         data: {
-          companyId: payload.companyId!,
-          userId: payload.userId,
+          companyId: companyId!,
+          userId: userId,
           action: action === "DRAFT" ? "DRAFT" : "CREATE",
           module: "invoices",
           message: `${createdInvoice.invoiceNo} numaralı normal fatura ${action === "DRAFT" ? "taslak olarak kaydedildi" : "oluşturuldu"}.`,
@@ -216,8 +264,8 @@ export async function POST(req: Request) {
 
       await createNotification(
         {
-          companyId: payload.companyId!,
-          userId: payload.userId,
+          companyId: companyId!,
+          userId: userId,
           type: action === "DRAFT" ? "INFO" : "SUCCESS",
           category: "INVOICES",
           module: "invoices",
@@ -238,6 +286,10 @@ export async function POST(req: Request) {
 
       return createdInvoice;
     });
+
+    if (action !== "DRAFT") {
+      invalidateDashboardCache(companyId!, "invoice-create");
+    }
 
     return NextResponse.json({
       success: true,

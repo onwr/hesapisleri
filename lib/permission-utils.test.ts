@@ -93,7 +93,7 @@ describe("sidebar menu filtering", () => {
     const titles = getSidebarMenuItems("STAFF").map((item) => item.title);
     assert.ok(titles.includes("POS / Hızlı Satış"));
     assert.ok(titles.includes("Ürünler"));
-    assert.ok(titles.includes("Stoklar"));
+    assert.ok(!titles.includes("Stoklar"));
     assert.ok(titles.includes("Fihrist"));
     assert.ok(!titles.includes("Kasa & Banka"));
     assert.ok(!titles.includes("Giderler"));
@@ -104,7 +104,7 @@ describe("sidebar menu filtering", () => {
     const titles = getSidebarMenuItems("OWNER").map((item) => item.title);
     assert.ok(titles.includes("POS / Hızlı Satış"));
     assert.ok(titles.includes("Kasa & Banka"));
-    assert.ok(titles.includes("Takvim"));
+    assert.ok(!titles.includes("Takvim"));
     assert.ok(titles.includes("Raporlar"));
     assert.ok(titles.includes("Ürünler"));
   });

@@ -7,7 +7,6 @@ import { AnimatePresence } from "framer-motion";
 import {
   ArrowRight,
   Building2,
-  CheckCircle2,
   Eye,
   EyeOff,
   Loader2,
@@ -23,8 +22,14 @@ import {
   authFlatFormClassName,
 } from "@/components/auth/auth-styles";
 import { AppLoadingScreen } from "@/components/layout/app-loading-screen";
+import { KvkkAydinlatmaModal } from "@/components/legal/kvkk-aydinlatma-modal";
 import type { LoadingPreset } from "@/lib/loading-presets";
+import {
+  KVKK_AYDINLATMA_PATH,
+  MARKETING_CONSENT_TEXT,
+} from "@/lib/legal/kvkk-consent";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -52,10 +57,26 @@ export function RegisterForm() {
     password: "",
     companyName: "",
   });
+  const [kvkkInformed, setKvkkInformed] = useState(false);
+  const [marketingConsent, setMarketingConsent] = useState(false);
+  const [kvkkModalOpen, setKvkkModalOpen] = useState(false);
 
   function updateForm(key: keyof FormState, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
     setError("");
+  }
+
+  function openKvkkModal() {
+    if (loading || transitioning) return;
+    setKvkkModalOpen(true);
+  }
+
+  function handleKvkkCheckboxChange(checked: boolean | "indeterminate") {
+    if (checked === true) {
+      openKvkkModal();
+      return;
+    }
+    setKvkkInformed(false);
   }
 
   function validate(): string | null {
@@ -70,6 +91,9 @@ export function RegisterForm() {
     }
     if (form.companyName.trim().length < 2) {
       return "Firma adı en az 2 karakter olmalıdır.";
+    }
+    if (!kvkkInformed) {
+      return "Devam etmek için aydınlatma metnini okuyup bilgilendirildiğinizi onaylamalısınız.";
     }
     return null;
   }
@@ -100,6 +124,8 @@ export function RegisterForm() {
           password: form.password,
           wantsCompanyInfo: true,
           companyName: form.companyName.trim(),
+          kvkkInformed: true as const,
+          marketingConsent,
         }),
       });
 
@@ -133,6 +159,12 @@ export function RegisterForm() {
       <AnimatePresence>
         {transitioning ? <AppLoadingScreen preset={loaderPreset} /> : null}
       </AnimatePresence>
+
+      <KvkkAydinlatmaModal
+        open={kvkkModalOpen}
+        onOpenChange={setKvkkModalOpen}
+        onAcknowledge={() => setKvkkInformed(true)}
+      />
 
       <div className={authFlatFormClassName}>
         <div className="mb-8">
@@ -245,11 +277,58 @@ export function RegisterForm() {
             </div>
           </div>
 
+          <div className="space-y-3">
+            <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3.5">
+              <Checkbox
+                id="kvkkInformed"
+                checked={kvkkInformed}
+                onCheckedChange={handleKvkkCheckboxChange}
+                disabled={loading || transitioning}
+                className="mt-0.5 shrink-0 rounded-md border-slate-300 data-checked:border-blue-600 data-checked:bg-blue-600"
+              />
+              <Label
+                htmlFor="kvkkInformed"
+                className="min-w-0 flex-1 cursor-pointer text-xs font-normal leading-relaxed text-slate-600 block!"
+              >
+                Kişisel Verilerin İşlenmesine İlişkin{" "}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    openKvkkModal();
+                  }}
+                  className="font-semibold text-blue-600 underline-offset-2 hover:text-blue-700 hover:underline"
+                >
+                  Aydınlatma Metni
+                </button>
+                &apos;ni okudum ve bilgilendirildim.
+              </Label>
+            </div>
+
+            <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3.5">
+              <Checkbox
+                id="marketingConsent"
+                checked={marketingConsent}
+                onCheckedChange={(checked) =>
+                  setMarketingConsent(checked === true)
+                }
+                disabled={loading || transitioning}
+                className="mt-0.5 shrink-0 rounded-md border-slate-300 data-checked:border-blue-600 data-checked:bg-blue-600"
+              />
+              <Label
+                htmlFor="marketingConsent"
+                className="min-w-0 flex-1 cursor-pointer text-xs font-normal leading-relaxed text-slate-600 block!"
+              >
+                {MARKETING_CONSENT_TEXT}
+              </Label>
+            </div>
+          </div>
+
           <AuthAlert message={error} />
 
           <Button
             type="submit"
-            disabled={loading || transitioning}
+            disabled={loading || transitioning || !kvkkInformed}
             className={authPrimaryButtonClassName}
           >
             {loading ? (
@@ -263,6 +342,16 @@ export function RegisterForm() {
           </Button>
         </form>
 
+        <p className="mt-4 text-center text-xs text-slate-400">
+          <Link
+            href={KVKK_AYDINLATMA_PATH}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-slate-500 hover:text-slate-700"
+          >
+            Aydınlatma metnini ayrı sayfada görüntüle
+          </Link>
+        </p>
 
         <p className="mt-6 text-center text-sm text-slate-500">
           Zaten hesabınız var mı?{" "}

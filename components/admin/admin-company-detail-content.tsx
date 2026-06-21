@@ -1,3 +1,4 @@
+import { AdminPageContainer } from "@/components/admin/layout/admin-page-container";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { AdminCompanyActions } from "@/components/admin/admin-company-actions";
@@ -26,6 +27,7 @@ export function AdminCompanyDetailContent({
   company: CompanyDetail;
 }) {
   return (
+    <AdminPageContainer size="full">
     <div>
       <AdminPageHeader
         title={company.name}
@@ -131,7 +133,7 @@ export function AdminCompanyDetailContent({
         </div>
 
         <div className="space-y-6">
-          <div className={cardClassName}>
+          <div id="membership" className={`${cardClassName} scroll-mt-24`}>
             <h2 className="mb-4 text-[18px] font-extrabold text-[#0f1f4d]">
               Üyelik Bilgileri
             </h2>
@@ -183,6 +185,7 @@ export function AdminCompanyDetailContent({
         </div>
       </div>
     </div>
+    </AdminPageContainer>
   );
 }
 

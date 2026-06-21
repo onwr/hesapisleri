@@ -1,4 +1,5 @@
 import type { Company, CompanySettings, MembershipPayment } from "@prisma/client";
+import { assertCompanyAccess, SettingsAccessError } from "@/lib/company-access";
 import { db } from "@/lib/prisma";
 import {
   StorageConfigError,
@@ -15,34 +16,22 @@ import {
   type UpdateInvoiceSettingsInput,
   type UpdateNotificationSettingsInput,
 } from "@/lib/settings-utils";
+import {
+  serializeCompany,
+  serializeCompanySettings,
+  type SerializedCompany,
+  type SerializedCompanySettings,
+} from "@/lib/settings-serialization";
+
+export { SettingsAccessError, assertCompanyAccess } from "@/lib/company-access";
+export {
+  serializeCompany,
+  serializeCompanySettings,
+  type SerializedCompany,
+  type SerializedCompanySettings,
+} from "@/lib/settings-serialization";
 
 const CDN_COMPANY_FOLDER = "hesapisleri/companies";
-
-export class SettingsAccessError extends Error {
-  status: number;
-
-  constructor(message: string, status = 403) {
-    super(message);
-    this.name = "SettingsAccessError";
-    this.status = status;
-  }
-}
-
-export async function assertCompanyAccess(userId: string, companyId: string) {
-  const companyUser = await db.companyUser.findFirst({
-    where: {
-      userId,
-      companyId,
-      status: "ACTIVE",
-    },
-  });
-
-  if (!companyUser) {
-    throw new SettingsAccessError("Bu firmaya erişim yetkiniz yok.");
-  }
-
-  return companyUser;
-}
 
 export async function ensureCompanySettings(companyId: string) {
   const existing = await db.companySettings.findUnique({
@@ -60,47 +49,6 @@ export async function ensureCompanySettings(companyId: string) {
       invoiceNoteTemplate: null,
     },
   });
-}
-
-export type SerializedCompany = Omit<Company, "createdAt" | "updatedAt"> & {
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type SerializedCompanySettings = Omit<
-  CompanySettings,
-  | "monthlyFee"
-  | "lastPaymentDate"
-  | "nextPaymentDate"
-  | "createdAt"
-  | "updatedAt"
-> & {
-  monthlyFee: number;
-  lastPaymentDate: string | null;
-  nextPaymentDate: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export function serializeCompany(company: Company): SerializedCompany {
-  return {
-    ...company,
-    createdAt: company.createdAt.toISOString(),
-    updatedAt: company.updatedAt.toISOString(),
-  };
-}
-
-export function serializeCompanySettings(
-  settings: CompanySettings
-): SerializedCompanySettings {
-  return {
-    ...settings,
-    monthlyFee: Number(settings.monthlyFee),
-    lastPaymentDate: settings.lastPaymentDate?.toISOString() ?? null,
-    nextPaymentDate: settings.nextPaymentDate?.toISOString() ?? null,
-    createdAt: settings.createdAt.toISOString(),
-    updatedAt: settings.updatedAt.toISOString(),
-  };
 }
 
 export type SerializedSettingsBundle = {

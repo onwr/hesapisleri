@@ -357,20 +357,6 @@ export default function EInvoicePage() {
   }
 
   function addProductToItems(product: Product) {
-    if (product.stock <= 0) {
-      setError(`${product.name} stokta yok.`);
-      return;
-    }
-
-    const usedQty = getUsedProductQuantity(items, product.id);
-
-    if (usedQty >= product.stock) {
-      setError(
-        `${product.name} için stok limiti doldu. Maksimum ${product.stock} adet eklenebilir.`
-      );
-      return;
-    }
-
     const price = Number(product.sellPrice);
 
     setError("");

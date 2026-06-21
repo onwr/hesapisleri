@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import {
   ArrowDownLeft,
   Banknote,
@@ -15,17 +14,19 @@ import {
   Wallet,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
+import { guardPageModule } from "@/lib/module-access";
+
 import { BankLogo } from "@/components/shared/bank-logo";
 import {
   CashBankAccountRowActions,
   CashBankActionCards,
+  CashBankEmptyAccountsCta,
 } from "@/components/cash-bank/cash-bank-list-actions";
 import {
   CashBankTablePagination,
   CashBankTableToolbar,
 } from "@/components/cash-bank/cash-bank-table-controls";
 import { CashBankSidebarWidgets } from "@/components/cash-bank/cash-bank-sidebar-widgets";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import { getCashBankPageData } from "@/lib/cash-bank-page-data";
 import {
   buildCashBankQuery,
@@ -39,12 +40,7 @@ import {
   parsePage,
   parseSearchQuery,
 } from "@/lib/cash-bank-page-utils";
-import { db } from "@/lib/prisma";
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
+import { canManageAccounts, resolveEffectiveRole } from "@/lib/permission-utils";
 
 type CashBankPageProps = {
   searchParams: Promise<{
@@ -72,33 +68,12 @@ const colorClassMap = {
 const cashIconColors = ["bg-emerald-500", "bg-yellow-400", "bg-teal-500"];
 
 export default async function CashBankPage({ searchParams }: CashBankPageProps) {
+  const session = await guardPageModule("cash-bank");
+  const company = session.company;
+  const companyUser = session.companyUser;
+  const effectiveRole = session.effectiveRole;
   const params = await searchParams;
-  const token = await getAuthToken();
-
-  if (!token) redirect("/login");
-
-  const payload = verifyToken<AuthPayload>(token);
-
-  if (!payload?.userId || !payload.companyId) redirect("/login");
-
-  const user = await db.user.findUnique({
-    where: { id: payload.userId },
-    include: {
-      companyUsers: {
-        include: {
-          company: true,
-        },
-      },
-    },
-  });
-
-  if (!user) redirect("/login");
-
-  const company =
-    user.companyUsers.find((item) => item.companyId === payload.companyId)
-      ?.company ?? user.companyUsers[0]?.company;
-
-  if (!company) redirect("/login");
+const canManage = canManageAccounts(effectiveRole, companyUser.isOwner);
 
   const activeTab = parseCashBankTab(params.tab);
   const currentPage = parsePage(params.page);
@@ -121,28 +96,38 @@ export default async function CashBankPage({ searchParams }: CashBankPageProps) 
     q: searchQuery,
   });
 
-  const actionAccountOptions = [
-    ...cashAccounts.map((account) => ({
-      id: account.id,
-      name: account.name,
-      type: account.type,
-      balance: account.balance,
-    })),
-    ...bankAccounts.map((account) => ({
-      id: account.id,
-      name: account.name,
-      type: "BANK",
-      balance: account.balance,
-    })),
-  ];
+  const actionAccountOptions = [...cashAccounts, ...bankAccounts].map((account) => ({
+    id: account.id,
+    name: account.name,
+    type: account.type,
+    balance: account.balance,
+  }));
 
   const hasFilters = Boolean(searchQuery) || activeTab !== "accounts";
   const isAccountsTab = activeTab === "accounts";
 
+  function toAccountFormRecord(
+    account: (typeof cashAccounts)[number] | (typeof bankAccounts)[number]
+  ) {
+    return {
+      id: account.id,
+      name: account.name,
+      type: account.type,
+      bankName: account.bankName,
+      branchName: account.branchName,
+      iban: account.iban,
+      accountNumber: account.accountNumber,
+      currency: account.currency,
+      isDefault: account.isDefault,
+      description: account.description,
+      status: account.status === "ACTIVE" ? ("ACTIVE" as const) : ("PASSIVE" as const),
+    };
+  }
+
   return (
     <AppShell>
       <div className="space-y-5">
-        <CashBankActionCards accounts={actionAccountOptions} />
+        <CashBankActionCards accounts={actionAccountOptions} canManage={canManage} />
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           {statCards.map((stat) => {
@@ -230,6 +215,11 @@ export default async function CashBankPage({ searchParams }: CashBankPageProps) 
                                   <p className="truncate text-[12px] font-extrabold text-[#0f1f4d]">
                                     {account.name}
                                   </p>
+                                  {account.isDefault ? (
+                                    <span className="mt-0.5 inline-block rounded-md bg-amber-50 px-1.5 py-0.5 text-[9px] font-black text-amber-700">
+                                      Varsayılan
+                                    </span>
+                                  ) : null}
                                 </div>
                               </td>
 
@@ -258,6 +248,10 @@ export default async function CashBankPage({ searchParams }: CashBankPageProps) 
                                 <CashBankAccountRowActions
                                   accountId={account.id}
                                   accounts={actionAccountOptions}
+                                  canManage={canManage}
+                                  isDefault={account.isDefault}
+                                  status={account.status}
+                                  account={toAccountFormRecord(account)}
                                 />
                               </td>
                             </tr>
@@ -270,9 +264,14 @@ export default async function CashBankPage({ searchParams }: CashBankPageProps) 
                               colSpan={5}
                               className="px-4 py-8 text-center text-[13px] font-medium text-slate-500"
                             >
-                              {hasFilters
-                                ? "Bu filtrede kasa hesabı bulunamadı"
-                                : "Henüz kasa hesabı yok"}
+                              <div>
+                                {hasFilters
+                                  ? "Bu filtrede kasa hesabı bulunamadı"
+                                  : "Henüz hesap eklenmedi."}
+                                {!hasFilters ? (
+                                  <CashBankEmptyAccountsCta canManage={canManage} />
+                                ) : null}
+                              </div>
                             </td>
                           </tr>
                         ) : null}
@@ -320,6 +319,11 @@ export default async function CashBankPage({ searchParams }: CashBankPageProps) 
                                     <p className="truncate text-[12px] font-extrabold text-[#0f1f4d]">
                                       {account.name}
                                     </p>
+                                    {account.isDefault ? (
+                                      <span className="mt-0.5 inline-block rounded-md bg-amber-50 px-1.5 py-0.5 text-[9px] font-black text-amber-700">
+                                        Varsayılan
+                                      </span>
+                                    ) : null}
                                     {account.iban ? (
                                       <p className="mt-0.5 truncate text-[10px] font-medium text-slate-500">
                                         {account.iban}
@@ -329,8 +333,13 @@ export default async function CashBankPage({ searchParams }: CashBankPageProps) 
                                 </div>
                               </td>
 
-                              <td className="max-w-[120px] truncate px-2 py-2.5 text-slate-600">
-                                {account.bankName || "-"}
+                              <td className="max-w-[120px] px-2 py-2.5">
+                                <p className="truncate text-slate-600">
+                                  {account.bankName || "-"}
+                                </p>
+                                <span className="mt-1 inline-block rounded-md bg-blue-50 px-1.5 py-0.5 text-[9px] font-black text-blue-600">
+                                  {getAccountTypeText(account.type)}
+                                </span>
                               </td>
 
                               <td className="whitespace-nowrap px-2 py-2.5 text-right text-[12px] font-black text-emerald-600">
@@ -352,6 +361,10 @@ export default async function CashBankPage({ searchParams }: CashBankPageProps) 
                                 <CashBankAccountRowActions
                                   accountId={account.id}
                                   accounts={actionAccountOptions}
+                                  canManage={canManage}
+                                  isDefault={account.isDefault}
+                                  status={account.status}
+                                  account={toAccountFormRecord(account)}
                                 />
                               </td>
                             </tr>
@@ -364,9 +377,14 @@ export default async function CashBankPage({ searchParams }: CashBankPageProps) 
                               colSpan={5}
                               className="px-4 py-8 text-center text-[13px] font-medium text-slate-500"
                             >
-                              {hasFilters
-                                ? "Bu filtrede banka hesabı bulunamadı"
-                                : "Henüz banka hesabı yok"}
+                              <div>
+                                {hasFilters
+                                  ? "Bu filtrede banka hesabı bulunamadı"
+                                  : "Henüz banka hesabı yok"}
+                                {!hasFilters && cashAccounts.length === 0 ? (
+                                  <CashBankEmptyAccountsCta canManage={canManage} />
+                                ) : null}
+                              </div>
                             </td>
                           </tr>
                         ) : null}

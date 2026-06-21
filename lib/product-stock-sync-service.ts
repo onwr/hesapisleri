@@ -1,4 +1,5 @@
 import { db } from "@/lib/prisma";
+import { isServiceProductType } from "@/lib/product-type-utils";
 
 type TransactionClient = Omit<
   typeof db,
@@ -9,6 +10,7 @@ export type ProductStockSyncSummary = {
   updated: number;
   unchanged: number;
   backfilled: number;
+  skipped: number;
 };
 
 const DEFAULT_WAREHOUSE_NAME = "Ana Depo";
@@ -64,6 +66,17 @@ export async function syncProductStockFromWarehouses(
   productId: string,
   tx: TransactionClient = db
 ) {
+  const product = await tx.product.findFirst({
+    where: { id: productId, companyId },
+    select: { id: true, productType: true, stock: true },
+  });
+
+  if (!product || isServiceProductType(product.productType)) {
+    return tx.product.findFirstOrThrow({
+      where: { id: productId },
+    });
+  }
+
   const total = await calculateProductStockFromWarehouses(
     companyId,
     productId,
@@ -85,14 +98,16 @@ export async function syncManyProductStocks(
 ) {
   let updated = 0;
   let unchanged = 0;
+  let skipped = 0;
 
   for (const productId of productIds) {
     const result = await syncOneProductStockIfNeeded(companyId, productId);
-    if (result.changed) updated += 1;
+    if (result.skipped) skipped += 1;
+    else if (result.changed) updated += 1;
     else unchanged += 1;
   }
 
-  return { updated, unchanged, backfilled: 0 };
+  return { updated, unchanged, backfilled: 0, skipped };
 }
 
 async function syncOneProductStockIfNeeded(
@@ -102,11 +117,15 @@ async function syncOneProductStockIfNeeded(
 ) {
   const product = await db.product.findFirst({
     where: { id: productId, companyId },
-    select: { id: true, stock: true },
+    select: { id: true, stock: true, productType: true },
   });
 
   if (!product) {
-    return { changed: false, backfilled: false };
+    return { changed: false, backfilled: false, skipped: false };
+  }
+
+  if (isServiceProductType(product.productType)) {
+    return { changed: false, backfilled: false, skipped: true };
   }
 
   const warehouseCount = await db.warehouseStock.count({
@@ -127,7 +146,7 @@ async function syncOneProductStockIfNeeded(
         quantity: product.stock,
       },
     });
-    return { changed: false, backfilled: true };
+    return { changed: false, backfilled: true, skipped: false };
   }
 
   const warehouseTotal = await calculateProductStockFromWarehouses(
@@ -136,24 +155,30 @@ async function syncOneProductStockIfNeeded(
   );
 
   if (warehouseTotal === product.stock) {
-    return { changed: false, backfilled: false };
+    return { changed: false, backfilled: false, skipped: false };
   }
 
   await syncProductStockFromWarehouses(companyId, productId);
-  return { changed: true, backfilled: false };
+  return { changed: true, backfilled: false, skipped: false };
 }
 
 export async function syncAllProductStocksForCompany(
   companyId: string
 ): Promise<ProductStockSyncSummary> {
   const products = await db.product.findMany({
-    where: { companyId },
+    where: { companyId, productType: "STOCK" },
     select: { id: true },
   });
 
   let updated = 0;
   let unchanged = 0;
   let backfilled = 0;
+  let skipped = 0;
+
+  const serviceCount = await db.product.count({
+    where: { companyId, productType: "SERVICE" },
+  });
+  skipped = serviceCount;
 
   for (const product of products) {
     const result = await syncOneProductStockIfNeeded(companyId, product.id);
@@ -162,7 +187,7 @@ export async function syncAllProductStocksForCompany(
     else unchanged += 1;
   }
 
-  return { updated, unchanged, backfilled };
+  return { updated, unchanged, backfilled, skipped };
 }
 
 /** @deprecated use syncAllProductStocksForCompany via POST /api/products/sync-stock */

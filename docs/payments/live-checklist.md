@@ -1,0 +1,24 @@
+# PayTR Live Checklist
+
+- Merchant ID alındı
+- Merchant Key alındı
+- Merchant Salt alındı
+- Direkt API yetkisi açık
+- Kart Saklama API yetkisi açık
+- Non3D yetkisi açık
+- Recurring yetkisi açık
+- Callback URL tanımlı
+- Production HTTPS aktif
+- Callback public ve auth istemiyor
+- Callback hash doğruluyor
+- Callback yalnız `OK` dönüyor
+- `PAYTR_TEST_MODE=0`
+- `debug_on=0`
+- `PAYTR_DIRECT_API_ENABLED=true`
+- `PAYTR_CARD_STORAGE_ENABLED=true`
+- `PAYTR_RECURRING_ENABLED=true`
+- `PAYTR_NON3D_ENABLED=true`
+- Reconciliation cron aktif
+- Billing renewal cron aktif
+- Billing outbox cron aktif
+- Invalid hash ve UNKNOWN payment alarmı aktif

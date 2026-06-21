@@ -4,7 +4,7 @@ import { Decimal } from "@prisma/client/runtime/library";
 import {
   serializeCompany,
   serializeCompanySettings,
-} from "./settings-service";
+} from "./settings-serialization";
 
 describe("settings serialization", () => {
   it("CompanySettings Decimal alanını number'a çevirir", () => {
@@ -53,6 +53,9 @@ describe("settings serialization", () => {
       email: null,
       address: null,
       logoUrl: null,
+      referringPartnerId: null,
+      referralCode: null,
+      referredAt: null,
       status: "ACTIVE",
       createdAt: new Date("2026-03-01T10:00:00.000Z"),
       updatedAt: new Date("2026-03-02T10:00:00.000Z"),

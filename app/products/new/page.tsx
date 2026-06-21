@@ -1,18 +1,25 @@
-import { redirect } from "next/navigation";
+import { guardPageModule } from "@/lib/module-access";
 import { NewProductForm } from "@/components/products/new-product-form";
-import { getAuthToken, verifyToken } from "@/lib/auth";
+import type { ProductTypeKey } from "@/lib/product-type-utils";
 
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
+type NewProductPageProps = {
+  searchParams: Promise<{ type?: string }>;
 };
 
-export default async function NewProductPage() {
-  const token = await getAuthToken();
-  if (!token) redirect("/login");
+function parseInitialProductType(value?: string): ProductTypeKey {
+  if (value === "service") return "SERVICE";
+  return "STOCK";
+}
 
-  const payload = verifyToken<AuthPayload>(token);
-  if (!payload?.companyId) redirect("/login");
+export default async function NewProductPage({ searchParams }: NewProductPageProps) {
+  const session = await guardPageModule("products");
+  const company = session.company;
+  const params = await searchParams;
 
-  return <NewProductForm companyId={payload.companyId} />;
+  return (
+    <NewProductForm
+      companyId={company.id}
+      initialProductType={parseInitialProductType(params.type)}
+    />
+  );
 }

@@ -25,8 +25,9 @@ import { QuoteConvertPanel } from "@/components/sales/quote-convert-panel";
 import { SaleCollectPayment } from "@/components/sales/sale-collect-payment";
 import { SalePrintOnLoad } from "@/components/sales/sale-print-on-load";
 import { AppShell } from "@/components/layout/app-shell";
+import { guardPageModule } from "@/lib/module-access";
+
 import { db } from "@/lib/prisma";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import { formatMoney } from "@/lib/format-utils";
 import { getSaleRemainingAmount } from "@/lib/sale-payment-utils";
 
@@ -38,11 +39,6 @@ type Props = {
     print?: string;
     convert?: string;
   }>;
-};
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
 };
 
 function formatDate(date: Date) {
@@ -94,37 +90,12 @@ function getCustomerBalanceClass(balance: number) {
 }
 
 export default async function SaleDetailPage({ params, searchParams }: Props) {
-  const { id } = await params;
+  const session = await guardPageModule("sales");
+  const company = session.company;
+const { id } = await params;
   const query = await searchParams;
   const shouldPrint = query.print === "1";
   const shouldOpenConvert = query.convert === "1";
-
-  const token = await getAuthToken();
-  if (!token) redirect("/login");
-
-  const payload = verifyToken<AuthPayload>(token);
-  if (!payload?.userId || !payload.companyId) redirect("/login");
-
-  const user = await db.user.findUnique({
-    where: {
-      id: payload.userId,
-    },
-    include: {
-      companyUsers: {
-        include: {
-          company: true,
-        },
-      },
-    },
-  });
-
-  if (!user) redirect("/login");
-
-  const company =
-    user.companyUsers.find((item) => item.companyId === payload.companyId)
-      ?.company ?? user.companyUsers[0]?.company;
-
-  if (!company) redirect("/login");
 
   const sale = await db.sale.findFirst({
     where: {

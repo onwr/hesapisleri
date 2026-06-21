@@ -7,6 +7,7 @@ export type AppModule =
   | "pos"
   | "sales"
   | "customers"
+  | "suppliers"
   | "products"
   | "stocks"
   | "invoices"
@@ -34,6 +35,7 @@ const MODULE_ACCESS: Record<AppModule, PermissionRole[]> = {
   pos: ["OWNER", "ADMIN", "STAFF", "POS_STAFF", "SUPER_ADMIN"],
   sales: ["OWNER", "ADMIN", "ACCOUNTANT", "STAFF", "SUPER_ADMIN"],
   customers: ["OWNER", "ADMIN", "ACCOUNTANT", "STAFF", "SUPER_ADMIN"],
+  suppliers: ["OWNER", "ADMIN", "ACCOUNTANT", "STAFF", "SUPER_ADMIN"],
   products: ["OWNER", "ADMIN", "STAFF", "SUPER_ADMIN"],
   stocks: ["OWNER", "ADMIN", "STAFF", "SUPER_ADMIN"],
   invoices: ["OWNER", "ADMIN", "ACCOUNTANT", "SUPER_ADMIN"],
@@ -149,6 +151,10 @@ export function canManageSettings(role: PermissionRole, isOwner = false) {
   );
 }
 
+export function canManageMembership(role: PermissionRole, isOwner = false) {
+  return canManageSettings(role, isOwner);
+}
+
 export function canAccessFinance(role: PermissionRole, isOwner = false) {
   return (
     canAccessModule(role, "cash-bank", isOwner) &&
@@ -176,6 +182,36 @@ export function getPostAuthRedirectPath(
 
 export function canManageProducts(role: PermissionRole, isOwner = false) {
   return canAccessModule(role, "products", isOwner);
+}
+
+const WAREHOUSE_MANAGE_ROLES: PermissionRole[] = [
+  "OWNER",
+  "ADMIN",
+  "SUPER_ADMIN",
+];
+
+export function canManageWarehouses(role: PermissionRole, isOwner = false) {
+  return hasRoleAccess(role, WAREHOUSE_MANAGE_ROLES, isOwner);
+}
+
+const ACCOUNT_MANAGE_ROLES: PermissionRole[] = [
+  "OWNER",
+  "ADMIN",
+  "SUPER_ADMIN",
+];
+
+export function canManageAccounts(role: PermissionRole, isOwner = false) {
+  return hasRoleAccess(role, ACCOUNT_MANAGE_ROLES, isOwner);
+}
+
+const SUPPLIER_MANAGE_ROLES: PermissionRole[] = [
+  "OWNER",
+  "ADMIN",
+  "SUPER_ADMIN",
+];
+
+export function canManageSuppliers(role: PermissionRole, isOwner = false) {
+  return hasRoleAccess(role, SUPPLIER_MANAGE_ROLES, isOwner);
 }
 
 export function canManageInvoices(role: PermissionRole, isOwner = false) {

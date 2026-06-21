@@ -27,13 +27,26 @@ export async function POST(req: Request) {
       );
     }
 
-    let sale;
-
     try {
-      sale = await executePosCheckout({
+      const result = await executePosCheckout({
         companyId,
         userId,
         data: parsed.data,
+      });
+
+      const warning =
+        result.stockWarnings.length > 0
+          ? result.stockWarnings[0]?.message
+          : undefined;
+
+      return NextResponse.json({
+        success: true,
+        message: "POS satışı başarıyla tamamlandı.",
+        ...(warning ? { warning } : {}),
+        ...(result.stockWarnings.length > 0
+          ? { negativeStockItems: result.stockWarnings }
+          : {}),
+        data: result.sale,
       });
     } catch (error) {
       if (error instanceof SaleStockValidationError) {
@@ -52,12 +65,6 @@ export async function POST(req: Request) {
 
       throw error;
     }
-
-    return NextResponse.json({
-      success: true,
-      message: "POS satışı başarıyla tamamlandı.",
-      data: sale,
-    });
   } catch (error) {
     console.error("POS_CHECKOUT_ERROR", error);
 

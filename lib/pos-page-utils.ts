@@ -1,11 +1,13 @@
 import { roundMoney } from "@/lib/sale-payment-utils";
+import { isNegativeStock, isZeroOrNegativeStock } from "@/lib/stock-policy";
 
-export type PosQuickFilter = "all" | "in_stock" | "bestseller";
+export type PosQuickFilter = "all" | "stock" | "service" | "low_stock";
 
 export type PosGridProduct = {
   id: string;
   name: string;
   stock: number;
+  productType?: "STOCK" | "SERVICE";
   warehouseStock?: number;
   sellPrice: string | number;
   vatRate: number;
@@ -33,13 +35,58 @@ export function isPosProductOutOfStock(
   return getPosProductStock(product, useWarehouseStock) <= 0;
 }
 
+export function isPosProductNegativeStock(
+  product: PosGridProduct,
+  useWarehouseStock: boolean
+) {
+  return isNegativeStock(getPosProductStock(product, useWarehouseStock));
+}
+
 export function isPosProductLowStock(
   product: PosGridProduct,
   useWarehouseStock: boolean,
   threshold = 10
 ) {
   const stock = getPosProductStock(product, useWarehouseStock);
-  return stock > 0 && stock <= threshold;
+  return !isNegativeStock(stock) && stock > 0 && stock <= threshold;
+}
+
+export function getPosStockBadge(
+  stock: number,
+  productType?: "STOCK" | "SERVICE"
+): { label: string; className: string } {
+  if (productType === "SERVICE") {
+    return {
+      label: "Hizmet",
+      className: "bg-indigo-50 text-indigo-700",
+    };
+  }
+
+  if (isNegativeStock(stock)) {
+    return {
+      label: "Eksi stok",
+      className: "bg-rose-100 text-rose-800",
+    };
+  }
+
+  if (isZeroOrNegativeStock(stock)) {
+    return {
+      label: "Stok düşük",
+      className: "bg-amber-50 text-amber-700",
+    };
+  }
+
+  if (stock <= 10) {
+    return {
+      label: `${stock} stok`,
+      className: "bg-amber-50 text-amber-700",
+    };
+  }
+
+  return {
+    label: `${stock} stok`,
+    className: "bg-emerald-50 text-emerald-700",
+  };
 }
 
 export function filterPosProducts(
@@ -64,20 +111,22 @@ export function filterPosProducts(
     );
   }
 
-  if (input.quickFilter === "in_stock") {
-    list = list.filter(
-      (product) => !isPosProductOutOfStock(product, useWarehouseStock)
-    );
+  if (input.quickFilter === "stock") {
+    list = list.filter((product) => product.productType !== "SERVICE");
   }
 
-  if (input.quickFilter === "bestseller") {
-    list = list
-      .filter((product) => !isPosProductOutOfStock(product, useWarehouseStock))
-      .sort(
-        (a, b) =>
-          getPosProductStock(b, useWarehouseStock) -
-          getPosProductStock(a, useWarehouseStock)
-      );
+  if (input.quickFilter === "service") {
+    list = list.filter((product) => product.productType === "SERVICE");
+  }
+
+  if (input.quickFilter === "low_stock") {
+    list = list.filter(
+      (product) =>
+        product.productType !== "SERVICE" &&
+        (isPosProductLowStock(product, useWarehouseStock) ||
+          isPosProductOutOfStock(product, useWarehouseStock) ||
+          isPosProductNegativeStock(product, useWarehouseStock))
+    );
   }
 
   if (keyword) {
@@ -124,7 +173,6 @@ export function adjustCartQuantity(
     .map((item) => {
       if (item.productId !== productId) return item;
       const nextQuantity = item.quantity + delta;
-      if (nextQuantity > item.stock) return item;
       return { ...item, quantity: nextQuantity };
     })
     .filter((item) => item.quantity > 0);
@@ -132,6 +180,7 @@ export function adjustCartQuantity(
 
 export const POS_QUICK_FILTER_LABELS: Record<PosQuickFilter, string> = {
   all: "Tümü",
-  in_stock: "Stokta olanlar",
-  bestseller: "En çok satan",
+  stock: "Stoklu Ürünler",
+  service: "Hizmetler",
+  low_stock: "Düşük Stok",
 };

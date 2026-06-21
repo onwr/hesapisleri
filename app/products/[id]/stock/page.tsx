@@ -1,6 +1,6 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
+import { guardPageModule } from "@/lib/module-access";
 import { ProductStockMovementForm } from "@/components/products/product-stock-movement-form";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import { db } from "@/lib/prisma";
 import { getOrCreateDefaultWarehouse } from "@/lib/warehouse-service";
 
@@ -8,24 +8,15 @@ type Props = {
   params: Promise<{ id: string }>;
 };
 
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
-
 export default async function ProductStockMovementPage({ params }: Props) {
+  const session = await guardPageModule("products");
+  const company = session.company;
   const { id } = await params;
-
-  const token = await getAuthToken();
-  if (!token) redirect("/login");
-
-  const payload = verifyToken<AuthPayload>(token);
-  if (!payload?.userId || !payload.companyId) redirect("/login");
 
   const product = await db.product.findFirst({
     where: {
       id,
-      companyId: payload.companyId,
+      companyId: company.id,
     },
     include: {
       category: true,
@@ -34,16 +25,16 @@ export default async function ProductStockMovementPage({ params }: Props) {
 
   if (!product) notFound();
 
-  await getOrCreateDefaultWarehouse(payload.companyId);
+  await getOrCreateDefaultWarehouse(company.id);
 
   const warehouses = await db.warehouse.findMany({
-    where: { companyId: payload.companyId, status: "ACTIVE" },
+    where: { companyId: company.id, status: "ACTIVE" },
     select: { id: true, name: true, code: true, isDefault: true },
     orderBy: [{ isDefault: "desc" }, { name: "asc" }],
   });
 
   const warehouseStocks = await db.warehouseStock.findMany({
-    where: { companyId: payload.companyId, productId: id },
+    where: { companyId: company.id, productId: id },
     select: { warehouseId: true, quantity: true },
   });
 

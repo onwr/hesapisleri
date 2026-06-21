@@ -19,6 +19,19 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: "form-action 'self' https://www.paytr.com;",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

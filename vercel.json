@@ -1,0 +1,44 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/exchange-rates",
+      "schedule": "0 21 * * *"
+    },
+    {
+      "path": "/api/cron/exchange-rates",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/exchange-rates",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/exchange-rates",
+      "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron/billing-renewals",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/payment-reconciliation",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/billing-outbox",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/discount-reservations",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/membership-campaign-lifecycle",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/usage-period-reset",
+      "schedule": "0 0 1 * *"
+    }
+  ]
+}

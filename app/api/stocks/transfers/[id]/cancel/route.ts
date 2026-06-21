@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { invalidateDashboardCache } from "@/lib/dashboard-cache-invalidation";
 import { requireApiModuleAccess } from "@/lib/module-access";
 import { cancelWarehouseTransfer } from "@/lib/warehouse-service";
 
@@ -23,6 +24,8 @@ export async function POST(_req: Request, { params }: Props) {
         { status: result.status }
       );
     }
+
+    invalidateDashboardCache(auth.companyId, "warehouse-transfer-cancel");
 
     return NextResponse.json({
       success: true,

@@ -3,7 +3,7 @@
 import type { FormEvent, ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ArrowLeft,
   Boxes,
@@ -22,51 +22,61 @@ import {
   emptyProductFormValues,
   getFirstProductErrorMessage,
   mapProductFieldErrors,
+  resolveInitialBarcodePayloadMode,
+  shouldIncludeBarcodeInJsonPayload,
+  getUnitTypesForProductType,
+  type ProductBarcodePayloadMode,
   type ProductFormValues,
   type ProductUnitType,
 } from "@/lib/product-form-utils";
+import type { ProductTypeKey } from "@/lib/product-type-utils";
 
 type NewProductFormProps = {
   companyId: string;
+  initialProductType?: ProductTypeKey;
 };
 
-export function NewProductForm({ companyId }: NewProductFormProps) {
+export function NewProductForm({
+  companyId,
+  initialProductType = "STOCK",
+}: NewProductFormProps) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [form, setForm] = useState<ProductFormValues>(emptyProductFormValues);
+  const [form, setForm] = useState<ProductFormValues>(() => ({
+    ...emptyProductFormValues,
+    productType: initialProductType,
+    stock: initialProductType === "SERVICE" ? "0" : emptyProductFormValues.stock,
+    minStock: initialProductType === "SERVICE" ? "0" : emptyProductFormValues.minStock,
+  }));
+  const [barcodePayloadMode, setBarcodePayloadMode] =
+    useState<ProductBarcodePayloadMode>("omit");
 
   function updateForm(key: keyof ProductFormValues, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function updateBatch(values: Partial<ProductFormValues>) {
-    setForm((prev) => ({ ...prev, ...values }));
-  }
+  function handleProductTypeChange(productType: ProductTypeKey) {
+    const allowedUnits = getUnitTypesForProductType(productType);
+    setForm((prev) => ({
+      ...prev,
+      productType,
+      stock: productType === "SERVICE" ? "0" : prev.stock,
+      minStock: productType === "SERVICE" ? "0" : prev.minStock,
+      barcode: productType === "SERVICE" ? "" : prev.barcode,
+      warehouseLocation: productType === "SERVICE" ? "" : prev.warehouseLocation,
+      unitType: (allowedUnits as readonly ProductUnitType[]).includes(
+        prev.unitType
+      )
+        ? prev.unitType
+        : allowedUnits[0],
+    }));
 
-  useEffect(() => {
-    async function prefillIdentifiers() {
-      try {
-        const response = await fetch("/api/products/generate-identifiers");
-        const data = await response.json();
-
-        if (!response.ok || !data.success) {
-          return;
-        }
-
-        setForm((prev) => ({
-          ...prev,
-          sku: prev.sku || (data.data.sku as string),
-          barcode: prev.barcode || (data.data.barcode as string),
-        }));
-      } catch {
-        // Sessizce geç; kullanıcı manuel oluşturabilir.
-      }
+    if (productType === "SERVICE") {
+      setBarcodePayloadMode("omit");
     }
-
-    void prefillIdentifiers();
-  }, []);
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -74,7 +84,12 @@ export function NewProductForm({ companyId }: NewProductFormProps) {
     setError("");
     setFieldErrors({});
 
-    const payload = buildProductPayload(form);
+    const payload = buildProductPayload(form, { barcodeMode: barcodePayloadMode });
+    const requestBody = shouldIncludeBarcodeInJsonPayload(barcodePayloadMode)
+      ? payload
+      : Object.fromEntries(
+          Object.entries(payload).filter(([key]) => key !== "barcode")
+        );
 
     if (payload.name.length < 2) {
       setFieldErrors({ name: "Ürün adı en az 2 karakter olmalıdır." });
@@ -87,7 +102,7 @@ export function NewProductForm({ companyId }: NewProductFormProps) {
       const response = await fetch("/api/products/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
@@ -187,14 +202,16 @@ export function NewProductForm({ companyId }: NewProductFormProps) {
               form={form}
               fieldErrors={fieldErrors}
               mode="create"
+              barcodePayloadMode={barcodePayloadMode}
+              onBarcodePayloadModeChange={setBarcodePayloadMode}
               onChange={updateForm}
-              onBatchChange={updateBatch}
               onUnitTypeChange={(value: ProductUnitType) =>
                 setForm((prev) => ({ ...prev, unitType: value }))
               }
               onStatusChange={(value) =>
                 setForm((prev) => ({ ...prev, status: value }))
               }
+              onProductTypeChange={handleProductTypeChange}
             />
 
             {error ? (

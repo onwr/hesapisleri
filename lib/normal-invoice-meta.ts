@@ -6,6 +6,10 @@ export type NormalInvoiceItemMeta = {
   unitPrice: number;
   vatRate: number;
   productId?: string;
+  lineNetAmount?: number;
+  vatAmount?: number;
+  lineGrossAmount?: number;
+  discountAmount?: number;
 };
 
 export type NormalInvoiceMeta = {
@@ -14,6 +18,10 @@ export type NormalInvoiceMeta = {
   currency: "TRY";
   invoiceDate: string;
   discountAmount: number;
+  subtotal?: number;
+  taxableAmount?: number;
+  totalVat?: number;
+  grandTotal?: number;
   items: NormalInvoiceItemMeta[];
 };
 

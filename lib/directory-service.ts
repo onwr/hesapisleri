@@ -55,7 +55,9 @@ export type DirectorySummary = {
   favorites: number;
   customers: number;
   employees: number;
+  suppliers: number;
   manual: number;
+  missingInfo: number;
 };
 
 function serializeDirectoryContact(
@@ -215,7 +217,15 @@ export async function getDirectoryContactById(input: {
 }
 
 export async function getDirectorySummary(companyId: string): Promise<DirectorySummary> {
-  const [total, favorites, customers, employees, manual] = await Promise.all([
+  const [
+    total,
+    favorites,
+    customers,
+    employees,
+    suppliers,
+    manual,
+    missingInfo,
+  ] = await Promise.all([
     db.directoryContact.count({ where: { companyId, isActive: true } }),
     db.directoryContact.count({
       where: { companyId, isActive: true, isFavorite: true },
@@ -227,15 +237,37 @@ export async function getDirectorySummary(companyId: string): Promise<DirectoryS
       where: { companyId, isActive: true, type: "EMPLOYEE" },
     }),
     db.directoryContact.count({
+      where: { companyId, isActive: true, type: "SUPPLIER" },
+    }),
+    db.directoryContact.count({
       where: {
         companyId,
         isActive: true,
         OR: [{ sourceType: "MANUAL" }, { sourceType: null }],
       },
     }),
+    db.directoryContact.count({
+      where: {
+        companyId,
+        isActive: true,
+        AND: [
+          { OR: [{ phone: null }, { phone: "" }] },
+          { OR: [{ mobilePhone: null }, { mobilePhone: "" }] },
+          { OR: [{ email: null }, { email: "" }] },
+        ],
+      },
+    }),
   ]);
 
-  return { total, favorites, customers, employees, manual };
+  return {
+    total,
+    favorites,
+    customers,
+    employees,
+    suppliers,
+    manual,
+    missingInfo,
+  };
 }
 
 export async function getDirectoryTags(companyId: string) {
@@ -455,7 +487,7 @@ function directorySyncFieldsEqual(
 
 async function upsertDirectorySyncEntry(input: {
   companyId: string;
-  sourceType: "CUSTOMER" | "EMPLOYEE";
+  sourceType: "CUSTOMER" | "EMPLOYEE" | "SUPPLIER";
   sourceId: string;
   data: DirectorySyncPayload;
 }): Promise<"created" | "updated" | "skipped"> {
@@ -576,6 +608,53 @@ export async function syncDirectoryFromEmployee(input: {
       companyId: input.companyId,
       sourceType: "EMPLOYEE",
       sourceId: employee.id,
+      data,
+    });
+
+    if (result === "created") created += 1;
+    else if (result === "updated") updated += 1;
+    else skipped += 1;
+  }
+
+  return { created, updated, skipped };
+}
+
+export async function syncDirectoryFromSupplier(input: {
+  companyId: string;
+}): Promise<DirectorySyncResult> {
+  const suppliers = await db.supplier.findMany({
+    where: { companyId: input.companyId },
+  });
+
+  let created = 0;
+  let updated = 0;
+  let skipped = 0;
+
+  for (const supplier of suppliers) {
+    const name = supplier.name.trim();
+    if (!name) {
+      skipped += 1;
+      continue;
+    }
+
+    const data: DirectorySyncPayload = {
+      type: "SUPPLIER",
+      name,
+      companyName: supplier.companyName,
+      title: supplier.contactName,
+      phone: supplier.phone ?? supplier.mobilePhone,
+      email: supplier.email,
+      taxNumber: supplier.taxNumber,
+      address: [supplier.city, supplier.district, supplier.address]
+        .filter(Boolean)
+        .join(", ") || supplier.address,
+      isActive: supplier.isActive,
+    };
+
+    const result = await upsertDirectorySyncEntry({
+      companyId: input.companyId,
+      sourceType: "SUPPLIER",
+      sourceId: supplier.id,
       data,
     });
 

@@ -1,5 +1,10 @@
 import { db } from "@/lib/prisma";
 import {
+  buildInsufficientStockWarning,
+  type StockWarningItem,
+} from "@/lib/stock-policy";
+import { isServiceProductType } from "@/lib/product-type-utils";
+import {
   ensureProductWarehouseStock,
   getWarehouseStockQuantity,
   resolveWarehouseId,
@@ -46,11 +51,12 @@ export async function validateSaleItemsStock(
   companyId: string,
   items: SaleItemInput[],
   saleWarehouseId?: string | null
-) {
+): Promise<StockWarningItem[]> {
   const quantitiesByProduct = aggregateQuantitiesByProduct(items);
+  const warnings: StockWarningItem[] = [];
 
   if (quantitiesByProduct.size === 0) {
-    return;
+    return warnings;
   }
 
   const resolvedWarehouseId = await resolveWarehouseId(
@@ -75,6 +81,10 @@ export async function validateSaleItemsStock(
       throw new SaleStockValidationError("Satış kalemlerinden biri bulunamadı.");
     }
 
+    if (isServiceProductType(product.productType)) {
+      continue;
+    }
+
     const requestedQty = quantitiesByProduct.get(productId) ?? 0;
     const { warehouse, quantity } = await getWarehouseStockQuantity(
       tx,
@@ -84,11 +94,19 @@ export async function validateSaleItemsStock(
     );
 
     if (quantity < requestedQty) {
-      throw new SaleStockValidationError(
-        `${warehouse.name} deposunda ${product.name} için yeterli stok yok. Mevcut: ${quantity}`
-      );
+      warnings.push({
+        ...buildInsufficientStockWarning({
+          productName: product.name,
+          warehouseName: warehouse.name,
+          availableQty: quantity,
+          requestedQty,
+        }),
+        productId,
+      });
     }
   }
+
+  return warnings;
 }
 
 type StockItemInput = {
@@ -104,6 +122,30 @@ export async function applySaleStockDecrement(
   items: StockItemInput[],
   saleWarehouseId?: string | null
 ) {
+  const stockItems = items.filter((item) => item.productId);
+
+  if (stockItems.length === 0) {
+    return;
+  }
+
+  const products = await tx.product.findMany({
+    where: {
+      companyId,
+      id: {
+        in: stockItems
+          .map((item) => item.productId)
+          .filter((id): id is string => Boolean(id)),
+      },
+    },
+    select: { id: true, productType: true },
+  });
+
+  const stockProductIds = new Set(
+    products
+      .filter((product) => !isServiceProductType(product.productType))
+      .map((product) => product.id)
+  );
+
   const resolvedWarehouseId = await resolveWarehouseId(
     companyId,
     saleWarehouseId,
@@ -115,7 +157,7 @@ export async function applySaleStockDecrement(
   });
 
   for (const item of items) {
-    if (!item.productId) continue;
+    if (!item.productId || !stockProductIds.has(item.productId)) continue;
 
     const warehouseStock = await ensureProductWarehouseStock(
       companyId,
@@ -123,12 +165,6 @@ export async function applySaleStockDecrement(
       warehouse.id,
       tx
     );
-
-    if (warehouseStock.quantity < item.quantity) {
-      throw new SaleStockValidationError(
-        `${warehouse.name} deposunda yeterli stok yok. Mevcut: ${warehouseStock.quantity}`
-      );
-    }
 
     await tx.warehouseStock.update({
       where: { id: warehouseStock.id },

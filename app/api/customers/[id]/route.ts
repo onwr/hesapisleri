@@ -1,15 +1,10 @@
 import { NextResponse } from "next/server";
+import { requireApiModuleAccess } from "@/lib/module-access";
 import { db } from "@/lib/prisma";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import {
   customerFormSchema,
   normalizeCustomerInput,
 } from "@/lib/customer-form-utils";
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
 
 type Props = {
   params: Promise<{
@@ -18,42 +13,28 @@ type Props = {
 };
 
 async function getAuthContext() {
-  const token = await getAuthToken();
-
-  if (!token) {
-    return {
-      error: NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      ),
-    };
+  const auth = await requireApiModuleAccess("customers");
+  if ("error" in auth) {
+    return { error: auth.error } as const;
   }
 
-  const payload = verifyToken<AuthPayload>(token);
-
-  if (!payload?.userId || !payload.companyId) {
-    return {
-      error: NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      ),
-    };
-  }
-
-  return { payload };
+  return {
+    companyId: auth.companyId,
+    userId: auth.userId,
+  } as const;
 }
 
 export async function GET(_req: Request, { params }: Props) {
   try {
     const auth = await getAuthContext();
-    if (auth.error) return auth.error;
+    if ("error" in auth) return auth.error;
 
     const { id } = await params;
 
     const customer = await db.customer.findFirst({
       where: {
         id,
-        companyId: auth.payload!.companyId!,
+        companyId: auth.companyId,
       },
     });
 
@@ -84,7 +65,7 @@ export async function GET(_req: Request, { params }: Props) {
 export async function PATCH(req: Request, { params }: Props) {
   try {
     const auth = await getAuthContext();
-    if (auth.error) return auth.error;
+    if ("error" in auth) return auth.error;
 
     const { id } = await params;
     const body = await req.json();
@@ -104,7 +85,7 @@ export async function PATCH(req: Request, { params }: Props) {
     const existing = await db.customer.findFirst({
       where: {
         id,
-        companyId: auth.payload!.companyId!,
+        companyId: auth.companyId,
       },
     });
 
@@ -115,17 +96,42 @@ export async function PATCH(req: Request, { params }: Props) {
       );
     }
 
-    const normalized = normalizeCustomerInput(parsed.data);
+    let normalized;
+    try {
+      normalized = normalizeCustomerInput(parsed.data);
+    } catch (error) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            error instanceof Error
+              ? error.message
+              : "Vergi levhası bilgileri geçersiz.",
+        },
+        { status: 400 }
+      );
+    }
 
-    const customer = await db.customer.update({
-      where: { id: existing.id },
+    const updateResult = await db.customer.updateMany({
+      where: { id: existing.id, companyId: auth.companyId },
       data: normalized,
+    });
+
+    if (updateResult.count === 0) {
+      return NextResponse.json(
+        { success: false, message: "Müşteri bulunamadı." },
+        { status: 404 }
+      );
+    }
+
+    const customer = await db.customer.findFirstOrThrow({
+      where: { id: existing.id, companyId: auth.companyId },
     });
 
     await db.activityLog.create({
       data: {
-        companyId: auth.payload!.companyId!,
-        userId: auth.payload!.userId,
+        companyId: auth.companyId,
+        userId: auth.userId,
         action: "UPDATE",
         module: "customers",
         message: `${customer.name} müşterisi güncellendi.`,

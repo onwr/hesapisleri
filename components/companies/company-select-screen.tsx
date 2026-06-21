@@ -2,9 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
-  ArrowLeft,
   Building2,
   Check,
   Loader2,
@@ -27,7 +25,6 @@ function getInitials(name: string) {
 }
 
 export function CompanySelectScreen() {
-  const router = useRouter();
   const [companies, setCompanies] = useState<CompanyListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -41,17 +38,17 @@ export function CompanySelectScreen() {
       const json = await res.json();
 
       if (!res.ok || !json.success) {
-        router.push("/login");
+        window.location.replace("/api/auth/clear-session?next=/login");
         return;
       }
 
       setCompanies(json.data ?? []);
     } catch {
-      router.push("/login");
+      window.location.replace("/api/auth/clear-session?next=/login");
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     void loadCompanies();
@@ -65,7 +62,7 @@ export function CompanySelectScreen() {
   async function handleSelect(companyId: string, isCurrent: boolean) {
     if (isCurrent || switchingId) {
       if (isCurrent) {
-        router.push("/dashboard");
+        window.location.replace("/dashboard");
       }
       return;
     }
@@ -85,8 +82,8 @@ export function CompanySelectScreen() {
         return;
       }
 
-      router.push(json.data?.redirectTo ?? "/dashboard");
-      router.refresh();
+      const redirectTo = json.data?.redirectTo ?? "/dashboard";
+      window.location.replace(redirectTo);
     } finally {
       setSwitchingId(null);
     }
@@ -101,13 +98,7 @@ export function CompanySelectScreen() {
       <img src="/login-bg.png" alt="" className="absolute filter grayscale brightness-150 invert  inset-0 w-full h-full object-cover" />
       <div className="relative mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center gap-2 justify-self-start text-sm font-bold text-slate-500 transition hover:text-[#0f1f4d]"
-          >
-            <ArrowLeft size={16} />
-            Panele dön
-          </Link>
+          <div className="justify-self-start" />
 
           <img
             src="/logo.svg"

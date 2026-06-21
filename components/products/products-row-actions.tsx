@@ -272,7 +272,7 @@ export function ProductsRowActions({
 
             {!row.isService ? (
               <DropdownMenuItem asChild>
-                <Link href="/stocks" className="cursor-pointer">
+                <Link href="/products/stocks" className="cursor-pointer">
                   <Warehouse size={14} />
                   Stok merkezi
                 </Link>

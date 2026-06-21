@@ -19,7 +19,13 @@ import {
   Wallet,
 } from "lucide-react";
 import { AppLoadingScreen } from "@/components/layout/app-loading-screen";
+import { SaleLineEditFields } from "@/components/sales/sale-line-edit-fields";
 import { formatMoney } from "@/lib/format-utils";
+import {
+  calculateLineSubtotal,
+  calculateSaleTotals,
+  validateSaleLineItems,
+} from "@/lib/sale-calculation-utils";
 
 type Customer = {
   id: string;
@@ -159,38 +165,11 @@ export function EditQuoteForm({
     );
   }, [products, productSearch]);
 
-  const subtotal = useMemo(() => {
-    return cart.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
-  }, [cart]);
-
-  const vatTotal = useMemo(() => {
-    return cart.reduce((sum, item) => {
-      const itemTotal = item.quantity * item.unitPrice;
-      return sum + (itemTotal * item.vatRate) / 100;
-    }, 0);
-  }, [cart]);
-
-  const total = subtotal + vatTotal;
+  const totals = useMemo(() => calculateSaleTotals(cart), [cart]);
+  const { subtotal, vatTotal, total } = totals;
   const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  function showStockLimitError(stock: number) {
-    setError(`Bu üründen stokta en fazla ${stock} adet var.`);
-  }
-
   function addToCart(product: Product) {
-    if (product.stock <= 0) return;
-
-    const existing = cart.find((item) => item.productId === product.id);
-
-    if (
-      existing &&
-      !existing.isInitial &&
-      existing.quantity >= existing.stock
-    ) {
-      showStockLimitError(existing.stock);
-      return;
-    }
-
     const price = Number(product.sellPrice);
 
     setError("");
@@ -225,14 +204,6 @@ export function EditQuoteForm({
   }
 
   function increaseQuantity(cartKey: string) {
-    const item = cart.find((entry) => entry.cartKey === cartKey);
-    if (!item) return;
-
-    if (!item.isInitial && item.quantity >= item.stock) {
-      showStockLimitError(item.stock);
-      return;
-    }
-
     setError("");
     setCart((prev) =>
       prev.map((entry) =>
@@ -288,6 +259,13 @@ export function EditQuoteForm({
 
     if (cart.length === 0) {
       setError("Teklif güncellemek için en az bir ürün ekleyin.");
+      setSaving(false);
+      return;
+    }
+
+    const lineError = validateSaleLineItems(cart);
+    if (lineError) {
+      setError(lineError);
       setSaving(false);
       return;
     }
@@ -500,24 +478,12 @@ export function EditQuoteForm({
               </div>
 
               <div className="grid gap-3 p-4 md:grid-cols-2 2xl:grid-cols-3">
-                {filteredProducts.map((product) => {
-                  const isOutOfStock = product.stock <= 0;
-                  const alreadyInCart = cart.some(
-                    (item) => item.productId === product.id
-                  );
-
-                  return (
+                {filteredProducts.map((product) => (
                     <button
                       key={product.id}
                       type="button"
                       onClick={() => addToCart(product)}
-                      disabled={isOutOfStock && !alreadyInCart}
-                      className={[
-                        "group rounded-2xl border p-4 text-left transition",
-                        isOutOfStock && !alreadyInCart
-                          ? "cursor-not-allowed border-slate-100 bg-slate-50 opacity-60"
-                          : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-amber-100 hover:bg-amber-50/30 hover:shadow-[0_14px_30px_rgba(245,158,11,0.10)]",
-                      ].join(" ")}
+                      className="group rounded-2xl border border-slate-200 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-amber-100 hover:bg-amber-50/30 hover:shadow-[0_14px_30px_rgba(245,158,11,0.10)]"
                     >
                       <div className="mb-4 flex items-start justify-between gap-3">
                         <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-linear-to-br from-amber-50 to-orange-50 text-amber-600">
@@ -552,8 +518,7 @@ export function EditQuoteForm({
                         </span>
                       </div>
                     </button>
-                  );
-                })}
+                ))}
               </div>
             </div>
           </div>
@@ -579,11 +544,7 @@ export function EditQuoteForm({
               </div>
 
               <div className="max-h-[360px] space-y-3 overflow-y-auto p-4">
-                {cart.map((item) => {
-                  const atStockLimit =
-                    !item.isInitial && item.quantity >= item.stock;
-
-                  return (
+                {cart.map((item) => (
                     <div
                       key={item.cartKey}
                       className="rounded-2xl border border-slate-100 bg-slate-50 p-3"
@@ -609,42 +570,19 @@ export function EditQuoteForm({
                         </button>
                       </div>
 
-                      <div className="mt-3 grid grid-cols-2 gap-2">
-                        <label className="text-[10px] font-black uppercase tracking-wide text-slate-400">
-                          Birim Fiyat
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={item.unitPrice}
-                            onChange={(event) =>
-                              updateCartItem(
-                                item.cartKey,
-                                "unitPrice",
-                                Number(event.target.value) || 0
-                              )
-                            }
-                            className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-bold text-[#0f1f4d] outline-none focus:border-amber-200"
-                          />
-                        </label>
-
-                        <label className="text-[10px] font-black uppercase tracking-wide text-slate-400">
-                          KDV %
-                          <input
-                            type="number"
-                            min="0"
-                            step="1"
-                            value={item.vatRate}
-                            onChange={(event) =>
-                              updateCartItem(
-                                item.cartKey,
-                                "vatRate",
-                                Number(event.target.value) || 0
-                              )
-                            }
-                            className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-bold text-[#0f1f4d] outline-none focus:border-amber-200"
-                          />
-                        </label>
+                      <div className="mt-3">
+                        <SaleLineEditFields
+                          key={item.cartKey}
+                          unitPrice={item.unitPrice}
+                          vatRate={item.vatRate}
+                          onUnitPriceChange={(value) =>
+                            updateCartItem(item.cartKey, "unitPrice", value)
+                          }
+                          onVatRateChange={(value) =>
+                            updateCartItem(item.cartKey, "vatRate", value)
+                          }
+                          compact
+                        />
                       </div>
 
                       <div className="mt-3 flex items-center justify-between">
@@ -664,25 +602,18 @@ export function EditQuoteForm({
                           <button
                             type="button"
                             onClick={() => increaseQuantity(item.cartKey)}
-                            disabled={atStockLimit}
-                            className={[
-                              "flex h-7 w-7 items-center justify-center rounded-lg",
-                              atStockLimit
-                                ? "cursor-not-allowed bg-amber-500/50 text-white opacity-50"
-                                : "bg-amber-500 text-white",
-                            ].join(" ")}
+                            className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500 text-white"
                           >
                             <Plus size={14} />
                           </button>
                         </div>
 
                         <p className="text-[13px] font-black text-[#0f1f4d]">
-                          {formatMoney(item.quantity * item.unitPrice)}
+                          {formatMoney(calculateLineSubtotal(item))}
                         </p>
                       </div>
                     </div>
-                  );
-                })}
+                ))}
               </div>
 
               <div className="border-t border-slate-100 p-4">

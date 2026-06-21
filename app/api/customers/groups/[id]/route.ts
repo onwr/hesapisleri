@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
+import { requireApiModuleAccess } from "@/lib/module-access";
 import { z } from "zod";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import {
   deleteCustomerGroup,
   updateCustomerGroup,
@@ -14,11 +14,6 @@ const groupColorSchema = z.enum([
   "rose",
   "cyan",
 ]);
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
 
 type Props = {
   params: Promise<{
@@ -35,24 +30,11 @@ const updateGroupSchema = z.object({
 export async function PATCH(req: Request, { params }: Props) {
   try {
     const { id } = await params;
-    const token = await getAuthToken();
+    const auth = await requireApiModuleAccess("customers");
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.userId || !payload.companyId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
-
+    const companyId = auth.companyId;
+    const userId = auth.userId;
     const body = await req.json();
     const parsed = updateGroupSchema.safeParse(body);
 
@@ -67,7 +49,7 @@ export async function PATCH(req: Request, { params }: Props) {
       );
     }
 
-    const group = await updateCustomerGroup(payload.companyId, id, parsed.data);
+    const group = await updateCustomerGroup(companyId, id, parsed.data);
 
     return NextResponse.json({
       success: true,
@@ -93,25 +75,12 @@ export async function PATCH(req: Request, { params }: Props) {
 export async function DELETE(_req: Request, { params }: Props) {
   try {
     const { id } = await params;
-    const token = await getAuthToken();
+    const auth = await requireApiModuleAccess("customers");
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.userId || !payload.companyId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
-
-    await deleteCustomerGroup(payload.companyId, id);
+    const companyId = auth.companyId;
+    const userId = auth.userId;
+    await deleteCustomerGroup(companyId, id);
 
     return NextResponse.json({
       success: true,

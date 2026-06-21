@@ -10,6 +10,8 @@ type OperationName =
   | "company"
   | "companyUser"
   | "membershipPayment"
+  | "membershipPlan"
+  | "companySubscription"
   | "warehouse"
   | "account"
   | "companySettings"
@@ -53,6 +55,17 @@ function createMockTx() {
         operations.push("membershipPayment");
         assert.equal(args.data.provider, "TRIAL");
         assert.equal(args.data.amount, 1499);
+      },
+    },
+    membershipPlan: {
+      findFirst: async () => {
+        operations.push("membershipPlan");
+        return { id: "plan-standard" };
+      },
+    },
+    companySubscription: {
+      create: async () => {
+        operations.push("companySubscription");
       },
     },
     warehouse: {
@@ -136,6 +149,8 @@ describe("createCompanyForUser", () => {
       "company",
       "companyUser",
       "membershipPayment",
+      "membershipPlan",
+      "companySubscription",
       "warehouse",
       "account",
       "companySettings",

@@ -1,16 +1,11 @@
 import { NextResponse } from "next/server";
-import { getAuthToken, verifyToken } from "@/lib/auth";
+import { getOptionalAuthenticatedApiSession } from "@/lib/module-access";
 import { attachAuthCookie } from "@/lib/auth-session-utils";
 import {
   CompanyUsersError,
   acceptCompanyInvite,
 } from "@/lib/company-users-service";
 import { acceptInviteSchema } from "@/lib/company-users-utils";
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
 
 export async function POST(req: Request) {
   try {
@@ -28,12 +23,11 @@ export async function POST(req: Request) {
       );
     }
 
-    const token = await getAuthToken();
-    const payload = token ? verifyToken<AuthPayload>(token) : null;
+    const authSession = await getOptionalAuthenticatedApiSession();
 
     const result = await acceptCompanyInvite({
       token: parsed.data.token,
-      userId: payload?.userId,
+      userId: authSession?.userId,
       name: parsed.data.name,
       password: parsed.data.password,
     });

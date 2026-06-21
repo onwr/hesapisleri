@@ -1,20 +1,21 @@
 import { NextResponse } from "next/server";
+import { requireApiModuleAccess } from "@/lib/module-access";
 import { z } from "zod";
 import { createNotification } from "@/lib/notification-service";
 import { db } from "@/lib/prisma";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import { applyCustomerDebtFromDocument } from "@/lib/customer-balance-utils";
-
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
+import { assertOptionalTenantCustomer } from "@/lib/tenant/tenant-resource";
+import { TenantNotFoundError } from "@/lib/tenant/tenant-errors";
+import { persistInvoiceFinancialSnapshot } from "@/lib/invoice-snapshot-service";
+import { buildInvoiceSnapshotData } from "@/lib/invoice-snapshot-utils";
+import { invalidateDashboardCache } from "@/lib/dashboard-cache-invalidation";
 
 const invoiceItemSchema = z.object({
   name: z.string().min(1, "Ürün / hizmet adı zorunludur."),
   quantity: z.number().min(1),
   unitPrice: z.number().min(0),
   vatRate: z.number().default(20),
+  productId: z.string().optional(),
 });
 
 const createInvoiceSchema = z.object({
@@ -34,24 +35,11 @@ function generateInvoiceNo(type: "E_INVOICE" | "E_ARCHIVE") {
 
 export async function POST(req: Request) {
   try {
-    const token = await getAuthToken();
+    const auth = await requireApiModuleAccess("invoices");
+    if ("error" in auth) return auth.error;
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      );
-    }
-
-    const payload = verifyToken<AuthPayload>(token);
-
-    if (!payload?.userId || !payload.companyId) {
-      return NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      );
-    }
-
+    const companyId = auth.companyId;
+    const userId = auth.userId;
     const body = await req.json();
     const parsed = createInvoiceSchema.safeParse(body);
 
@@ -68,22 +56,10 @@ export async function POST(req: Request) {
 
     const { saleId, customerId, type, action, items } = parsed.data;
 
-    const subtotal = items.reduce(
-      (sum, item) => sum + item.quantity * item.unitPrice,
-      0
-    );
-
-    const vatTotal = items.reduce((sum, item) => {
-      const itemTotal = item.quantity * item.unitPrice;
-      return sum + (itemTotal * item.vatRate) / 100;
-    }, 0);
-
-    const total = subtotal + vatTotal;
-
     if (saleId) {
       const existingInvoice = await db.invoice.findFirst({
         where: {
-          companyId: payload.companyId!,
+          companyId: companyId!,
           saleId,
         },
       });
@@ -99,16 +75,33 @@ export async function POST(req: Request) {
       }
     }
 
+    const lineItems = items.map((item) => ({
+      productId: item.productId,
+      productName: item.name,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      vatRate: item.vatRate,
+    }));
+
+    const snapshot = buildInvoiceSnapshotData(lineItems, 0);
+
+    await assertOptionalTenantCustomer(db, companyId!, customerId);
+
     const invoice = await db.$transaction(async (tx) => {
       const createdInvoice = await tx.invoice.create({
         data: {
-          companyId: payload.companyId!,
+          companyId: companyId!,
           customerId: customerId || null,
           saleId: saleId || null,
           invoiceNo: generateInvoiceNo(type),
           type,
           status: action === "DRAFT" ? "DRAFT" : "SENT",
-          total,
+          subtotal: snapshot.header.subtotal,
+          totalDiscount: snapshot.header.totalDiscount,
+          taxableAmount: snapshot.header.taxableAmount,
+          totalVat: snapshot.header.totalVat,
+          total: snapshot.header.grandTotal,
+          financialSnapshotStatus: "COMPLETE",
           paymentStatus: "UNPAID",
           paidAmount: 0,
           gibStatus: action === "DRAFT" ? "TASLAK" : "GONDERILDI",
@@ -119,14 +112,25 @@ export async function POST(req: Request) {
         },
       });
 
+      await persistInvoiceFinancialSnapshot(tx, {
+        invoiceId: createdInvoice.id,
+        items: lineItems,
+      });
+
       if (action !== "DRAFT" && !saleId && customerId) {
-        await applyCustomerDebtFromDocument(tx, customerId, total, 0);
+        await applyCustomerDebtFromDocument(
+          tx,
+          companyId!,
+          customerId,
+          snapshot.header.grandTotal,
+          0
+        );
       }
 
       await tx.activityLog.create({
         data: {
-          companyId: payload.companyId!,
-          userId: payload.userId,
+          companyId: companyId!,
+          userId: userId,
           action: action === "DRAFT" ? "DRAFT" : "SEND",
           module: "e-invoice",
           message: `${createdInvoice.invoiceNo} numaralı ${type === "E_INVOICE" ? "e-Fatura" : "e-Arşiv"} oluşturuldu.`,
@@ -135,8 +139,8 @@ export async function POST(req: Request) {
 
       await createNotification(
         {
-          companyId: payload.companyId!,
-          userId: payload.userId,
+          companyId: companyId!,
+          userId: userId,
           type: action === "DRAFT" ? "INFO" : "SUCCESS",
           category: "INVOICES",
           module: "invoices",
@@ -157,6 +161,10 @@ export async function POST(req: Request) {
 
       return createdInvoice;
     });
+
+    if (action !== "DRAFT") {
+      invalidateDashboardCache(companyId!, "e-invoice-create");
+    }
 
     return NextResponse.json({
       success: true,

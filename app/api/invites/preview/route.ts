@@ -1,12 +1,6 @@
 import { NextResponse } from "next/server";
-import { getAuthToken, verifyToken } from "@/lib/auth";
-import { db } from "@/lib/prisma";
+import { getOptionalAuthenticatedApiSession } from "@/lib/module-access";
 import { getInvitePreview } from "@/lib/company-users-service";
-
-type AuthPayload = {
-  userId: string;
-  email?: string;
-};
 
 export async function GET(req: Request) {
   try {
@@ -21,24 +15,13 @@ export async function GET(req: Request) {
     }
 
     let session: { userId: string; email: string } | null = null;
-    const authToken = await getAuthToken();
+    const authSession = await getOptionalAuthenticatedApiSession();
 
-    if (authToken) {
-      const payload = verifyToken<AuthPayload>(authToken);
-
-      if (payload?.userId) {
-        const user = await db.user.findUnique({
-          where: { id: payload.userId },
-          select: { id: true, email: true },
-        });
-
-        if (user) {
-          session = {
-            userId: user.id,
-            email: user.email,
-          };
-        }
-      }
+    if (authSession) {
+      session = {
+        userId: authSession.userId,
+        email: authSession.user.email,
+      };
     }
 
     const preview = await getInvitePreview(token, session);

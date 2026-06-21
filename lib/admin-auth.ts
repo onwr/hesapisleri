@@ -23,6 +23,24 @@ export class SuperAdminAccessError extends Error {
   }
 }
 
+function getPlatformSuperAdminAllowlist() {
+  return (process.env.PLATFORM_SUPER_ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/** Platform /admin erişimi: User.role SUPER_ADMIN veya env allowlist. */
+export function isPlatformSuperAdminUser(
+  user: Pick<User, "role" | "status" | "email">
+) {
+  if (user.status !== "ACTIVE") return false;
+  if (user.role === "SUPER_ADMIN") return true;
+
+  const allowlist = getPlatformSuperAdminAllowlist();
+  return allowlist.includes(user.email.trim().toLowerCase());
+}
+
 export async function getSuperAdminUser(): Promise<User | null> {
   const token = await getAuthToken();
   if (!token) return null;
@@ -34,7 +52,7 @@ export async function getSuperAdminUser(): Promise<User | null> {
     where: { id: payload.userId },
   });
 
-  if (!user || user.role !== "SUPER_ADMIN" || user.status !== "ACTIVE") {
+  if (!user || !isPlatformSuperAdminUser(user)) {
     return null;
   }
 
@@ -86,7 +104,7 @@ export async function requireSuperAdminApi() {
     };
   }
 
-  if (user.role !== "SUPER_ADMIN") {
+  if (!isPlatformSuperAdminUser(user)) {
     return {
       error: NextResponse.json(
         { success: false, message: "Bu işlem için Super Admin yetkisi gerekir." },

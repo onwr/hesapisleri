@@ -1,14 +1,8 @@
-import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
-import { OrdersBulkActionsCenter } from "@/components/orders/orders-bulk-actions-center";
-import { getAuthToken, verifyToken } from "@/lib/auth";
-import { getOrderBulkActionsPageData } from "@/lib/orders-bulk-actions-data";
-import { db } from "@/lib/prisma";
+import { guardPageModule } from "@/lib/module-access";
 
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
+import { OrdersBulkActionsCenter } from "@/components/orders/orders-bulk-actions-center";
+import { getOrderBulkActionsPageData } from "@/lib/orders-bulk-actions-data";
 
 type Props = {
   searchParams: Promise<{
@@ -22,19 +16,9 @@ type Props = {
 };
 
 export default async function OrdersBulkActionsPage({ searchParams }: Props) {
+  const session = await guardPageModule("orders");
+  const company = session.company;
   const params = await searchParams;
-  const token = await getAuthToken();
-  if (!token) redirect("/login");
-
-  const payload = verifyToken<AuthPayload>(token);
-  if (!payload?.companyId) redirect("/login");
-
-  const company = await db.company.findUnique({
-    where: { id: payload.companyId },
-    select: { id: true },
-  });
-
-  if (!company) redirect("/login");
 
   const { filters, rows, summary } = await getOrderBulkActionsPageData(
     company.id,

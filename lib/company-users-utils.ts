@@ -12,6 +12,7 @@ export const assignableInviteRoleSchema = z.enum([
   "ADMIN",
   "ACCOUNTANT",
   "STAFF",
+  "POS_STAFF",
 ]);
 
 export const createInviteSchema = z.object({
@@ -20,7 +21,10 @@ export const createInviteSchema = z.object({
 });
 
 export const changeCompanyUserRoleSchema = z.object({
-  role: assignableInviteRoleSchema,
+  role: assignableInviteRoleSchema.optional(),
+  status: z.enum(["ACTIVE", "PASSIVE"]).optional(),
+}).refine((value) => value.role || value.status, {
+  message: "Güncellenecek alan belirtilmelidir.",
 });
 
 export const acceptInviteSchema = z.object({

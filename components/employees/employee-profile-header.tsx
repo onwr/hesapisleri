@@ -3,9 +3,12 @@
 import Link from "next/link";
 import {
   CalendarClock,
+  KeyRound,
   Mail,
   Phone,
   ScanBarcode,
+  Shield,
+  UserCog,
 } from "lucide-react";
 import { EmployeeAvatar } from "@/components/employees/employee-avatar";
 import { TEAM_HERO_CLASS } from "@/components/team/team-ui-tokens";
@@ -21,6 +24,9 @@ type EmployeeProfileHeaderProps = {
   onAddPayment: () => void;
   onAddLeave: () => void;
   onManagePos: () => void;
+  onCreateSystemUser?: () => void;
+  onResetSystemUserPassword?: () => void;
+  onToggleSystemUserStatus?: () => void;
   onPassivate: () => void;
   onActivate: () => void;
   onDelete: () => void;
@@ -33,6 +39,9 @@ export function EmployeeProfileHeader({
   onAddPayment,
   onAddLeave,
   onManagePos,
+  onCreateSystemUser,
+  onResetSystemUserPassword,
+  onToggleSystemUserStatus,
   onPassivate,
   onActivate,
   onDelete,
@@ -120,6 +129,55 @@ export function EmployeeProfileHeader({
             >
               POS Erişimi
             </button>
+            {!employee.hasUserAccount && onCreateSystemUser ? (
+              <button
+                type="button"
+                onClick={onCreateSystemUser}
+                className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-black text-blue-700"
+              >
+                Sistem Kullanıcısı Oluştur
+              </button>
+            ) : null}
+            {employee.hasUserAccount && employee.linkedUser ? (
+              <>
+                <Link
+                  href="/settings"
+                  className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-2 text-xs font-black text-violet-700"
+                >
+                  <span className="inline-flex items-center gap-1">
+                    <UserCog size={14} />
+                    Kullanıcı Hesabını Gör
+                  </span>
+                </Link>
+                {onResetSystemUserPassword ? (
+                  <button
+                    type="button"
+                    onClick={onResetSystemUserPassword}
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700"
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      <KeyRound size={14} />
+                      Şifre Belirle
+                    </span>
+                  </button>
+                ) : null}
+                {onToggleSystemUserStatus ? (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={onToggleSystemUserStatus}
+                    className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-black text-amber-700 disabled:opacity-50"
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      <Shield size={14} />
+                      {employee.linkedUser.status === "ACTIVE"
+                        ? "Pasif Yap"
+                        : "Aktif Yap"}
+                    </span>
+                  </button>
+                ) : null}
+              </>
+            ) : null}
             {employee.status === "ACTIVE" || employee.status === "ON_LEAVE" ? (
               <button
                 type="button"

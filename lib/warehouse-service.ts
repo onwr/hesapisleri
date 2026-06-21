@@ -1,4 +1,15 @@
+import {
+  executeWarehouseTransfer,
+  cancelWarehouseTransferAtomic,
+} from "@/lib/warehouse-transfer-service";
+import {
+  normalizeWarehouseTransferItems,
+  type NormalizedWarehouseTransferInput,
+} from "@/lib/warehouse-transfer-utils";
 import type { Prisma } from "@prisma/client";
+import { calculateWarehouseStockValue } from "@/lib/inventory-value-utils";
+import { isServiceProductType } from "@/lib/product-type-utils";
+import { resolveProductMinStock } from "@/lib/stocks-page-utils";
 import { db } from "@/lib/prisma";
 import { syncProductStockFromWarehouses } from "@/lib/product-stock-sync-service";
 import {
@@ -24,11 +35,7 @@ export class WarehouseStockError extends Error {
   }
 }
 
-export function generateTransferNo() {
-  const year = new Date().getFullYear();
-  const suffix = String(Date.now()).slice(-6);
-  return `TRF-${year}-${suffix}`;
-}
+export { generateTransferNo } from "@/lib/warehouse-transfer-utils";
 
 export async function getOrCreateDefaultWarehouse(
   companyId: string,
@@ -263,6 +270,15 @@ export async function applyWarehouseStockMovement({
       };
     }
 
+    if (isServiceProductType(product.productType)) {
+      return {
+        ok: false as const,
+        status: 400,
+        message: "Hizmet kalemleri için stok hareketi yapılamaz.",
+        errors: { productId: ["Hizmet kalemleri için stok hareketi yapılamaz."] },
+      };
+    }
+
     let warehouseId: string;
     try {
       warehouseId = await resolveWarehouseId(companyId, input.warehouseId, tx);
@@ -307,11 +323,32 @@ export async function applyWarehouseStockMovement({
       data: { quantity: newStock },
     });
 
+    let movementSupplierId: string | null = null;
+    if (input.supplierId) {
+      const supplier = await tx.supplier.findFirst({
+        where: {
+          id: input.supplierId,
+          companyId,
+          isActive: true,
+        },
+      });
+      if (!supplier) {
+        return {
+          ok: false as const,
+          status: 400,
+          message: "Seçilen tedarikçi bulunamadı veya pasif.",
+          errors: { supplierId: ["Seçilen tedarikçi bulunamadı veya pasif."] },
+        };
+      }
+      movementSupplierId = supplier.id;
+    }
+
     const stockMovement = await tx.stockMovement.create({
       data: {
         companyId,
         productId,
         warehouseId,
+        supplierId: movementSupplierId,
         type: dbType,
         quantity: movementQuantity,
         note: normalizeMovementNote(input.note),
@@ -362,171 +399,53 @@ type MoveStockBetweenWarehousesParams = {
   quantity: number;
   note?: string | null;
   transferDate?: string | null;
+  idempotencyKey?: string | null;
+  items?: Array<{ productId: string; quantity: number }>;
 };
 
 export async function moveStockBetweenWarehouses(
   input: MoveStockBetweenWarehousesParams
 ) {
-  const movementDate = parseMovementDate(input.transferDate);
-  if (!movementDate) {
-    return {
-      ok: false as const,
-      status: 400,
-      message: "Geçerli bir transfer tarihi girin.",
-    };
-  }
-
-  if (input.fromWarehouseId === input.toWarehouseId) {
-    return {
-      ok: false as const,
-      status: 400,
-      message: "Çıkış ve giriş deposu aynı olamaz.",
-    };
-  }
-
-  if (input.quantity <= 0) {
-    return {
-      ok: false as const,
-      status: 400,
-      message: "Transfer miktarı 0'dan büyük olmalıdır.",
-    };
-  }
-
-  return db.$transaction(async (tx) => {
-    const product = await tx.product.findFirst({
-      where: { id: input.productId, companyId: input.companyId },
-    });
-
-    if (!product) {
-      return {
-        ok: false as const,
-        status: 404,
-        message: "Ürün bulunamadı.",
-      };
-    }
-
-    const [fromWarehouse, toWarehouse] = await Promise.all([
-      tx.warehouse.findFirst({
-        where: {
-          id: input.fromWarehouseId,
-          companyId: input.companyId,
-          status: "ACTIVE",
-        },
-      }),
-      tx.warehouse.findFirst({
-        where: {
-          id: input.toWarehouseId,
-          companyId: input.companyId,
-          status: "ACTIVE",
-        },
-      }),
-    ]);
-
-    if (!fromWarehouse || !toWarehouse) {
-      return {
-        ok: false as const,
-        status: 400,
-        message: "Depo bulunamadı veya pasif.",
-      };
-    }
-
-    const fromStock = await ensureProductWarehouseStock(
-      input.companyId,
-      input.productId,
-      fromWarehouse.id,
-      tx
-    );
-
-    if (fromStock.quantity < input.quantity) {
-      return {
-        ok: false as const,
-        status: 400,
-        message: `${fromWarehouse.name} deposunda yeterli stok yok. Mevcut: ${fromStock.quantity}`,
-      };
-    }
-
-    const toStock = await ensureProductWarehouseStock(
-      input.companyId,
-      input.productId,
-      toWarehouse.id,
-      tx
-    );
-
-    const transferNo = generateTransferNo();
-
-    const transfer = await tx.warehouseTransfer.create({
-      data: {
-        companyId: input.companyId,
-        transferNo,
-        fromWarehouseId: fromWarehouse.id,
-        toWarehouseId: toWarehouse.id,
+  const normalizedItems = input.items?.length
+    ? { ok: true as const, items: input.items }
+    : normalizeWarehouseTransferItems({
         productId: input.productId,
         quantity: input.quantity,
-        note: normalizeMovementNote(input.note),
-        status: "COMPLETED",
-        createdByUserId: input.userId,
-      },
-    });
+      });
 
-    await tx.warehouseStock.update({
-      where: { id: fromStock.id },
-      data: { quantity: fromStock.quantity - input.quantity },
-    });
-
-    await tx.warehouseStock.update({
-      where: { id: toStock.id },
-      data: { quantity: toStock.quantity + input.quantity },
-    });
-
-    const [transferOut, transferIn] = await Promise.all([
-      tx.stockMovement.create({
-        data: {
-          companyId: input.companyId,
-          productId: input.productId,
-          warehouseId: fromWarehouse.id,
-          transferId: transfer.id,
-          type: "TRANSFER_OUT",
-          quantity: -input.quantity,
-          note: `${transferNo} depo transferi (${fromWarehouse.name} → ${toWarehouse.name})`,
-          movementDate,
-        },
-      }),
-      tx.stockMovement.create({
-        data: {
-          companyId: input.companyId,
-          productId: input.productId,
-          warehouseId: toWarehouse.id,
-          transferId: transfer.id,
-          type: "TRANSFER_IN",
-          quantity: input.quantity,
-          note: `${transferNo} depo transferi (${fromWarehouse.name} → ${toWarehouse.name})`,
-          movementDate,
-        },
-      }),
-    ]);
-
-    await syncProductTotalStock(input.companyId, input.productId, tx);
-
-    await tx.activityLog.create({
-      data: {
-        companyId: input.companyId,
-        userId: input.userId,
-        action: "CREATE",
-        module: "stocks",
-        message: `${transferNo}: ${product.name} ${input.quantity} adet ${fromWarehouse.name} → ${toWarehouse.name} transfer edildi.`,
-      },
-    });
-
+  if (!normalizedItems.ok) {
     return {
-      ok: true as const,
-      data: {
-        transfer,
-        transferOut,
-        transferIn,
-        productStock: product.stock,
-      },
+      ok: false as const,
+      status: 400,
+      message: normalizedItems.message,
     };
-  });
+  }
+
+  const transferInput: NormalizedWarehouseTransferInput = {
+    companyId: input.companyId,
+    userId: input.userId,
+    fromWarehouseId: input.fromWarehouseId,
+    toWarehouseId: input.toWarehouseId,
+    items: normalizedItems.items,
+    note: input.note,
+    transferDate: input.transferDate,
+    idempotencyKey: input.idempotencyKey,
+  };
+
+  const result = await executeWarehouseTransfer(transferInput);
+
+  if (!result.ok) {
+    return result;
+  }
+
+  return {
+    ok: true as const,
+    replayed: result.replayed ?? false,
+    data: {
+      transfer: result.data,
+      replayed: result.replayed ?? false,
+    },
+  };
 }
 
 export async function cancelWarehouseTransfer(
@@ -534,113 +453,7 @@ export async function cancelWarehouseTransfer(
   userId: string,
   transferId: string
 ) {
-  return db.$transaction(async (tx) => {
-    const transfer = await tx.warehouseTransfer.findFirst({
-      where: { id: transferId, companyId },
-      include: {
-        fromWarehouse: true,
-        toWarehouse: true,
-        product: true,
-      },
-    });
-
-    if (!transfer) {
-      return {
-        ok: false as const,
-        status: 404,
-        message: "Transfer bulunamadı.",
-      };
-    }
-
-    if (transfer.status === "CANCELLED") {
-      return {
-        ok: false as const,
-        status: 400,
-        message: "Bu transfer zaten iptal edilmiş.",
-      };
-    }
-
-    const toStock = await ensureProductWarehouseStock(
-      companyId,
-      transfer.productId,
-      transfer.toWarehouseId,
-      tx
-    );
-
-    if (toStock.quantity < transfer.quantity) {
-      return {
-        ok: false as const,
-        status: 400,
-        message: `${transfer.toWarehouse.name} deposunda iptal için yeterli stok yok. Mevcut: ${toStock.quantity}`,
-      };
-    }
-
-    const fromStock = await ensureProductWarehouseStock(
-      companyId,
-      transfer.productId,
-      transfer.fromWarehouseId,
-      tx
-    );
-
-    await tx.warehouseStock.update({
-      where: { id: toStock.id },
-      data: { quantity: toStock.quantity - transfer.quantity },
-    });
-
-    await tx.warehouseStock.update({
-      where: { id: fromStock.id },
-      data: { quantity: fromStock.quantity + transfer.quantity },
-    });
-
-    await tx.warehouseTransfer.update({
-      where: { id: transfer.id },
-      data: { status: "CANCELLED" },
-    });
-
-    const cancelNote = `${transfer.transferNo} transferi iptal edildi`;
-
-    await Promise.all([
-      tx.stockMovement.create({
-        data: {
-          companyId,
-          productId: transfer.productId,
-          warehouseId: transfer.toWarehouseId,
-          transferId: transfer.id,
-          type: "TRANSFER_OUT",
-          quantity: -transfer.quantity,
-          note: cancelNote,
-        },
-      }),
-      tx.stockMovement.create({
-        data: {
-          companyId,
-          productId: transfer.productId,
-          warehouseId: transfer.fromWarehouseId,
-          transferId: transfer.id,
-          type: "TRANSFER_IN",
-          quantity: transfer.quantity,
-          note: cancelNote,
-        },
-      }),
-    ]);
-
-    await syncProductTotalStock(companyId, transfer.productId, tx);
-
-    await tx.activityLog.create({
-      data: {
-        companyId,
-        userId,
-        action: "UPDATE",
-        module: "stocks",
-        message: `${transfer.transferNo} depo transferi iptal edildi.`,
-      },
-    });
-
-    return {
-      ok: true as const,
-      data: { transferId: transfer.id },
-    };
-  });
+  return cancelWarehouseTransferAtomic(companyId, userId, transferId);
 }
 
 export type WarehouseListItem = Prisma.WarehouseGetPayload<{
@@ -649,7 +462,8 @@ export type WarehouseListItem = Prisma.WarehouseGetPayload<{
       include: {
         product: {
           select: {
-            sellPrice: true;
+            buyPrice: true;
+            productType: true;
             minStock: true;
             stock: true;
           };
@@ -660,15 +474,17 @@ export type WarehouseListItem = Prisma.WarehouseGetPayload<{
 }>;
 
 export function buildWarehouseMetrics(warehouse: WarehouseListItem) {
-  const productCount = warehouse.stocks.filter((s) => s.quantity > 0).length;
-  const totalStock = warehouse.stocks.reduce((sum, s) => sum + s.quantity, 0);
-  const totalValue = warehouse.stocks.reduce(
-    (sum, s) => sum + s.quantity * Number(s.product.sellPrice),
-    0
+  const stockItems = warehouse.stocks.filter(
+    (stock) => !isServiceProductType(stock.product.productType)
   );
-  const lowStockCount = warehouse.stocks.filter(
-    (s) => s.quantity > 0 && s.quantity <= s.product.minStock
-  ).length;
+  const productCount = stockItems.filter((s) => s.quantity > 0).length;
+  const totalStock = stockItems.reduce((sum, s) => sum + s.quantity, 0);
+  const totalValue = calculateWarehouseStockValue(stockItems);
+  const lowStockCount = stockItems.filter((s) => {
+    if (s.quantity <= 0) return false;
+    const minStock = resolveProductMinStock(s.product.minStock);
+    return s.quantity <= minStock;
+  }).length;
 
   return { productCount, totalStock, totalValue, lowStockCount };
 }

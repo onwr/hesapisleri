@@ -19,7 +19,13 @@ import {
   Wallet,
 } from "lucide-react";
 import { AppLoadingScreen } from "@/components/layout/app-loading-screen";
+import { SaleLineEditFields } from "@/components/sales/sale-line-edit-fields";
 import { formatMoney } from "@/lib/format-utils";
+import {
+  calculateLineSubtotal,
+  calculateSaleTotals,
+  validateSaleLineItems,
+} from "@/lib/sale-calculation-utils";
 
 type Customer = {
   id: string;
@@ -116,34 +122,11 @@ export default function NewQuotePage() {
     );
   }, [products, productSearch]);
 
-  const subtotal = useMemo(() => {
-    return cart.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
-  }, [cart]);
-
-  const vatTotal = useMemo(() => {
-    return cart.reduce((sum, item) => {
-      const itemTotal = item.quantity * item.unitPrice;
-      return sum + (itemTotal * item.vatRate) / 100;
-    }, 0);
-  }, [cart]);
-
-  const total = subtotal + vatTotal;
+  const totals = useMemo(() => calculateSaleTotals(cart), [cart]);
+  const { subtotal, vatTotal, total } = totals;
   const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  function showStockLimitError(stock: number) {
-    setError(`Bu üründen stokta en fazla ${stock} adet var.`);
-  }
-
   function addToCart(product: Product) {
-    if (product.stock <= 0) return;
-
-    const existing = cart.find((item) => item.productId === product.id);
-
-    if (existing && existing.quantity >= existing.stock) {
-      showStockLimitError(existing.stock);
-      return;
-    }
-
     const price = Number(product.sellPrice);
 
     setError("");
@@ -176,14 +159,6 @@ export default function NewQuotePage() {
   }
 
   function increaseQuantity(productId: string) {
-    const item = cart.find((entry) => entry.productId === productId);
-    if (!item) return;
-
-    if (item.quantity >= item.stock) {
-      showStockLimitError(item.stock);
-      return;
-    }
-
     setError("");
     setCart((prev) =>
       prev.map((entry) =>
@@ -216,12 +191,30 @@ export default function NewQuotePage() {
     setCart((prev) => prev.filter((item) => item.productId !== productId));
   }
 
+  function updateCartItem(
+    productId: string,
+    patch: Partial<Pick<CartItem, "unitPrice" | "vatRate">>
+  ) {
+    setCart((prev) =>
+      prev.map((item) =>
+        item.productId === productId ? { ...item, ...patch } : item
+      )
+    );
+  }
+
   async function handleSaveQuote() {
     setSaving(true);
     setError("");
 
     if (cart.length === 0) {
       setError("Teklif oluşturmak için en az bir ürün ekleyin.");
+      setSaving(false);
+      return;
+    }
+
+    const lineError = validateSaleLineItems(cart);
+    if (lineError) {
+      setError(lineError);
       setSaving(false);
       return;
     }
@@ -432,21 +425,12 @@ export default function NewQuotePage() {
               </div>
 
               <div className="grid gap-3 p-4 md:grid-cols-2 2xl:grid-cols-3">
-                {filteredProducts.map((product) => {
-                  const isOutOfStock = product.stock <= 0;
-
-                  return (
+                {filteredProducts.map((product) => (
                     <button
                       key={product.id}
                       type="button"
                       onClick={() => addToCart(product)}
-                      disabled={isOutOfStock}
-                      className={[
-                        "group rounded-2xl border p-4 text-left transition",
-                        isOutOfStock
-                          ? "cursor-not-allowed border-slate-100 bg-slate-50 opacity-60"
-                          : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-amber-100 hover:bg-amber-50/30 hover:shadow-[0_14px_30px_rgba(245,158,11,0.10)]",
-                      ].join(" ")}
+                      className="group rounded-2xl border border-slate-200 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-amber-100 hover:bg-amber-50/30 hover:shadow-[0_14px_30px_rgba(245,158,11,0.10)]"
                     >
                       <div className="mb-4 flex items-start justify-between gap-3">
                         <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-linear-to-br from-amber-50 to-orange-50 text-amber-600">
@@ -481,8 +465,7 @@ export default function NewQuotePage() {
                         </span>
                       </div>
                     </button>
-                  );
-                })}
+                ))}
 
                 {filteredProducts.length === 0 ? (
                   <div className="col-span-full rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-10 text-center">
@@ -524,10 +507,7 @@ export default function NewQuotePage() {
               </div>
 
               <div className="max-h-[360px] space-y-3 overflow-y-auto p-4">
-                {cart.map((item) => {
-                  const atStockLimit = item.quantity >= item.stock;
-
-                  return (
+                {cart.map((item) => (
                     <div
                       key={item.productId}
                       className="rounded-2xl border border-slate-100 bg-slate-50 p-3"
@@ -538,8 +518,8 @@ export default function NewQuotePage() {
                             {item.name}
                           </p>
 
-                          <p className="mt-1 text-[11px] font-medium text-slate-500">
-                            {formatMoney(item.unitPrice)} · KDV %{item.vatRate}
+                          <p className="mt-1 text-[10px] font-semibold text-slate-400">
+                            Bu satışa özel fiyat
                           </p>
 
                           <p className="mt-1 text-[10px] font-semibold text-slate-400">
@@ -554,6 +534,21 @@ export default function NewQuotePage() {
                         >
                           <Trash2 size={15} />
                         </button>
+                      </div>
+
+                      <div className="mt-3">
+                        <SaleLineEditFields
+                          key={item.productId}
+                          unitPrice={item.unitPrice}
+                          vatRate={item.vatRate}
+                          onUnitPriceChange={(value) =>
+                            updateCartItem(item.productId, { unitPrice: value })
+                          }
+                          onVatRateChange={(value) =>
+                            updateCartItem(item.productId, { vatRate: value })
+                          }
+                          compact
+                        />
                       </div>
 
                       <div className="mt-3 flex items-center justify-between">
@@ -573,25 +568,18 @@ export default function NewQuotePage() {
                           <button
                             type="button"
                             onClick={() => increaseQuantity(item.productId)}
-                            disabled={atStockLimit}
-                            className={[
-                              "flex h-7 w-7 items-center justify-center rounded-lg",
-                              atStockLimit
-                                ? "cursor-not-allowed bg-amber-500/50 text-white opacity-50"
-                                : "bg-amber-500 text-white",
-                            ].join(" ")}
+                            className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500 text-white"
                           >
                             <Plus size={14} />
                           </button>
                         </div>
 
                         <p className="text-[13px] font-black text-[#0f1f4d]">
-                          {formatMoney(item.quantity * item.unitPrice)}
+                          {formatMoney(calculateLineSubtotal(item))}
                         </p>
                       </div>
                     </div>
-                  );
-                })}
+                ))}
 
                 {cart.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">

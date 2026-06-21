@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import {
+  AUTH_COOKIE_NAME,
+  getClearAuthCookieOptions,
+} from "@/lib/auth/auth-cookie";
 
 export async function POST() {
   const response = NextResponse.json({
@@ -6,13 +10,7 @@ export async function POST() {
     message: "Çıkış yapıldı.",
   });
 
-  response.cookies.set("hesapisleri_token", "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 0,
-  });
+  response.cookies.set(AUTH_COOKIE_NAME, "", getClearAuthCookieOptions());
 
   return response;
 }

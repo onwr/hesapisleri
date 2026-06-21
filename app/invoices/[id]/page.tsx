@@ -10,10 +10,12 @@ import {
   Wallet,
 } from "lucide-react";
 import { InvoiceDetailActions } from "@/components/invoices/invoice-detail-actions";
+import { InvoiceEDocumentPanel } from "@/components/invoices/invoice-e-document-panel";
 import { AppShell } from "@/components/layout/app-shell";
+import { guardPageModule } from "@/lib/module-access";
+
 import { InvoicePrintOnLoad } from "@/components/invoices/invoice-print-on-load";
 import { PrintInvoiceButton } from "@/components/invoices/print-invoice-button";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import {
   buildInvoiceDetailView,
   getInvoiceEditHref,
@@ -28,44 +30,19 @@ import {
   getPaymentText,
 } from "@/lib/invoices-page-utils";
 import { db } from "@/lib/prisma";
+import { getEDocumentIntegrationSummary } from "@/lib/e-document/e-document-integration-service";
 
 type Props = {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ print?: string }>;
 };
 
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
-
 export default async function InvoiceDetailPage({ params, searchParams }: Props) {
-  const { id } = await params;
+  const session = await guardPageModule("invoices");
+  const company = session.company;
+const { id } = await params;
   const query = await searchParams;
   const shouldPrint = query.print === "1";
-
-  const token = await getAuthToken();
-  if (!token) redirect("/login");
-
-  const payload = verifyToken<AuthPayload>(token);
-  if (!payload?.userId || !payload.companyId) redirect("/login");
-
-  const user = await db.user.findUnique({
-    where: { id: payload.userId },
-    include: {
-      companyUsers: {
-        include: { company: true },
-      },
-    },
-  });
-
-  if (!user) redirect("/login");
-
-  const company =
-    user.companyUsers.find((item) => item.companyId === payload.companyId)
-      ?.company ?? user.companyUsers[0]?.company;
-
-  if (!company) redirect("/login");
 
   const invoice = await db.invoice.findFirst({
     where: {
@@ -76,45 +53,60 @@ export default async function InvoiceDetailPage({ params, searchParams }: Props)
       customer: true,
       company: true,
       sale: true,
+      items: {
+        orderBy: { lineIndex: "asc" },
+      },
     },
   });
 
   if (!invoice) notFound();
 
-  const [detail, accounts] = await Promise.all([
+  const [detail, accounts, eDocument, documentSubmission] = await Promise.all([
     getInvoiceDetailForPage(company.id, id),
     getInvoiceCollectionAccounts(company.id),
+    getEDocumentIntegrationSummary(company.id),
+    db.invoiceDocumentSubmission.findFirst({
+      where: { companyId: company.id, invoiceId: id },
+    }),
   ]);
 
   if (!detail) notFound();
 
-  const view = buildInvoiceDetailView({
-    id: invoice.id,
-    invoiceNo: invoice.invoiceNo,
-    type: invoice.type,
-    status: invoice.status,
-    paymentStatus: invoice.paymentStatus,
-    total: Number(invoice.total),
-    createdAt: invoice.createdAt,
-    dueDate: invoice.dueDate,
-    gibStatus: invoice.gibStatus,
-    gibMessage: invoice.gibMessage,
-    pdfUrl: invoice.pdfUrl,
-    saleId: invoice.saleId,
-    customer: invoice.customer
-      ? {
-          id: invoice.customer.id,
-          name: invoice.customer.name,
-          phone: invoice.customer.phone,
-          email: invoice.customer.email,
-        }
-      : null,
-    company: {
-      name: invoice.company.name,
-      taxNo: invoice.company.taxNo,
-      address: invoice.company.address,
+  const view = buildInvoiceDetailView(
+    {
+      id: invoice.id,
+      invoiceNo: invoice.invoiceNo,
+      type: invoice.type,
+      status: invoice.status,
+      paymentStatus: invoice.paymentStatus,
+      total: Number(invoice.total),
+      subtotal: Number(invoice.subtotal),
+      totalDiscount: Number(invoice.totalDiscount),
+      taxableAmount: Number(invoice.taxableAmount),
+      totalVat: Number(invoice.totalVat),
+      financialSnapshotStatus: invoice.financialSnapshotStatus,
+      createdAt: invoice.createdAt,
+      dueDate: invoice.dueDate,
+      gibStatus: invoice.gibStatus,
+      gibMessage: invoice.gibMessage,
+      pdfUrl: invoice.pdfUrl,
+      saleId: invoice.saleId,
+      customer: invoice.customer
+        ? {
+            id: invoice.customer.id,
+            name: invoice.customer.name,
+            phone: invoice.customer.phone,
+            email: invoice.customer.email,
+          }
+        : null,
+      company: {
+        name: invoice.company.name,
+        taxNo: invoice.company.taxNo,
+        address: invoice.company.address,
+      },
     },
-  });
+    { dbItems: invoice.items }
+  );
 
   const editHref = getInvoiceEditHref({
     id: invoice.id,
@@ -221,6 +213,34 @@ export default async function InvoiceDetailPage({ params, searchParams }: Props)
           />
         </section>
 
+        {invoice.status !== "CANCELLED" ? (
+          <InvoiceEDocumentPanel
+            invoiceId={invoice.id}
+            customerTaxNo={invoice.customer?.taxNo}
+            integrationConnected={
+              eDocument.provider === "TRENDYOL_EFATURAM" &&
+              eDocument.status === "CONNECTED"
+            }
+            providerLabel={eDocument.providerLabel}
+            submission={
+              documentSubmission
+                ? {
+                    status: documentSubmission.status,
+                    documentType: documentSubmission.documentType,
+                    providerInvoiceUuid: documentSubmission.providerInvoiceUuid,
+                    providerInvoiceId: documentSubmission.providerInvoiceId,
+                    providerStatus: documentSubmission.providerStatus,
+                    gibStatus: documentSubmission.gibStatus,
+                    targetAlias: documentSubmission.targetAlias,
+                    errorDetail: documentSubmission.errorDetail,
+                    lastQueriedAt:
+                      documentSubmission.lastQueriedAt?.toISOString() ?? null,
+                  }
+                : null
+            }
+          />
+        ) : null}
+
         <section className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.04)] print:border print:shadow-none">
           <div className="border-b border-slate-100 p-4">
             <div className="flex items-center gap-3">
@@ -264,7 +284,7 @@ export default async function InvoiceDetailPage({ params, searchParams }: Props)
                       </td>
                       <td className="px-4 py-3 text-center">%{item.vatRate}</td>
                       <td className="px-4 py-3 text-right font-black">
-                        {formatMoney(item.quantity * item.unitPrice)}
+                        {formatMoney(item.lineGrossAmount)}
                       </td>
                     </tr>
                   ))

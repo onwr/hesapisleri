@@ -10,6 +10,7 @@ import {
   isMovementTab,
   isTransferTab,
   isWarehouseTab,
+  PRODUCTS_STOCKS_WAREHOUSES_PATH,
   STOCK_TAB_LABELS,
   type StockTabKey,
 } from "@/lib/stocks-page-utils";
@@ -19,6 +20,7 @@ type StocksTableControlsProps = {
   from: Date;
   to: Date;
   searchQuery: string | null;
+  productId?: string | null;
   totalPages: number;
   currentPage: number;
   totalRecords: number;
@@ -27,14 +29,35 @@ type StocksTableControlsProps = {
 
 const tabKeys = Object.keys(STOCK_TAB_LABELS) as StockTabKey[];
 
+function stocksQueryParams(
+  params: {
+    activeTab: StockTabKey;
+    from: Date | string;
+    to: Date | string;
+    searchQuery: string | null;
+    productId?: string | null;
+    page?: number;
+  }
+) {
+  return {
+    tab: params.activeTab,
+    page: params.page,
+    from: params.from,
+    to: params.to,
+    q: params.searchQuery,
+    productId: params.productId,
+  };
+}
+
 export function StocksTableToolbar({
   activeTab,
   from,
   to,
   searchQuery,
+  productId,
 }: Pick<
   StocksTableControlsProps,
-  "activeTab" | "from" | "to" | "searchQuery"
+  "activeTab" | "from" | "to" | "searchQuery" | "productId"
 >) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -74,13 +97,16 @@ export function StocksTableToolbar({
 
     startTransition(() => {
       router.push(
-        buildStocksQuery({
-          tab: activeTab,
-          page: 1,
-          from: nextFrom,
-          to: nextTo,
-          q: queryValue.trim() || null,
-        })
+        buildStocksQuery(
+          stocksQueryParams({
+            activeTab,
+            page: 1,
+            from: nextFrom,
+            to: nextTo,
+            searchQuery: queryValue.trim() || null,
+            productId,
+          })
+        )
       );
     });
   }
@@ -94,13 +120,16 @@ export function StocksTableToolbar({
           return (
             <Link
               key={tabKey}
-              href={buildStocksQuery({
-                tab: tabKey,
-                page: 1,
-                from,
-                to,
-                q: searchQuery,
-              })}
+              href={buildStocksQuery(
+                stocksQueryParams({
+                  activeTab: tabKey,
+                  page: 1,
+                  from,
+                  to,
+                  searchQuery,
+                  productId,
+                })
+              )}
               className={[
                 "flex min-h-[40px] items-center justify-center px-2 py-2.5 text-center text-[10px] font-extrabold leading-tight transition xl:text-[11px]",
                 isActive
@@ -166,7 +195,7 @@ export function StocksTableToolbar({
         </button>
 
         <Link
-          href="/stocks/warehouses"
+          href={PRODUCTS_STOCKS_WAREHOUSES_PATH}
           className="flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[12px] font-extrabold text-[#0f1f4d] transition hover:bg-slate-50"
         >
           Depolar
@@ -199,6 +228,7 @@ export function StocksTablePagination({
   from,
   to,
   searchQuery,
+  productId,
   totalPages,
   currentPage,
   totalRecords,
@@ -230,13 +260,16 @@ export function StocksTablePagination({
       <div className="flex items-center gap-2">
         {currentPage > 1 ? (
           <Link
-            href={buildStocksQuery({
-              tab: activeTab,
-              page: currentPage - 1,
-              from,
-              to,
-              q: searchQuery,
-            })}
+            href={buildStocksQuery(
+              stocksQueryParams({
+                activeTab,
+                page: currentPage - 1,
+                from,
+                to,
+                searchQuery,
+                productId,
+              })
+            )}
             className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-bold leading-none text-[#24345f] transition hover:bg-slate-50"
           >
             Önceki
@@ -250,13 +283,16 @@ export function StocksTablePagination({
         {pageNumbers.map((page) => (
           <Link
             key={page}
-            href={buildStocksQuery({
-              tab: activeTab,
-              page,
-              from,
-              to,
-              q: searchQuery,
-            })}
+            href={buildStocksQuery(
+              stocksQueryParams({
+                activeTab,
+                page,
+                from,
+                to,
+                searchQuery,
+                productId,
+              })
+            )}
             className={[
               "flex h-9 w-9 items-center justify-center rounded-lg text-[12px] font-black",
               page === currentPage
@@ -270,13 +306,16 @@ export function StocksTablePagination({
 
         {currentPage < totalPages ? (
           <Link
-            href={buildStocksQuery({
-              tab: activeTab,
-              page: currentPage + 1,
-              from,
-              to,
-              q: searchQuery,
-            })}
+            href={buildStocksQuery(
+              stocksQueryParams({
+                activeTab,
+                page: currentPage + 1,
+                from,
+                to,
+                searchQuery,
+                productId,
+              })
+            )}
             className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-bold leading-none text-[#24345f] transition hover:bg-slate-50"
           >
             Sonraki

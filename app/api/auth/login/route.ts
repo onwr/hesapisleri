@@ -1,14 +1,33 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/prisma";
-import { comparePassword, signToken } from "@/lib/auth";
+import { comparePassword } from "@/lib/auth";
+import { attachAuthCookie } from "@/lib/auth-session-utils";
 import { resolveLoginEmail } from "@/lib/employee-pos-utils";
-import { getPostAuthRedirectPath, resolveEffectiveRole } from "@/lib/permission-utils";
+import {
+  getPostAuthRedirectPath,
+  resolveEffectiveRole,
+} from "@/lib/permission-utils";
 
 const loginSchema = z.object({
   email: z.string().min(1, "E-posta veya kullanıcı adı zorunludur."),
   password: z.string().min(1, "Şifre zorunludur."),
 });
+
+function resolveLoginRedirectTo(input: {
+  role: string;
+  isOwner: boolean;
+  hasActiveCompany: boolean;
+}) {
+  if (!input.hasActiveCompany) {
+    return "/companies/select";
+  }
+
+  return getPostAuthRedirectPath(
+    input.role as Parameters<typeof getPostAuthRedirectPath>[0],
+    input.isOwner
+  );
+}
 
 export async function POST(req: Request) {
   try {
@@ -48,9 +67,9 @@ export async function POST(req: Request) {
       where: { email },
       include: {
         companyUsers: {
-          include: {
-            company: true,
-          },
+          where: { status: "ACTIVE" },
+          include: { company: true },
+          orderBy: [{ isOwner: "desc" }, { createdAt: "asc" }],
         },
       },
     });
@@ -77,7 +96,19 @@ export async function POST(req: Request) {
       );
     }
 
-    const activeMembership = user.companyUsers[0] ?? null;
+    if (user.status !== "ACTIVE") {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Kullanıcı hesabınız aktif değil.",
+        },
+        { status: 403 }
+      );
+    }
+
+    const activeMembership =
+      user.companyUsers.find((entry) => entry.company?.status === "ACTIVE") ??
+      null;
     const activeCompany = activeMembership?.company ?? null;
     const effectiveRole = activeMembership
       ? resolveEffectiveRole({
@@ -86,16 +117,16 @@ export async function POST(req: Request) {
         })
       : user.role;
 
-    const token = signToken({
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-      companyId: activeCompany?.id ?? null,
+    const redirectTo = resolveLoginRedirectTo({
+      role: effectiveRole,
+      isOwner: activeMembership?.isOwner ?? false,
+      hasActiveCompany: Boolean(activeCompany),
     });
 
     const response = NextResponse.json({
       success: true,
       message: "Giriş başarılı.",
+      redirectTo,
       data: {
         user: {
           id: user.id,
@@ -111,19 +142,15 @@ export async function POST(req: Request) {
               phone: activeCompany.phone,
             }
           : null,
-        redirectTo: getPostAuthRedirectPath(
-          effectiveRole,
-          activeMembership?.isOwner ?? false
-        ),
+        redirectTo,
       },
     });
 
-    response.cookies.set("hesapisleri_token", token, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7,
+    attachAuthCookie(response, {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      companyId: activeCompany?.id ?? null,
     });
 
     return response;

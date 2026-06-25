@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
-import { generateReferralCode } from "@/lib/partner-utils";
+import { Loader2, RefreshCw } from "lucide-react";
+import { generateReferralCode, getBadgeTypeLabel } from "@/lib/partner-utils";
+import type { PartnerBadgeType } from "@prisma/client";
 
 type Application = {
   id: string;
@@ -16,14 +17,21 @@ type Application = {
   createdAt: string;
 };
 
-const badgeOptions = [
+const badgeOptions: PartnerBadgeType[] = [
   "NONE",
   "PARTNER",
   "VERIFIED",
   "INFLUENCER",
   "CELEBRITY",
   "VIP",
-] as const;
+];
+
+const fieldClass =
+  "mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-[13px] font-semibold text-[#0f1f4d] outline-none transition focus:border-[#0f1f4d] focus:ring-2 focus:ring-[#0f1f4d]/10";
+
+const labelClass = "block text-[12px] font-bold text-slate-500";
+
+const hintClass = "mt-1 text-[11px] font-medium text-slate-400";
 
 export function AdminPartnerApplicationActions({
   application,
@@ -36,7 +44,7 @@ export function AdminPartnerApplicationActions({
   const [approveForm, setApproveForm] = useState({
     referralCode: generateReferralCode(application.fullName),
     commissionRate: 10,
-    badgeType: "PARTNER" as (typeof badgeOptions)[number],
+    badgeType: "PARTNER" as PartnerBadgeType,
     badgeLabel: "Onaylı Partner",
     notes: "",
   });
@@ -124,59 +132,130 @@ export function AdminPartnerApplicationActions({
             </p>
 
             {open === "approve" ? (
-              <div className="mt-4 space-y-3">
-                <input
-                  className="w-full rounded-xl border px-3 py-2 text-[13px]"
-                  value={approveForm.referralCode}
-                  onChange={(e) =>
-                    setApproveForm({ ...approveForm, referralCode: e.target.value })
-                  }
-                  placeholder="Referral code"
-                />
-                <input
-                  type="number"
-                  className="w-full rounded-xl border px-3 py-2 text-[13px]"
-                  value={approveForm.commissionRate}
-                  onChange={(e) =>
-                    setApproveForm({
-                      ...approveForm,
-                      commissionRate: Number(e.target.value),
-                    })
-                  }
-                  placeholder="Komisyon %"
-                />
-                <select
-                  className="w-full rounded-xl border px-3 py-2 text-[13px]"
-                  value={approveForm.badgeType}
-                  onChange={(e) =>
-                    setApproveForm({
-                      ...approveForm,
-                      badgeType: e.target.value as (typeof badgeOptions)[number],
-                    })
-                  }
-                >
-                  {badgeOptions.map((badge) => (
-                    <option key={badge} value={badge}>
-                      {badge}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  className="w-full rounded-xl border px-3 py-2 text-[13px]"
-                  value={approveForm.badgeLabel}
-                  onChange={(e) =>
-                    setApproveForm({ ...approveForm, badgeLabel: e.target.value })
-                  }
-                  placeholder="Rozet etiketi"
-                />
+              <div className="mt-4 space-y-4">
+                <label className={labelClass}>
+                  Referans kodu
+                  <div className="mt-1 flex gap-2">
+                    <input
+                      className={fieldClass}
+                      value={approveForm.referralCode}
+                      onChange={(e) =>
+                        setApproveForm({
+                          ...approveForm,
+                          referralCode: e.target.value.toUpperCase(),
+                        })
+                      }
+                      placeholder="Örn. FADIME9041"
+                      maxLength={32}
+                    />
+                    <button
+                      type="button"
+                      title="Yeni kod üret"
+                      onClick={() =>
+                        setApproveForm({
+                          ...approveForm,
+                          referralCode: generateReferralCode(application.fullName),
+                        })
+                      }
+                      className="inline-flex shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-slate-600 transition hover:bg-slate-50"
+                    >
+                      <RefreshCw size={15} />
+                    </button>
+                  </div>
+                  <p className={hintClass}>
+                    Partner linkinde kullanılacak benzersiz kod. Boş bırakılırsa
+                    otomatik üretilir.
+                  </p>
+                </label>
+
+                <label className={labelClass}>
+                  Komisyon oranı (%)
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.5}
+                    className={fieldClass}
+                    value={approveForm.commissionRate}
+                    onChange={(e) =>
+                      setApproveForm({
+                        ...approveForm,
+                        commissionRate: Number(e.target.value),
+                      })
+                    }
+                    placeholder="Örn. 10"
+                  />
+                  <p className={hintClass}>
+                    Üyelik ödemelerinden partnerin kazanacağı yüzde. Varsayılan
+                    platform oranı kullanılabilir.
+                  </p>
+                </label>
+
+                <label className={labelClass}>
+                  Partner rozeti (seviye)
+                  <select
+                    className={fieldClass}
+                    value={approveForm.badgeType}
+                    onChange={(e) =>
+                      setApproveForm({
+                        ...approveForm,
+                        badgeType: e.target.value as PartnerBadgeType,
+                      })
+                    }
+                  >
+                    {badgeOptions.map((badge) => (
+                      <option key={badge} value={badge}>
+                        {getBadgeTypeLabel(badge)}
+                      </option>
+                    ))}
+                  </select>
+                  <p className={hintClass}>
+                    Partner panelinde görünecek rozet türü (Influencer, VIP vb.).
+                  </p>
+                </label>
+
+                <label className={labelClass}>
+                  Rozet etiketi (görünen metin)
+                  <input
+                    className={fieldClass}
+                    value={approveForm.badgeLabel}
+                    onChange={(e) =>
+                      setApproveForm({ ...approveForm, badgeLabel: e.target.value })
+                    }
+                    placeholder="Örn. Onaylı Partner"
+                  />
+                  <p className={hintClass}>
+                    Rozetin yanında kullanıcıya gösterilecek kısa açıklama.
+                  </p>
+                </label>
+
+                <label className={labelClass}>
+                  İç not (isteğe bağlı)
+                  <textarea
+                    className={`${fieldClass} min-h-[88px] resize-y`}
+                    value={approveForm.notes}
+                    onChange={(e) =>
+                      setApproveForm({ ...approveForm, notes: e.target.value })
+                    }
+                    placeholder="Yalnız admin panelinde görünür; partner ile paylaşılmaz."
+                  />
+                </label>
               </div>
             ) : (
-              <textarea
-                className="mt-4 w-full rounded-xl border px-3 py-2 text-[13px]"
-                value={rejectionReason}
-                onChange={(e) => setRejectionReason(e.target.value)}
-                placeholder="Red nedeni"
-              />
+              <label className={`${labelClass} mt-4 block`}>
+                Red nedeni
+                <textarea
+                  className={`${fieldClass} min-h-[100px] resize-y`}
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  placeholder="Başvurunun neden reddedildiğini kısaca yazın. Başvuru sahibi bu metni görebilir."
+                  required
+                />
+                <p className={hintClass}>
+                  Bu açıklama başvuru sahibine gösterilir; net ve profesyonel
+                  olun.
+                </p>
+              </label>
             )}
 
             {error ? (
@@ -195,10 +274,10 @@ export function AdminPartnerApplicationActions({
                 type="button"
                 disabled={loading}
                 onClick={() => void (open === "approve" ? submitApprove() : submitReject())}
-                className="inline-flex items-center gap-2 rounded-xl bg-[#0f1f4d] px-4 py-2 text-[13px] font-bold text-white"
+                className="inline-flex items-center gap-2 rounded-xl bg-[#0f1f4d] px-4 py-2 text-[13px] font-bold text-white disabled:opacity-60"
               >
                 {loading ? <Loader2 className="animate-spin" size={16} /> : null}
-                Kaydet
+                {open === "approve" ? "Onayla ve Partner Oluştur" : "Reddet"}
               </button>
             </div>
           </div>

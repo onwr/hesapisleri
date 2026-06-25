@@ -40,6 +40,7 @@ describe("posCheckoutSchema warehouseId", () => {
   it("warehouseId alanını kabul eder", () => {
     const parsed = posCheckoutSchema.safeParse({
       warehouseId: "warehouse-1",
+      paymentStatus: "UNPAID",
       items: [
         {
           productId: "p1",

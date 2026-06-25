@@ -10,6 +10,9 @@ import { z } from "zod";
 export const PARTNER_IP_SALT =
   process.env.PARTNER_IP_SALT ?? "hesapisleri-partner-salt";
 
+/** Soft monthly signup goal shown in partner motivation widgets. */
+export const PARTNER_MONTHLY_SIGNUP_GOAL = 10;
+
 export const partnerApplicationSchema = z.object({
   fullName: z.string().min(2, "Ad soyad zorunludur."),
   email: z.string().email("Geçerli bir e-posta girin."),

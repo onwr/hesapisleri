@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { PrintSaleButton } from "@/components/sales/print-sale-button";
 import { QuoteCancelButton } from "@/components/sales/quote-cancel-button";
+import { SaleCancelButton } from "@/components/sales/sale-cancel-button";
 import { QuoteConvertPanel } from "@/components/sales/quote-convert-panel";
 import { SaleCollectPayment } from "@/components/sales/sale-collect-payment";
 import { SalePrintOnLoad } from "@/components/sales/sale-print-on-load";
@@ -30,6 +31,12 @@ import { guardPageModule } from "@/lib/module-access";
 import { db } from "@/lib/prisma";
 import { formatMoney } from "@/lib/format-utils";
 import { getSaleRemainingAmount } from "@/lib/sale-payment-utils";
+import { getPosPaymentMethodLabel } from "@/lib/pos-checkout-utils";
+import { canCancelSales, canUpdateSales } from "@/lib/sale-permission-utils";
+import {
+  validateSaleCancelEligibility,
+  validateSaleEditEligibility,
+} from "@/lib/sale-mutation-policy";
 
 type Props = {
   params: Promise<{
@@ -104,12 +111,33 @@ const { id } = await params;
     },
     include: {
       customer: true,
+      payments: {
+        include: {
+          account: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      },
       items: {
         include: {
           product: true,
         },
       },
-      invoice: true,
+      invoice: {
+        include: {
+          documentSubmission: true,
+        },
+      },
+      cancelledByUser: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
     },
   });
 
@@ -125,6 +153,16 @@ const { id } = await params;
     !isCancelled &&
     sale.status !== "REFUNDED" &&
     remainingAmount > 0;
+
+  const canEditSale =
+    !isQuote &&
+    canUpdateSales(session.effectiveRole, session.companyUser.isOwner) &&
+    validateSaleEditEligibility(sale).ok;
+
+  const canCancelSale =
+    !isQuote &&
+    canCancelSales(session.effectiveRole, session.companyUser.isOwner) &&
+    validateSaleCancelEligibility(sale).ok;
 
   const stockMovements = await db.stockMovement.findMany({
     where: {
@@ -225,6 +263,12 @@ const { id } = await params;
 
                 <div className="mt-5 flex flex-wrap gap-3">
                   <HeroBadge
+                    label="Satış Tarihi"
+                    value={formatShortDate(sale.saleDate ?? sale.createdAt)}
+                    icon={<CalendarDays size={15} />}
+                  />
+
+                  <HeroBadge
                     label="Oluşturma"
                     value={formatShortDate(sale.createdAt)}
                     icon={<CalendarDays size={15} />}
@@ -286,13 +330,33 @@ const { id } = await params;
                     </Link>
                   </>
                 ) : !isCancelled ? (
-                  <Link
-                    href={`/invoices/e-invoice?saleId=${sale.id}`}
-                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-white px-4 text-[12px] font-black text-blue-600 shadow-lg shadow-blue-950/10 transition hover:bg-blue-50"
-                  >
-                    <Send size={17} strokeWidth={2.5} />
-                    e-Fatura / e-Arşiv Kes
-                  </Link>
+                  <>
+                    {canEditSale ? (
+                      <Link
+                        href={`/sales/${sale.id}/edit`}
+                        className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 text-[12px] font-black text-white backdrop-blur transition hover:bg-white/15"
+                      >
+                        <Edit3 size={16} strokeWidth={2.5} />
+                        Satışı Düzenle
+                      </Link>
+                    ) : null}
+
+                    {canCancelSale ? (
+                      <SaleCancelButton
+                        saleId={sale.id}
+                        saleNo={sale.saleNo}
+                        variant="destructive"
+                      />
+                    ) : null}
+
+                    <Link
+                      href={`/invoices/e-invoice?saleId=${sale.id}`}
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-white px-4 text-[12px] font-black text-blue-600 shadow-lg shadow-blue-950/10 transition hover:bg-blue-50"
+                    >
+                      <Send size={17} strokeWidth={2.5} />
+                      e-Fatura / e-Arşiv Kes
+                    </Link>
+                  </>
                 ) : null}
               </div>
             </div>
@@ -382,12 +446,44 @@ const { id } = await params;
                 </div>
               </div>
 
-              <QuoteConvertPanel
-                saleId={sale.id}
-                saleNo={sale.saleNo}
-                total={saleTotal}
-                defaultOpen={false}
-              />
+                    <QuoteConvertPanel
+                      saleId={sale.id}
+                      saleNo={sale.saleNo}
+                      total={saleTotal}
+                      defaultOpen={false}
+                    />
+            </div>
+          </section>
+        ) : null}
+
+        {isCancelled ? (
+          <section className="rounded-2xl border border-rose-100 bg-rose-50 p-5">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-rose-600 shadow-sm">
+                <XCircle size={21} strokeWidth={2.5} />
+              </div>
+
+              <div>
+                <p className="text-[15px] font-black text-[#0f1f4d]">
+                  Bu satış iptal edilmiş
+                </p>
+                <p className="mt-1 text-[12px] font-medium leading-6 text-rose-700">
+                  {sale.cancelReason
+                    ? `Neden: ${sale.cancelReason}`
+                    : "İptal nedeni kaydedilmemiş."}
+                  {sale.cancelledAt
+                    ? ` · ${formatShortDate(sale.cancelledAt)}`
+                    : ""}
+                  {sale.cancelledByUser?.name
+                    ? ` · ${sale.cancelledByUser.name}`
+                    : ""}
+                </p>
+                {sale.cancelNote ? (
+                  <p className="mt-2 text-[12px] font-medium text-rose-600">
+                    {sale.cancelNote}
+                  </p>
+                ) : null}
+              </div>
             </div>
           </section>
         ) : null}
@@ -757,6 +853,27 @@ const { id } = await params;
                       >
                         {getPaymentStatusText(sale.paymentStatus)}
                       </span>
+
+                      {sale.payments.length > 0 ? (
+                        <div className="mt-3 space-y-2">
+                          {sale.payments.map((payment) => (
+                            <div
+                              key={payment.id}
+                              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[12px] font-medium text-slate-600"
+                            >
+                              <span className="font-black text-[#0f1f4d]">
+                                {getPosPaymentMethodLabel(payment.paymentMethod)}
+                              </span>
+                              <span className="text-slate-400"> · </span>
+                              <span>{payment.account.name}</span>
+                              <span className="text-slate-400"> · </span>
+                              <span className="font-black text-emerald-700">
+                                {formatMoney(Number(payment.amount))}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-violet-100 bg-violet-50 p-4">
@@ -783,12 +900,12 @@ const { id } = await params;
                   <div className="grid gap-3">
                     {isQuote ? (
                       <>
-                        <QuoteConvertPanel
-                          saleId={sale.id}
-                          saleNo={sale.saleNo}
-                          total={saleTotal}
-                          defaultOpen={false}
-                        />
+                    <QuoteConvertPanel
+                      saleId={sale.id}
+                      saleNo={sale.saleNo}
+                      total={saleTotal}
+                      defaultOpen={false}
+                    />
 
                         <Link
                           href={`/sales/quotes/${sale.id}/edit`}
@@ -807,13 +924,29 @@ const { id } = await params;
                         Faturayı Gör
                       </Link>
                     ) : !isCancelled ? (
-                      <Link
-                        href={`/invoices/e-invoice?saleId=${sale.id}`}
-                        className="flex h-11 items-center justify-center gap-2 rounded-xl bg-linear-to-br from-blue-600 to-violet-600 text-[12px] font-black text-white shadow-lg shadow-blue-100"
-                      >
-                        <Send size={16} strokeWidth={2.5} />
-                        e-Fatura / e-Arşiv Kes
-                      </Link>
+                      <>
+                        {canEditSale ? (
+                          <Link
+                            href={`/sales/${sale.id}/edit`}
+                            className="flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-[12px] font-black text-[#24345f] transition hover:bg-slate-50"
+                          >
+                            <Edit3 size={16} strokeWidth={2.5} />
+                            Satışı Düzenle
+                          </Link>
+                        ) : null}
+
+                        <Link
+                          href={`/invoices/e-invoice?saleId=${sale.id}`}
+                          className="flex h-11 items-center justify-center gap-2 rounded-xl bg-linear-to-br from-blue-600 to-violet-600 text-[12px] font-black text-white shadow-lg shadow-blue-100"
+                        >
+                          <Send size={16} strokeWidth={2.5} />
+                          e-Fatura / e-Arşiv Kes
+                        </Link>
+
+                        {canCancelSale ? (
+                          <SaleCancelButton saleId={sale.id} saleNo={sale.saleNo} />
+                        ) : null}
+                      </>
                     ) : null}
 
                     <div className="flex h-11 items-center justify-center">

@@ -27,6 +27,7 @@ import {
   CashBankTableToolbar,
 } from "@/components/cash-bank/cash-bank-table-controls";
 import { CashBankSidebarWidgets } from "@/components/cash-bank/cash-bank-sidebar-widgets";
+import { AiPageTriggerButton } from "@/components/ai-assistant/ai-page-trigger-button";
 import { getCashBankPageData } from "@/lib/cash-bank-page-data";
 import {
   buildCashBankQuery,
@@ -127,6 +128,10 @@ const canManage = canManageAccounts(effectiveRole, companyUser.isOwner);
   return (
     <AppShell>
       <div className="space-y-5">
+        <div className="flex justify-end">
+          <AiPageTriggerButton moduleKey="cash-bank" />
+        </div>
+
         <CashBankActionCards accounts={actionAccountOptions} canManage={canManage} />
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">

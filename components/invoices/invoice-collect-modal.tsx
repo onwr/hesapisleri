@@ -4,15 +4,11 @@ import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, Wallet, X } from "lucide-react";
+import { CollectionAccountSelect } from "@/components/cash-bank/collection-account-select";
+import { useCollectionAccounts } from "@/hooks/use-collection-accounts";
+import { resolveDefaultCollectionAccountId } from "@/lib/collection-account-utils";
 import { formatInvoiceMoney } from "@/lib/invoices-page-utils";
 import { previewInvoicePaymentStatus } from "@/lib/invoice-payment-utils";
-
-type AccountOption = {
-  id: string;
-  name: string;
-  type: string;
-  balance: number;
-};
 
 type InvoiceCollectModalProps = {
   open: boolean;
@@ -22,7 +18,6 @@ type InvoiceCollectModalProps = {
   total: number;
   paidAmount: number;
   remainingAmount: number;
-  accounts: AccountOption[];
 };
 
 export function InvoiceCollectModal({
@@ -33,9 +28,9 @@ export function InvoiceCollectModal({
   total,
   paidAmount,
   remainingAmount,
-  accounts,
 }: InvoiceCollectModalProps) {
   const router = useRouter();
+  const { accounts, loading: accountsLoading } = useCollectionAccounts();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [accountId, setAccountId] = useState("");
@@ -46,14 +41,23 @@ export function InvoiceCollectModal({
   const [note, setNote] = useState("");
 
   useEffect(() => {
-    if (open) {
-      setAccountId(accounts[0]?.id ?? "");
-      setAmount(remainingAmount.toFixed(2));
-      setCollectedAt(new Date().toISOString().split("T")[0]);
-      setNote("");
-      setError("");
-    }
-  }, [open, accounts, remainingAmount]);
+    if (!open) return;
+
+    setAmount(remainingAmount.toFixed(2));
+    setCollectedAt(new Date().toISOString().split("T")[0]);
+    setNote("");
+    setError("");
+  }, [open, remainingAmount]);
+
+  useEffect(() => {
+    if (!open || accountsLoading) return;
+
+    setAccountId((current) =>
+      current && accounts.some((account) => account.id === current)
+        ? current
+        : resolveDefaultCollectionAccountId(accounts)
+    );
+  }, [open, accounts, accountsLoading]);
 
   const parsedAmount = Number(amount);
   const selectedAccount = useMemo(
@@ -132,6 +136,12 @@ export function InvoiceCollectModal({
     return null;
   }
 
+  const canSubmit =
+    !saving &&
+    !accountsLoading &&
+    accounts.length > 0 &&
+    Boolean(accountId);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4">
       <div
@@ -176,20 +186,16 @@ export function InvoiceCollectModal({
             />
           </Field>
 
-          <Field label="Ödeme Hesabı" required>
-            <select
+          <Field label="Tahsilat Hesabı" required>
+            <CollectionAccountSelect
+              accounts={accounts}
+              loading={accountsLoading}
               value={accountId}
-              onChange={(event) => setAccountId(event.target.value)}
+              onChange={setAccountId}
               required
+              disabled={saving || accountsLoading}
               className={inputClass}
-            >
-              <option value="">Hesap seçin</option>
-              {accounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.name} ({formatInvoiceMoney(account.balance)})
-                </option>
-              ))}
-            </select>
+            />
           </Field>
 
           {projectedBalance !== null ? (
@@ -242,7 +248,7 @@ export function InvoiceCollectModal({
           <div className="flex gap-3 pt-1">
             <button
               type="submit"
-              disabled={saving || accounts.length === 0}
+              disabled={!canSubmit}
               className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-linear-to-r from-blue-600 to-violet-600 text-[13px] font-black text-white disabled:opacity-60"
             >
               {saving ? (

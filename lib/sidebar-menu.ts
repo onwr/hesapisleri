@@ -6,6 +6,7 @@ import {
   Box,
   Brain,
   FileText,
+  Handshake,
   Home,
   ReceiptText,
   ScanBarcode,
@@ -83,7 +84,7 @@ const SIDEBAR_LINK_ITEMS: Omit<SidebarMenuItem, "type">[] = [
   { title: "Giderler", href: "/expenses", icon: ReceiptText, module: "expenses" },
   { title: "Raporlar", href: "/reports", icon: BarChart3, module: "reports" },
   {
-    title: "AI Asistan",
+    title: "Yapay Zekâ Asistanı",
     href: "/ai-assistant",
     icon: Brain,
     module: "ai-assistant",
@@ -93,6 +94,12 @@ const SIDEBAR_LINK_ITEMS: Omit<SidebarMenuItem, "type">[] = [
     href: "/team",
     icon: UserCog,
     module: "employees",
+  },
+  {
+    title: "Ortaklık Programı",
+    href: "/partnership",
+    icon: Handshake,
+    module: "partnership",
   },
   { title: "Ayarlar", href: "/settings", icon: Settings, module: "settings" },
 ];

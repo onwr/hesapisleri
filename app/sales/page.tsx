@@ -27,8 +27,8 @@ import {
   parseSalesTab,
   toSalesRowActionData,
 } from "@/lib/sales-page-utils";
-import { getInvoiceCollectionAccounts } from "@/lib/invoice-service";
 import { formatMoney } from "@/lib/format-utils";
+import { AiPageTriggerButton } from "@/components/ai-assistant/ai-page-trigger-button";
 
 type SalesPageProps = {
   searchParams: Promise<{
@@ -148,11 +148,13 @@ const now = new Date();
       to,
     });
 
-  const collectionAccounts = await getInvoiceCollectionAccounts(company.id);
-
   return (
     <AppShell>
       <div className="space-y-5">
+        <div className="flex justify-end">
+          <AiPageTriggerButton moduleKey="sales" />
+        </div>
+
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           {actionCards.map((card) => {
             const Icon = card.icon;
@@ -322,10 +324,7 @@ const now = new Date();
                     </td>
 
                     <td className="px-4 py-3">
-                      <SalesRowActions
-                        row={toSalesRowActionData(row)}
-                        accounts={collectionAccounts}
-                      />
+                      <SalesRowActions row={toSalesRowActionData(row)} />
                     </td>
                   </tr>
                 ))}

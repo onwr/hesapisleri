@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, RefreshCw, Send, XCircle } from "lucide-react";
+import { Eye, Loader2, RefreshCw, Send, XCircle } from "lucide-react";
 import {
   getGibStatusLabel,
   getProviderStatusLabel,
@@ -26,10 +26,54 @@ type SubmissionInfo = {
   lastQueriedAt?: string | null;
 } | null;
 
+type PreviewIssue = {
+  field: string;
+  message: string;
+  lineIndex?: number;
+};
+
+type PreviewResult = {
+  provider: string | null;
+  recommendedDocumentType: "E_INVOICE" | "E_ARCHIVE";
+  profileId: string | null;
+  invoiceTypeCode: string;
+  selectedAlias: string | null;
+  availableAliases: TaxpayerAlias[];
+  sellerIssues: PreviewIssue[];
+  buyerIssues: PreviewIssue[];
+  lineIssues: PreviewIssue[];
+  internetSaleIssues: PreviewIssue[];
+  snapshotIssues: PreviewIssue[];
+  totalValidation: { ok: boolean; issues: PreviewIssue[] };
+  xsdValidation: { ok: boolean; valid: boolean; schemaLoaded: boolean; issues: PreviewIssue[] };
+  taxpayerLookup?: {
+    syncOperation: string;
+    lookupMethod: string;
+    providerError: string | null;
+    cacheHit: boolean;
+    staleCache: boolean;
+    status: string | null;
+  };
+  snapshot?: {
+    ready: boolean;
+    persisted: boolean;
+    refreshed: boolean;
+    locked: boolean;
+    status: string | null;
+    revisionHash: string | null;
+    capturedAt: string | null;
+  };
+  entitlement: { featureEnabled: boolean; limitReached: boolean; message: string | null };
+  sendable: boolean;
+  identifiers: { previewUuid: string | null; custInvId: string | null };
+};
+
 type Props = {
   invoiceId: string;
   customerTaxNo?: string | null;
   integrationConnected: boolean;
+  previewEnabled?: boolean;
+  submitEnabled?: boolean;
   providerLabel?: string;
   submission: SubmissionInfo;
 };
@@ -38,6 +82,8 @@ export function InvoiceEDocumentPanel({
   invoiceId,
   customerTaxNo,
   integrationConnected,
+  previewEnabled = integrationConnected,
+  submitEnabled = integrationConnected,
   providerLabel,
   submission,
 }: Props) {
@@ -58,10 +104,73 @@ export function InvoiceEDocumentPanel({
     "E_ARCHIVE"
   );
   const [internetSale, setInternetSale] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewResult, setPreviewResult] = useState<PreviewResult | null>(null);
   const [localSubmission, setLocalSubmission] = useState(submission);
 
   const isSuccess = localSubmission?.status === "SUCCESS";
   const isSubmitted = Boolean(localSubmission?.providerInvoiceUuid);
+
+  function renderIssues(title: string, issues: PreviewIssue[]) {
+    if (issues.length === 0) return null;
+    return (
+      <div className="rounded-xl bg-red-50 p-3 text-sm text-red-800">
+        <p className="font-semibold">{title}</p>
+        <ul className="mt-2 list-disc space-y-1 pl-5">
+          {issues.map((issue, index) => (
+            <li key={`${issue.field}-${index}`}>
+              <span className="font-medium">{issue.field}</span>: {issue.message}
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  async function handlePreview() {
+    setPreviewLoading(true);
+    setError("");
+    setMessage("");
+    try {
+      const res = await fetch(`/api/invoices/${invoiceId}/e-document/preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          documentType,
+          targetAlias: documentType === "E_INVOICE" ? selectedAlias : null,
+          internetSale: documentType === "E_ARCHIVE" ? internetSale : false,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        setError(json.message || "Önizleme oluşturulamadı.");
+        return;
+      }
+      const data = json.data as PreviewResult;
+      setPreviewResult(data);
+      setRecommendedType(data.recommendedDocumentType);
+      setDocumentType(data.recommendedDocumentType);
+      if (data.availableAliases.length === 1) {
+        setSelectedAlias(data.availableAliases[0]!.alias);
+      }
+      setAliases(
+        data.availableAliases.map((item) => ({
+          alias: item.alias,
+          type: item.type,
+          title: item.title,
+        }))
+      );
+      setMessage(
+        data.sendable
+          ? "Önizleme tamamlandı; belge gönderime hazır görünüyor."
+          : "Önizleme tamamlandı; eksik veya hatalı alanlar var."
+      );
+    } catch {
+      setError("Önizleme sırasında hata oluştu.");
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
 
   async function handleLookup() {
     setLookupLoading(true);
@@ -197,14 +306,11 @@ export function InvoiceEDocumentPanel({
     }
   }
 
-  if (!integrationConnected) {
+  if (!previewEnabled && !integrationConnected) {
     return (
       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
         E-belge oluşturmak için Ayarlar &gt; Entegrasyonlar bölümünden
         {providerLabel ? ` ${providerLabel}` : ""} bağlantısını kurun.
-        {providerLabel && providerLabel !== "Trendyol E-Faturam"
-          ? " Şu an yalnızca Trendyol E-Faturam ile belge gönderimi destekleniyor."
-          : ""}
       </div>
     );
   }
@@ -214,7 +320,9 @@ export function InvoiceEDocumentPanel({
       <div className="mb-4">
         <h3 className="text-base font-semibold text-slate-900">E-Belge Oluştur</h3>
         <p className="mt-1 text-sm text-slate-500">
-          Trendyol E-Faturam üzerinden e-Fatura veya e-Arşiv gönderin.
+          {submitEnabled
+            ? "Bağlı sağlayıcı üzerinden e-Fatura veya e-Arşiv gönderin."
+            : "UBL-TR önizleme ve doğrulama; gönderim henüz bu sağlayıcıda aktif değil."}
         </p>
       </div>
 
@@ -320,6 +428,17 @@ export function InvoiceEDocumentPanel({
 
           <button
             type="button"
+            onClick={() => void handlePreview()}
+            disabled={previewLoading}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-60"
+          >
+            {previewLoading ? <Loader2 size={16} className="animate-spin" /> : <Eye size={16} />}
+            Önizle ve doğrula
+          </button>
+
+          {submitEnabled ? (
+          <button
+            type="button"
             onClick={() => void handleSubmit()}
             disabled={
               submitLoading ||
@@ -330,6 +449,78 @@ export function InvoiceEDocumentPanel({
             {submitLoading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
             Gönder
           </button>
+          ) : null}
+
+          {previewResult ? (
+            <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              <p>
+                Profil: <span className="font-semibold">{previewResult.profileId ?? "—"}</span> ·
+                Tür: <span className="font-semibold">{previewResult.invoiceTypeCode}</span> ·
+                Gönderilebilir:{" "}
+                <span className="font-semibold">
+                  {previewResult.sendable ? "Evet" : "Hayır"}
+                </span>
+              </p>
+              {previewResult.identifiers.previewUuid ? (
+                <p>Önizleme UUID: {previewResult.identifiers.previewUuid}</p>
+              ) : null}
+              {previewResult.snapshot ? (
+                <p>
+                  Snapshot:{" "}
+                  <span className="font-semibold">
+                    {previewResult.snapshot.locked
+                      ? "Kilitli"
+                      : previewResult.snapshot.ready
+                        ? "Hazır"
+                        : "Eksik"}
+                  </span>
+                  {previewResult.snapshot.status
+                    ? ` · ${previewResult.snapshot.status}`
+                    : ""}
+                  {previewResult.snapshot.refreshed ? " · yenilendi" : ""}
+                  {previewResult.snapshot.capturedAt
+                    ? ` · ${new Date(previewResult.snapshot.capturedAt).toLocaleString("tr-TR")}`
+                    : ""}
+                </p>
+              ) : null}
+              {previewResult.taxpayerLookup?.providerError ? (
+                <p className="text-red-700">
+                  {previewResult.taxpayerLookup.providerError === "STALE_CACHE"
+                    ? "Mükellef listesi önbelleği süresi dolmuş; Sovos erişilemiyor (STALE_CACHE)."
+                    : previewResult.taxpayerLookup.providerError === "PROVIDER_UNAVAILABLE"
+                      ? "Sovos mükellef listesi şu an erişilemiyor (PROVIDER_UNAVAILABLE)."
+                      : previewResult.taxpayerLookup.providerError}
+                </p>
+              ) : null}
+              {previewResult.taxpayerLookup ? (
+                <p className="text-xs text-gray-600">
+                  Mükellef: {previewResult.taxpayerLookup.syncOperation} →{" "}
+                  {previewResult.taxpayerLookup.lookupMethod}
+                  {previewResult.taxpayerLookup.cacheHit ? " (önbellek)" : ""}
+                  {previewResult.taxpayerLookup.staleCache ? " (süresi dolmuş önbellek)" : ""}
+                </p>
+              ) : null}
+              {renderIssues("Snapshot eksikleri", previewResult.snapshotIssues ?? [])}
+              {renderIssues("Satıcı eksikleri", previewResult.sellerIssues)}
+              {renderIssues("Alıcı eksikleri", previewResult.buyerIssues)}
+              {renderIssues("Satır eksikleri", previewResult.lineIssues)}
+              {renderIssues("İnternet satış eksikleri", previewResult.internetSaleIssues)}
+              {renderIssues(
+                previewResult.totalValidation.ok
+                  ? "Toplam doğrulaması"
+                  : "Toplam doğrulaması (kuruş farkı)",
+                previewResult.totalValidation.issues
+              )}
+              {!previewResult.xsdValidation.schemaLoaded ? (
+                <p className="text-sm text-red-700">
+                  XSD şemaları yüklenemedi; belge gönderilemez.
+                </p>
+              ) : previewResult.xsdValidation.valid ? (
+                <p className="text-sm text-emerald-700">XSD doğrulaması geçti (transport profili).</p>
+              ) : null}
+              {renderIssues("XSD doğrulaması", previewResult.xsdValidation.issues)}
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="flex flex-wrap gap-2">

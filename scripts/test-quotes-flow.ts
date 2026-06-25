@@ -308,7 +308,7 @@ async function convertQuote(
           companyId: ctx.companyId,
           saleNo: newSaleNo,
           amount: payment.paidAmount,
-          paymentMethod: input.paymentMethod ?? "CASH",
+          accountId: ctx.cashAccountId,
         });
       }
 

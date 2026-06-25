@@ -13,6 +13,9 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import { AiHealthBadge, AiFallbackBanner } from "@/components/ai-assistant/ai-health-badge";
+import { AiConversationSidebar } from "@/components/ai-assistant/ai-conversation-sidebar";
+import { AiStructuredMessage } from "@/components/ai-assistant/ai-structured-message";
 import {
   formatDateInputValue,
   QUICK_QUESTIONS,
@@ -27,6 +30,7 @@ type AiAssistantChatPanelProps = {
   from: Date;
   to: Date;
   activeTopic: AiTopicKey;
+  variant?: "page" | "drawer";
 };
 
 const EMPTY_MESSAGE_ERROR = "Lütfen bir mesaj yazın.";
@@ -107,7 +111,10 @@ function ChatMessageBubble({ message, index }: ChatMessageBubbleProps) {
       </div>
       <div className="max-w-[min(85%,620px)]">
         <div className="rounded-2xl rounded-tl-md border border-slate-200/80 bg-white px-4 py-3 text-[13px] font-medium leading-6 text-[#24345f] shadow-sm">
-          <p className="whitespace-pre-wrap">{message.content}</p>
+          <AiStructuredMessage
+            content={message.content}
+            structured={message.structured}
+          />
         </div>
         {timeLabel ? (
           <p className="mt-1 text-[10px] font-semibold text-slate-400">
@@ -124,6 +131,8 @@ type ChatPanelChromeProps = {
   onToggleFullscreen: () => void;
   onCloseFullscreen?: () => void;
   highlight?: boolean;
+  showHeader?: boolean;
+  showFullscreenToggle?: boolean;
   children: ReactNode;
   footer: ReactNode;
 };
@@ -133,10 +142,12 @@ function ChatPanelChrome({
   onToggleFullscreen,
   onCloseFullscreen,
   highlight,
+  showHeader = true,
+  showFullscreenToggle = true,
   children,
   footer,
 }: ChatPanelChromeProps) {
-  const header = (
+  const header = showHeader ? (
     <div
       className={[
         "relative shrink-0 overflow-hidden border-b border-white/10 px-4 py-3.5 sm:px-5",
@@ -160,23 +171,28 @@ function ChatPanelChrome({
             <p className="truncate text-[11px] font-medium text-blue-100/90">
               İşletme verilerinize dayalı akıllı yanıtlar
             </p>
+            <div className="mt-1">
+              <AiHealthBadge />
+            </div>
           </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5">
-          <button
-            type="button"
-            onClick={onToggleFullscreen}
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-white transition hover:bg-white/20"
-            aria-label={isFullscreen ? "Tam ekrandan çık" : "Tam ekran"}
-            title={isFullscreen ? "Tam ekrandan çık" : "Tam ekran"}
-          >
-            {isFullscreen ? (
-              <Minimize2 size={17} strokeWidth={2.4} />
-            ) : (
-              <Maximize2 size={17} strokeWidth={2.4} />
-            )}
-          </button>
+          {showFullscreenToggle ? (
+            <button
+              type="button"
+              onClick={onToggleFullscreen}
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-white transition hover:bg-white/20"
+              aria-label={isFullscreen ? "Tam ekrandan çık" : "Tam ekran"}
+              title={isFullscreen ? "Tam ekrandan çık" : "Tam ekran"}
+            >
+              {isFullscreen ? (
+                <Minimize2 size={17} strokeWidth={2.4} />
+              ) : (
+                <Maximize2 size={17} strokeWidth={2.4} />
+              )}
+            </button>
+          ) : null}
           {isFullscreen && onCloseFullscreen ? (
             <button
               type="button"
@@ -190,14 +206,14 @@ function ChatPanelChrome({
         </div>
       </div>
     </div>
-  );
+  ) : null;
 
   const shell = (
     <section
       id="ai-chat-panel"
       className={[
         "flex flex-col overflow-hidden bg-white",
-        isFullscreen
+        isFullscreen || !showHeader
           ? "h-full"
           : [
               "animate-in fade-in slide-in-from-bottom-3 fill-mode-both rounded-2xl border shadow-[0_10px_28px_rgba(15,23,42,0.04)] duration-700",
@@ -206,7 +222,7 @@ function ChatPanelChrome({
                 : "border-slate-200/80",
             ].join(" "),
       ].join(" ")}
-      style={isFullscreen ? undefined : { animationDelay: "180ms" }}
+      style={isFullscreen || !showHeader ? undefined : { animationDelay: "180ms" }}
     >
       {header}
       {children}
@@ -224,12 +240,17 @@ export function AiAssistantChatPanel({
   from,
   to,
   activeTopic,
+  variant = "page",
 }: AiAssistantChatPanelProps) {
+  const isDrawer = variant === "drawer";
   const [messages, setMessages] = useState(initialMessages);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retryQuestion, setRetryQuestion] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
+  const [conversationRefreshKey, setConversationRefreshKey] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -282,6 +303,35 @@ export function AiAssistantChatPanel({
     textarea.style.height = `${Math.min(textarea.scrollHeight, isFullscreen ? 160 : 120)}px`;
   }, [input, isFullscreen]);
 
+  function startNewConversation() {
+    setConversationId(null);
+    setMessages(initialMessages);
+    setFallbackNotice(null);
+    setError(null);
+    setRetryQuestion(null);
+  }
+
+  function loadConversation(
+    id: string,
+    loadedMessages: Array<{
+      id: string;
+      role: string;
+      content: string;
+      structuredContent?: unknown;
+    }>
+  ) {
+    setConversationId(id);
+    setFallbackNotice(null);
+    setMessages(
+      loadedMessages.map((msg) => ({
+        id: msg.id,
+        role: msg.role as "user" | "assistant",
+        content: msg.content,
+        structured: msg.structuredContent,
+      }))
+    );
+  }
+
   async function sendQuestion(question: string) {
     const trimmed = question.trim();
     if (!trimmed) {
@@ -304,11 +354,12 @@ export function AiAssistantChatPanel({
     setIsTyping(true);
 
     try {
-      const response = await fetch("/api/assistant/chat", {
+      const response = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: trimmed,
+          conversationId: conversationId || undefined,
           context: activeTopic === "all" ? "dashboard" : activeTopic,
           from: formatDateInputValue(from),
           to: formatDateInputValue(to),
@@ -318,16 +369,33 @@ export function AiAssistantChatPanel({
       const data = (await response.json()) as {
         success?: boolean;
         message?: string;
+        conversationId?: string;
+        responseMode?: "openai" | "rules_fallback";
+        fallbackNotice?: string | null;
+        structured?: unknown;
       };
 
       if (!response.ok || !data.success || !data.message) {
         throw new Error(data.message || GENERIC_ERROR);
       }
 
+      if (data.conversationId) {
+        setConversationId(data.conversationId);
+        setConversationRefreshKey((key) => key + 1);
+      }
+
+      setFallbackNotice(
+        data.responseMode === "rules_fallback"
+          ? data.fallbackNotice ||
+              "Bu yanıt kural tabanlı yedek modda üretildi; OpenAI kullanılmadı."
+          : null
+      );
+
       const assistantMessage: AiChatMessage = {
         id: `assistant-${Date.now()}`,
         role: "assistant",
         content: data.message,
+        structured: data.structured,
       };
 
       setMessages((current) => [...current, assistantMessage]);
@@ -347,7 +415,9 @@ export function AiAssistantChatPanel({
       ref={scrollRef}
       className={[
         "flex-1 space-y-4 overflow-y-auto bg-linear-to-b from-slate-50/90 to-white p-4 sm:p-5",
-        isFullscreen ? "min-h-0" : "max-h-[min(52vh,420px)] min-h-[280px]",
+        isFullscreen || isDrawer
+          ? "min-h-0"
+          : "max-h-[min(52vh,420px)] min-h-[280px]",
       ].join(" ")}
     >
       {messages.length <= 1 ? (
@@ -364,6 +434,8 @@ export function AiAssistantChatPanel({
         </div>
       ) : null}
 
+      {fallbackNotice ? <AiFallbackBanner notice={fallbackNotice} /> : null}
+
       {messages.map((message, index) => (
         <ChatMessageBubble key={message.id} message={message} index={index} />
       ))}
@@ -376,7 +448,7 @@ export function AiAssistantChatPanel({
     <div
       className={[
         "shrink-0 border-t border-slate-100 bg-white p-3 sm:p-4",
-        isFullscreen ? "" : "rounded-b-2xl",
+        isFullscreen || isDrawer ? "" : "rounded-b-2xl",
       ].join(" ")}
     >
       {error ? (
@@ -466,16 +538,36 @@ export function AiAssistantChatPanel({
     </div>
   );
 
-  const panel = (
+  const panel = isDrawer ? (
     <ChatPanelChrome
-      isFullscreen={isFullscreen}
-      onToggleFullscreen={() => setIsFullscreen((current) => !current)}
-      onCloseFullscreen={() => setIsFullscreen(false)}
-      highlight={highlight}
+      isFullscreen={false}
+      onToggleFullscreen={() => undefined}
+      showHeader={false}
+      showFullscreenToggle={false}
       footer={composer}
     >
       {messageArea}
     </ChatPanelChrome>
+  ) : (
+    <div className={isFullscreen ? "flex h-full min-h-0 gap-0" : "grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)]"}>
+      {!isFullscreen ? (
+        <AiConversationSidebar
+          activeConversationId={conversationId}
+          onSelectConversation={loadConversation}
+          onNewConversation={startNewConversation}
+          refreshKey={conversationRefreshKey}
+        />
+      ) : null}
+      <ChatPanelChrome
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={() => setIsFullscreen((current) => !current)}
+        onCloseFullscreen={() => setIsFullscreen(false)}
+        highlight={highlight}
+        footer={composer}
+      >
+        {messageArea}
+      </ChatPanelChrome>
+    </div>
   );
 
   if (isFullscreen && mounted) {

@@ -18,7 +18,12 @@ import {
   type PosCartItem,
 } from "@/components/pos/pos-cart-panel";
 import { PosCategoryFilter } from "@/components/pos/pos-category-filter";
-import { PosPaymentModal } from "@/components/pos/pos-payment-modal";
+import {
+  PosPaymentModal,
+  createDefaultPosPaymentLine,
+  validatePosPaymentLines,
+  type PosPaymentLineState,
+} from "@/components/pos/pos-payment-modal";
 import { PosProductGrid } from "@/components/pos/pos-product-grid";
 import { PosQuickActions } from "@/components/pos/pos-quick-actions";
 import { PosReceipt, printPosReceipt } from "@/components/pos/pos-receipt";
@@ -44,9 +49,10 @@ import {
   buildPosSaleItemTotal,
   calculatePosTotals,
   getPosPaymentMethodLabel,
-  type PosPaymentMethod,
   type PosPaymentStatus,
 } from "@/lib/pos-checkout-utils";
+import { usePosCollectionAccounts } from "@/hooks/use-pos-collection-accounts";
+import { getPosCollectionAccountName } from "@/components/pos/pos-collection-account-select";
 import {
   buildProductsListUrl,
   getSaleProductStock,
@@ -77,6 +83,12 @@ type Product = {
   category?: { id: string; name: string } | null;
 };
 
+type SuccessReceiptPayment = {
+  paymentMethod: string;
+  accountName: string;
+  amount: number;
+};
+
 type SuccessReceipt = {
   saleNo: string;
   saleId: string;
@@ -86,9 +98,8 @@ type SuccessReceipt = {
   vatTotal: number;
   discount: number;
   total: number;
-  paymentMethod: PosPaymentMethod;
   paymentStatus: PosPaymentStatus;
-  collectedAmount?: number;
+  payments: SuccessReceiptPayment[];
 };
 
 type PosStats = {
@@ -125,7 +136,8 @@ export default function PosPage() {
   const [barcode, setBarcode] = useState("");
 
   const [cart, setCart] = useState<PosCartItem[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState<PosPaymentMethod>("CASH");
+  const [paymentMode, setPaymentMode] = useState<"single" | "split">("single");
+  const [paymentLines, setPaymentLines] = useState<PosPaymentLineState[]>([]);
   const [paymentStatus] = useState<PosPaymentStatus>("PAID");
   const [receivedAmount, setReceivedAmount] = useState("");
   const [discount, setDiscount] = useState("0");
@@ -139,6 +151,7 @@ export default function PosPage() {
     null
   );
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
+  const { accounts, loading: accountsLoading } = usePosCollectionAccounts();
 
   const useWarehouseStock = warehouseEnabled && Boolean(selectedWarehouseId);
 
@@ -392,7 +405,8 @@ export default function PosPage() {
     setDiscount("0");
     setNote("");
     setReceivedAmount("");
-    setPaymentMethod("CASH");
+    setPaymentLines([]);
+    setPaymentMode("single");
     setError("");
     setSuccessReceipt(null);
     barcodeRef.current?.focus();
@@ -418,39 +432,26 @@ export default function PosPage() {
     barcodeRef.current?.focus();
   }
 
-  function openPaymentModal(method?: PosPaymentMethod) {
+  function openPaymentModal(method?: PosPaymentLineState["paymentMethod"]) {
     if (cart.length === 0) {
       setError("Satışı tamamlamak için sepete ürün ekleyin.");
       return;
     }
     setError("");
-    if (method) {
-      setPaymentMethod(method);
-    }
+    setPaymentMode("single");
+    setPaymentLines([
+      createDefaultPosPaymentLine(totals.total, method ?? "CASH"),
+    ]);
     setReceivedAmount(String(totals.total));
     setPaymentOpen(true);
   }
 
   const openCashPaymentModal = useCallback(() => {
-    if (cart.length === 0) {
-      setError("Satışı tamamlamak için sepete ürün ekleyin.");
-      return;
-    }
-    setError("");
-    setPaymentMethod("CASH");
-    setReceivedAmount(String(totals.total));
-    setPaymentOpen(true);
+    openPaymentModal("CASH");
   }, [cart.length, totals.total]);
 
   const openCardPaymentModal = useCallback(() => {
-    if (cart.length === 0) {
-      setError("Satışı tamamlamak için sepete ürün ekleyin.");
-      return;
-    }
-    setError("");
-    setPaymentMethod("CARD");
-    setReceivedAmount(String(totals.total));
-    setPaymentOpen(true);
+    openPaymentModal("CARD");
   }, [cart.length, totals.total]);
 
   async function handleCheckout() {
@@ -463,9 +464,30 @@ export default function PosPage() {
       return;
     }
 
+    const normalizedLines =
+      paymentMode === "single" && paymentLines[0]
+        ? [{ ...paymentLines[0], amount: String(totals.total) }]
+        : paymentLines;
+
+    const validationError = validatePosPaymentLines({
+      lines: normalizedLines,
+      total: totals.total,
+      accounts,
+    });
+
+    if (validationError) {
+      setError(validationError);
+      setCheckingOut(false);
+      return;
+    }
+
     const checkoutCart = [...cart];
     const checkoutTotals = { ...totals };
-    const checkoutPaymentMethod = paymentMethod;
+    const checkoutLines = normalizedLines.map((line) => ({
+      paymentMethod: line.paymentMethod,
+      amount: Number(line.amount),
+      accountId: line.accountId,
+    }));
 
     try {
       const res = await fetch("/api/pos/checkout", {
@@ -474,10 +496,10 @@ export default function PosPage() {
         body: JSON.stringify({
           customerId: selectedCustomerId || undefined,
           warehouseId: useWarehouseStock ? selectedWarehouseId : undefined,
-          paymentMethod: checkoutPaymentMethod,
           paymentStatus: "PAID",
           discount: checkoutTotals.discount,
           note,
+          payments: checkoutLines,
           items: checkoutCart.map((item) => ({
             productId: item.productId,
             name: item.name,
@@ -494,6 +516,25 @@ export default function PosPage() {
         return;
       }
 
+      const responsePayments = Array.isArray(data.data?.payments)
+        ? data.data.payments.map(
+            (payment: {
+              paymentMethod: string;
+              amount: number | string;
+              account?: { name?: string };
+            }) => ({
+              paymentMethod: payment.paymentMethod,
+              accountName: payment.account?.name ?? "Hesap",
+              amount: Number(payment.amount),
+            })
+          )
+        : checkoutLines.map((line) => ({
+            paymentMethod: line.paymentMethod,
+            accountName:
+              getPosCollectionAccountName(accounts, line.accountId) ?? "Hesap",
+            amount: line.amount,
+          }));
+
       setPaymentOpen(false);
       setSuccessReceipt({
         saleNo: data.data?.saleNo || "Satış tamamlandı",
@@ -504,8 +545,8 @@ export default function PosPage() {
         vatTotal: checkoutTotals.vatTotal,
         discount: checkoutTotals.discount,
         total: checkoutTotals.total,
-        paymentMethod: checkoutPaymentMethod,
         paymentStatus: data.data?.paymentStatus || "PAID",
+        payments: responsePayments,
       });
 
       if (data.warning) {
@@ -518,7 +559,8 @@ export default function PosPage() {
       setDiscount("0");
       setNote("");
       setReceivedAmount("");
-      setPaymentMethod("CASH");
+      setPaymentLines([]);
+      setPaymentMode("single");
       setMobileCartOpen(false);
 
       const productsRes = await fetch(
@@ -585,9 +627,8 @@ export default function PosPage() {
           vatTotal={successReceipt.vatTotal}
           discount={successReceipt.discount}
           total={successReceipt.total}
-          paymentMethod={successReceipt.paymentMethod}
           paymentStatus={successReceipt.paymentStatus}
-          collectedAmount={successReceipt.collectedAmount}
+          payments={successReceipt.payments}
         />
       ) : null}
 
@@ -667,9 +708,21 @@ export default function PosPage() {
                     Satış tamamlandı
                   </p>
                   <p className="mt-1 text-sm text-emerald-700">
-                    {successReceipt.saleNo} ·{" "}
-                    {getPosPaymentMethodLabel(successReceipt.paymentMethod)}
+                    {successReceipt.saleNo}
                   </p>
+                  <div className="mt-2 space-y-1">
+                    {successReceipt.payments.map((payment, index) => (
+                      <p
+                        key={`${payment.paymentMethod}-${payment.accountName}-${index}`}
+                        className="text-[12px] font-semibold text-emerald-800"
+                      >
+                        {getPosPaymentMethodLabel(
+                          payment.paymentMethod as PosPaymentLineState["paymentMethod"]
+                        )}{" "}
+                        · {payment.accountName} · {formatMoney(payment.amount)}
+                      </p>
+                    ))}
+                  </div>
                 </div>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row">
@@ -851,7 +904,10 @@ export default function PosPage() {
       <PosPaymentModal
         open={paymentOpen}
         total={totals.total}
-        paymentMethod={paymentMethod}
+        paymentMode={paymentMode}
+        paymentLines={paymentLines}
+        accounts={accounts}
+        accountsLoading={accountsLoading}
         receivedAmount={receivedAmount}
         note={note}
         selectedCustomerId={selectedCustomerId}
@@ -861,7 +917,26 @@ export default function PosPage() {
         hideCreditOptions={isPosStaff}
         onClose={() => setPaymentOpen(false)}
         onConfirm={() => void handleCheckout()}
-        onPaymentMethodChange={setPaymentMethod}
+        onPaymentModeChange={(mode) => {
+          setPaymentMode(mode);
+          if (mode === "single") {
+            setPaymentLines([
+              createDefaultPosPaymentLine(
+                totals.total,
+                paymentLines[0]?.paymentMethod ?? "CASH"
+              ),
+            ]);
+          } else if (paymentLines.length < 2) {
+            setPaymentLines([
+              createDefaultPosPaymentLine(
+                Math.max(0, totals.total - (Number(paymentLines[0]?.amount) || 0)),
+                "CARD"
+              ),
+              paymentLines[0] ?? createDefaultPosPaymentLine(totals.total, "CASH"),
+            ]);
+          }
+        }}
+        onPaymentLinesChange={setPaymentLines}
         onReceivedAmountChange={setReceivedAmount}
         onNoteChange={setNote}
         onCustomerChange={setSelectedCustomerId}

@@ -3,7 +3,9 @@ import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/prisma";
 import { invalidateDashboardCache } from "@/lib/dashboard-cache-invalidation";
 import { reverseCustomerDebtFromDocument } from "@/lib/customer-balance-utils";
+import { reverseSaleIncomeTransactions } from "@/lib/sale-finance-reversal-utils";
 import { buildStockReturnEntries } from "@/lib/sale-cancel-stock-utils";
+import { validateSaleCancelEligibility } from "@/lib/sale-mutation-policy";
 import {
   ensureProductWarehouseStock,
   getOrCreateDefaultWarehouse,
@@ -18,7 +20,11 @@ type TransactionClient = Omit<
 type SaleWithRelations = Prisma.SaleGetPayload<{
   include: {
     items: true;
-    invoice: true;
+    invoice: {
+      include: {
+        documentSubmission: true;
+      };
+    };
     customer: true;
   };
 }>;
@@ -29,9 +35,11 @@ export async function reverseSaleEffects(
     sale: SaleWithRelations;
     companyId: string;
     userId: string;
+    reason: string;
+    note?: string | null;
   }
 ) {
-  const { sale, companyId, userId } = input;
+  const { sale, companyId, userId, reason, note } = input;
 
   const existingReturns = await tx.stockMovement.count({
     where: {
@@ -96,50 +104,13 @@ export async function reverseSaleEffects(
     }
   }
 
-  const incomeTransactions = await tx.accountTransaction.findMany({
-    where: {
-      account: { companyId },
-      type: "INCOME",
-      OR: [
-        { title: { contains: sale.saleNo } },
-        { note: { contains: sale.saleNo } },
-      ],
-    },
+  await reverseSaleIncomeTransactions(tx, {
+    companyId,
+    saleNo: sale.saleNo,
+    reversalTitle: `Satış İptali - ${sale.saleNo}`,
+    reversalNote: `${sale.saleNo} numaralı satış iptal edildi, tahsilat geri alındı.`,
+    mirrorKind: "REVERSAL",
   });
-
-  for (const incomeTx of incomeTransactions) {
-    const reversalTitle = `Satış İptali - ${sale.saleNo}`;
-
-    const alreadyReversed = await tx.accountTransaction.findFirst({
-      where: {
-        accountId: incomeTx.accountId,
-        type: "EXPENSE",
-        title: reversalTitle,
-      },
-    });
-
-    if (alreadyReversed) continue;
-
-    await tx.account.update({
-      where: { id: incomeTx.accountId },
-      data: {
-        balance: {
-          decrement: incomeTx.amount,
-        },
-      },
-    });
-
-    await tx.accountTransaction.create({
-      data: {
-        accountId: incomeTx.accountId,
-        type: "EXPENSE",
-        title: reversalTitle,
-        amount: incomeTx.amount,
-        date: new Date(),
-        note: `${sale.saleNo} numaralı satış iptal edildi, tahsilat geri alındı.`,
-      },
-    });
-  }
 
   if (sale.invoice && sale.invoice.status !== "CANCELLED") {
     await tx.invoice.update({
@@ -166,6 +137,10 @@ export async function reverseSaleEffects(
       status: "CANCELLED",
       paymentStatus: "UNPAID",
       paidAmount: 0,
+      cancelledAt: new Date(),
+      cancelledByUserId: userId,
+      cancelReason: reason,
+      cancelNote: note?.trim() || null,
     },
   });
 
@@ -175,7 +150,7 @@ export async function reverseSaleEffects(
       userId,
       action: "UPDATE",
       module: "sales",
-      message: `${sale.saleNo} numaralı satış tam iptal edildi (stok, tahsilat ve durum geri alındı).`,
+      message: `${sale.saleNo} numaralı satış iptal edildi. Neden: ${reason}`,
     },
   });
 
@@ -199,8 +174,18 @@ export async function reverseSaleEffects(
 export async function cancelSaleById(
   saleId: string,
   companyId: string,
-  userId: string
+  userId: string,
+  input?: { reason?: string; note?: string | null }
 ) {
+  const reason = input?.reason?.trim();
+  if (!reason) {
+    return {
+      ok: false as const,
+      status: 400,
+      message: "İptal nedeni zorunludur.",
+    };
+  }
+
   const sale = await db.sale.findFirst({
     where: {
       id: saleId,
@@ -208,7 +193,11 @@ export async function cancelSaleById(
     },
     include: {
       items: true,
-      invoice: true,
+      invoice: {
+        include: {
+          documentSubmission: true,
+        },
+      },
       customer: true,
     },
   });
@@ -217,24 +206,23 @@ export async function cancelSaleById(
     return { ok: false as const, status: 404, message: "Satış bulunamadı." };
   }
 
-  if (sale.status === "CANCELLED" || sale.status === "REFUNDED") {
+  const eligibility = validateSaleCancelEligibility(sale);
+  if (!eligibility.ok) {
     return {
       ok: false as const,
       status: 400,
-      message: "Bu satış zaten iptal edilmiş.",
-    };
-  }
-
-  if (sale.invoice?.status === "APPROVED") {
-    return {
-      ok: false as const,
-      status: 400,
-      message: "Onaylı faturası olan satış iptal edilemez.",
+      message: eligibility.message,
     };
   }
 
   await db.$transaction(async (tx) => {
-    await reverseSaleEffects(tx, { sale, companyId, userId });
+    await reverseSaleEffects(tx, {
+      sale,
+      companyId,
+      userId,
+      reason,
+      note: input?.note,
+    });
   });
 
   invalidateDashboardCache(companyId, "sale-cancel");

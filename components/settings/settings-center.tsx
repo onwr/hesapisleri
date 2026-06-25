@@ -19,6 +19,7 @@ import {
   PlugZap,
   Save,
   ShieldCheck,
+  Sparkles,
   Users,
   Wallet,
   X,
@@ -757,6 +758,16 @@ export function SettingsCenter({
           icon={<PlugZap size={22} strokeWidth={2.4} />}
           gradient="bg-linear-to-br from-violet-500 to-purple-600"
         />
+
+        {canManageSettings ? (
+          <ActionCard
+            title="Yapay Zekâ"
+            description="Asistan ve model ayarları"
+            href="/settings/ai"
+            icon={<Sparkles size={22} strokeWidth={2.4} />}
+            gradient="bg-linear-to-br from-indigo-500 to-violet-600"
+          />
+        ) : null}
 
         {canManageMembership ? (
           <ActionCard

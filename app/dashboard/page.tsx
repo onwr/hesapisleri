@@ -4,7 +4,6 @@ import { db } from "@/lib/prisma";
 import { requireCompanyUser } from "@/lib/auth/auth-dal";
 import { formatRelativeTime } from "@/lib/dashboard-metrics";
 import { getCachedDashboardPageData } from "@/lib/dashboard-cache";
-import { resolveDashboardAiInsights } from "@/lib/dashboard-page-data";
 import { resolveDashboardPeriodKey } from "@/lib/dashboard-period-utils";
 import { shouldShowOnboardingAlert } from "@/lib/company-onboarding-utils";
 import { getMembershipAlertForCompany } from "@/lib/membership-service";
@@ -85,7 +84,6 @@ export default async function DashboardPage() {
         accounts={dashboardData.accounts}
         upcomingPayments={dashboardData.upcomingPayments}
         statLinks={dashboardData.statLinks}
-        aiInsights={resolveDashboardAiInsights(dashboardData)}
         actionNotifications={actionNotifications}
         notificationSummary={{
           unread: notificationSummary.unread,

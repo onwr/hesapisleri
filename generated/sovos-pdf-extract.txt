@@ -1,0 +1,310 @@
+﻿--- PDF: Sovos Bulut e-Fatura WS API v2.3.pdf pages: 36 ---
+Sovos Bulut e-Fatura Web Servis API
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzuÔÇÖna
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+Bu dok├╝man Sovos e-Fatura ├ûzel Entegrat├Ârl├╝─ş├╝ ├╝r├╝n├╝ M├╝┼şteri Web ServisiÔÇÖnin i├ğerik ve
+kullan─▒m─▒ hakk─▒nda bilgi sunmak amac─▒yla d├╝zenlenmi┼ştir. Web servisle ilgili teknik
+VKN Vergi Kimlik Numaras─▒
+TCKN T.C. Kimlik Numaras─▒
+WS API Web Servis Uygulama Programlama Arabirimi
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+Destek ve Servis
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+bulunmaktad─▒r. Sovos Bulut e-Fatura m├╝┼şteri web servis APIÔÇÖsi 1 Eyl├╝l 2015ÔÇÖte G─░B taraf─▒ndan devreye
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+M├╝┼şteri e-Fatura Web Servisi
+Sovos Bulut e-Fatura ├ğ├Âz├╝m├╝n├╝ web servisler arac─▒l─▒─ş─▒yla kullanmak isteyen m├╝kellefler, sunulan
+entegrasyon altyap─▒s─▒ arac─▒l─▒─ş─▒yla t├╝m e-Fatura ihtiya├ğlar─▒n─▒ ba┼şka bir ara y├╝z/servis kullanmaks─▒z─▒n
+ger├ğekle┼ştirebilirler. M├╝┼şteri e-Fatura web servisi, bulut e-Fatura Portali ile entegre ├ğal─▒┼şmakta ve yap─▒lan
+bulunan VKN/TCKN, etiket, kullan─▒c─▒ ad─▒ ve ┼şifre bilgileriyle ÔÇ£HTTP Basic AuthenticationÔÇØ y├Ântemiyle
+sisteme gereksiz ve fazla say─▒da ├ğa─şr─▒ yap─▒lmamal─▒d─▒r. T├╝m servis metodlar─▒na eri┼şimler kay─▒t alt─▒na
+Web servisi tan─▒mlar─▒ ekli ClientEInvoiceServices.wsdl ve referans verilen ┼şema dosyalar─▒nda
+bulunmaktad─▒r, servis metotlar─▒n─▒n nas─▒l kullan─▒laca─ş─▒ bu dok├╝man i├ğerisinde a├ğ─▒klanm─▒┼şt─▒r. Sunucular
+├╝zerinden WSDL dosyalar─▒n al─▒m─▒ g├╝venlik ve uyumluluk sebebiyle engellenmi┼ştir. Web servis adresleri,
+Bulut e-Fatura m├╝┼şteri web servis metodlar─▒, toplu i┼şlemlerde her zaman daha y├╝ksek performans
+sunmaktad─▒r. Bu y├╝zden t├╝m servis metodlar─▒ i├ğin m├╝mk├╝n oldu─şunca toplu i┼şlemler yap─▒larak m├╝┼şteri
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+ve Sovos Bulut e-Fatura m├╝┼şteri web servis APIÔÇÖsi i├ğinde Bulut e-Fatura M├╝┼şteri WS API v2.0\EK1 -
+servislerle entegrasyon, gerekse portalden kullan─▒mda ayn─▒ ┼şekilde ge├ğerli olacak ve m├╝kellef ya her
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+ayr─▒ birer ÔÇ£├Ân ekÔÇØ tan─▒mlarlar. Portal, adapt├Âr, ERP ya da web servislerden fatura ya da fatura zarf─▒
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+Servisin cevap yap─▒s─▒nda olu┼şan fatura IDÔÇÖler yine zarf-fatura UUID ve CustInvIDÔÇÖlerle birlikte t├╝m
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+2. Genel servis parametreleri ve belge alanlar─▒n─▒n kontrol├╝
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+istemci web servisindeki sendUBL methodunda Parameters alan─▒nda a┼şa─ş─▒daki gibi bir de─şer
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+ayr─▒ par├ğada yine zipli olarak verilmektedir. Yani web servis yan─▒t─▒nda, 15 kullan─▒c─▒ listesi par├ğas─▒ zipli
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+EK1 - Bulut e-Fatura M├╝┼şteri Web Servisi Ba─şlant─▒
+Bulut e-Fatura m├╝┼şteri web servislerine HTTPS protokol├╝ ve 443 portu ├╝zerinden eri┼şim sa─şlan─▒r.
+komutuyla eri┼şim testi yaparak sisteminizin web servis adreslerine eri┼şebildi─şini kontrol etmeniz
+ÔÇ£EK1 - Teknik BelgelerÔÇØ klas├Âr├╝nde mevcuttur. WSDL ve ┼şema dok├╝manlar─▒na servis adreslerinden
+servis istemci uygulamalar─▒n─▒n bu ayarlar─▒ ilgili ┼şekilde yapmalar─▒ gerekmektedir.
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+(Authentication)
+Web servislere eri┼şim HTTPS ├╝zerinden ÔÇ£HTTP Basic AuthenticationÔÇØ y├Ântemi kullan─▒larak VKN/TCKN
+bazl─▒ kullan─▒c─▒ ad─▒ ve ┼şifre kontrolleriyle g├╝venlik alt─▒na al─▒nm─▒┼şt─▒r. WS-Security standard─▒ ile SOAP
+servislerden ÔÇ£HTTP 401 - UnauthorizedÔÇØ al─▒n─▒yorsa, ├Âncelikle ba┼şvuru formlar─▒nda bildirilen web servis
+E─şer ba┼şvuru formunda belirtti─şiniz kullan─▒c─▒ ad─▒ ve ┼şifreyi, servis ├ğa─şr─▒lar─▒ i├ğerisinde HTTP Header
+ÔÇ£Authorization: BasicÔÇØ ba┼şl─▒─ş─▒yla g├Ânderdi─şiniz halde bu hatay─▒ al─▒yorsan─▒z, Bulut e-Fatura OMÔÇÖne
+EK3 ba┼şl─▒─ş─▒ alt─▒nda .Net servisler i├ğin HTTP authentication ile WS kullan─▒c─▒ ad─▒ ve ┼şifresi g├Ânderebilmek
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+EK3 - .NET Client Programlar─▒ ─░le Servislerine
+WCF Servis Projesi Yarat─▒lmas─▒
+veya Visual Studio men├╝leri ├╝zerinden Project-> Add Service Reference takip ederek Servis ekleme
+Servis ekleme ekran─▒nda zip dosyas─▒ndan ├ğ─▒kart─▒lan WSDL dok├╝man─▒n─▒n dizini belirtilir ve GO butonuna
+bas─▒l─▒r. Sonras─▒nda ekranda WSDL dosyas─▒nda bulunan Servis ve Servise ait metodlar─▒n bir listesi
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+Burada namespace ServiceReference1 olarak b─▒rak─▒lm─▒┼şt─▒r. OK Butonuna bas─▒ld─▒─ş─▒nda projeye Servis
+Bu ad─▒mdan sonra web servis metodlar─▒na ServiceReference1 namespaceÔÇÖi kullan─▒larak eri┼şilebilir.
+Bulut e-Fatura m├╝┼şteri servislerine ba─şlanabilmek i├ğin .Net client programlar─▒nda a┼şa─ş─▒dakine benzer
+gerekmektedir). Servisin WSDL dosyas─▒ referans olarak eklendi─şinde, zaten benzer bir binding ayar─▒
+<!--CDM Servis i├ğin Binding Ayar─▒ -->
+<binding name="CustomClientEInvoiceServicesBinding">
+<!--CDM Servis i├ğin Endpoint Ayar─▒ -->
+<endpoint
+address="https://<degistiriniz>/ClientEInvoiceServices/ClientEInvoiceServicesPort.svc"
+bindingConfiguration="CustomClientEInvoiceServicesBinding"
+contract="FITOEServices.ClientEInvoiceServicesPort"
+name="ClientEInvoiceServicesPort" />
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+public interface ClientEInvoiceServicesPort {
+Authentication
+.NET uygulamalar─▒ndan HTTP Basic Authentication ile authentication bilgisi a┼şa─ş─▒daki kod ├Ârne─şinde
+ClientEInvoiceServicesPortClient wsClient = new ClientEInvoiceServicesPortClient();
+questHeader.Authorization, String.Format("Basic {0}", base64authorization));
+Sovos Bulut e-Fatura Web Servis API Kullan─▒m K─▒lavuzu V2.3
+EK4 - SOAP UI Authentication Ayarlar─▒
+Soap UI program─▒ ile web servislere ba─şlanabilmek i├ğin ilk olarak SoapUI Preferences ekran─▒ndan
+Daha sonra HTTP Basic Authentication ayarlar─▒n─▒n yap─▒lmas─▒ ve kullan─▒c─▒ ad─▒ ┼şifre bilgilerinin girilmesi
+Do─şru VKN-TCKN ve web servis kullan─▒c─▒ bilgileri ile ba─şlant─▒ sa─şland─▒─ş─▒ durumda web servislerden ba┼şar─▒l─▒
+--- PDF: Sovos Bulut e-Ar┼şiv Fatura WS API v2.3.pdf pages: 31 ---
+Servis API K─▒lavuzu V2.3
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzuna
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+Bu Dok├╝man Sovos Bulut e-Ar┼şiv fatura web servislerini a├ğ─▒klamak. e-Ar┼şiv fatura ve raporlarile ilgili
+Web servise ve g├╝ncel UBL-TR e-Ar┼şiv Faturas─▒ belgelerine ait teknik dok├╝manlar (WSDL, XSD, XML vb.)
+WS Web Servis
+VKN Vergi Kimlik Numaras─▒
+TCKN T.C. Kimlik Numaras─▒
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+Destek ve Servis
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+DESTEK VE SERVIS ............................................................................... 4
+BULUT E-AR┼ŞIV FATURA WEB SERVIS API ............................................ 7
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+kullan─▒lacak VKN/TCKNÔÇÖye ait bir web servis kullan─▒c─▒ ad─▒ ve ┼şifre al─▒nmal─▒d─▒r.
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+Bulut e-Ar┼şiv Fatura Web Servis API
+haz─▒rlanm─▒┼ş e-Ar┼şiv faturalar, e-Ar┼şiv fatura web servisinde yer alan 2 farkl─▒ metod arac─▒l─▒─ş─▒ ile Sovos e-
+Ar┼şiv Fatura ├╝r├╝n├╝ne aktar─▒labilirler. Bu 2 farkl─▒ metod servis yap─▒s─▒(input- output structure) olarak
+Hash (Optiyonel) Ziplenmi┼ş e-Ar┼şiv fatura bilgisinin md5 hash bilgisi
+customizationParams(Opsiyonel) Bu k─▒s─▒m web servise eklenecek ├Âzel parametreleri
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+Web servis iste─şi s─▒ras─▒nda fatura i├ğeri─şi haricinde genel sistem hatalar─▒ i├ğin a┼şa─ş─▒daki ┼şekilde
+1. UBL TR 1.2 format─▒ndaki e-Ar┼şiv fatura ziplenerek Sovos e-Ar┼şiv Fatura servisine aktar─▒lmak
+i├ğin web servis ├ğa─şr─▒s─▒ yap─▒l─▒r.
+2. Basic authentication ile web servis kullan─▒c─▒ ad─▒ & ┼şifre kontrol├╝ yap─▒l─▒r.
+e┼şlenerek web servis yan─▒t─▒nda d├Ân├╝l├╝r.
+Web servis ├ğa─şr─▒s─▒nda yaln─▒z bir e-Ar┼şiv fatura g├Ânderilebilmektedir.
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+ÔÇó ┼Şube tan─▒mlay─▒c─▒s─▒: Web servis ├ğa─şr─▒s─▒ yap─▒ld─▒─ş─▒nda, e-Ar┼şiv faturan─▒n g├Ânderici VKN/TCKN
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+Hash (Opsiyonel) Ziplenmi┼ş e-Ar┼şiv fatura bilgisinin md5 hash bilgisi
+customizationParams (Opsiyonel) Bu k─▒s─▒m web servise eklenecek ├Âzel parametreleri
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+ziplenerek, Sovos e-Ar┼şiv Fatura ├╝r├╝n├╝ne aktar─▒lmak i├ğin web servis ├ğa─şr─▒s─▒ yap─▒l─▒r.
+2. Basic authentication ile web servis kullan─▒c─▒ ad─▒ & ┼şifre kontrol├╝ yap─▒l─▒r.
+sisteme g├Ânderilen bilgi(data) hash, ┼şema, ┼şematron kontrollerini tabii tutulur ve bu
+verir. Hangi e-Ar┼şiv faturalar─▒n ba┼şar─▒l─▒ hangilerinin ise ba┼şar─▒s─▒z oldu─şu web servis yan─▒t─▒ i├ğerisinde bir
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+ÔÇó ┼Şube tan─▒mlay─▒c─▒s─▒: Web servis ├ğa─şr─▒s─▒ yap─▒ld─▒─ş─▒nda, e-Ar┼şiv faturan─▒n g├Ânderici
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+durumunda, servis parametre olarak PDF girilmi┼ş gibi davran─▒r
+Hash (Opsiyonel) ─░mzal─▒ e-Ar┼şiv Faturan─▒n sha256 hash bilgisi
+arac─▒l─▒─ş─▒yla PDF g├Âr├╝nt├╝s├╝ ├╝retilir ve web servisin yan─▒t─▒nda binary data olarak PDF d├Ân├╝l├╝r. E─şer
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+g├Ânderimi s─▒ras─▒nda web servis yan─▒t─▒ olarak g├Ândericiye
+Hash ─░mzal─▒ e-Ar┼şiv Faturan─▒n sha256 hash bilgisi
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+aksiyon servisi yarat─▒lm─▒┼şt─▒r. E-Ar┼şiv fatura itiraz i┼şlemi i├ğin olmas─▒ gereken request bilgileri a┼şa─ş─▒da
+ActionType EARSIV_ITIRAZ
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+Fatura g├Ânderilmesi gerekirÔÇØ kural─▒na istinaden, e-Fatura m├╝kellef listesi bu servis arac─▒l─▒─ş─▒ ile g├╝nde
+getUserList() web servis metodu giri┼ş parametresi olarak sadece VKN/TCKN al─▒r. Bu VKN/TCKN bilgisi
+Sovos Bulut sistemlerde servisi ├ğa─ş─▒ran kullan─▒c─▒n─▒n kimli─şini do─şrulamak amac─▒yla kullan─▒l─▒r.
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+15 ayr─▒ par├ğada yine zipli olarak verilmektedir. Yani web servis yan─▒t─▒nda, 15 kullan─▒c─▒ listesi par├ğas─▒
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+alan bo┼ş b─▒rak─▒ld─▒─ş─▒ durumda, servis ÔÇİdefaultÔÇÖ ┼şube olarak
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+Bu web servis metodu kullan─▒l─▒rken dikkat edilmesi gereken noktalar ┼şunlard─▒r:
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+metodu, olu┼şturulan raporun XMLÔÇÖini almak i├ğin kullan─▒lan web servis metodudur. Raporun her
+getReportData() web servis metodu giri┼ş parametresi olarak VKN/TCKN ve Rapor UUIDÔÇÖsi al─▒r. Bu giri┼ş
+stat├╝lerini sorgulamak i├ğin kullan─▒lan web servis metodudur. G─░BÔÇÖe g├Ânderilmi┼ş bir raporun g├Ânderim
+getReportStatus() web servis metodu giri┼ş parametresi olarak VKN/TCKN ve e-Ar┼şiv rapor UUIDÔÇÖsi al─▒r.
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+Belirli tarih aral─▒─ş─▒nda onaylanm─▒┼ş veya onaylanmam─▒┼ş rapor listesini ├ğekmek i├ğin kullan─▒lan web servis
+getReportList() web servis metodu giri┼ş parametresi olarak ÔÇ£startDate, endDate, VKN/TCKN ve
+tarih aral─▒─ş─▒ndaki e-Ar┼şiv rapor listesi d├Ân├╝l├╝r. D├Ânen web servis yan─▒t─▒nda e-Ar┼şiv raporun; UUID,
+ihtiya├ğ oldu─şu taktirde sendInvoice(e-Ar┼şiv fatura g├Ânderim) web servis ├ğa─şr─▒s─▒ s─▒ras─▒nda
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+API kullan─▒m─▒, servis durumu ve kalitesi 7x24 izlenmektedir. Bu dok├╝manda a├ğ─▒klanan uygun
+Web Servis Metodu Hata Kodu A├ğ─▒klama
+sendInvoice/sendEnvelope 90 Hash do─şrulan─▒rken bir hata olu┼ştu.
+Web Servis Metodu Ba┼şar─▒l─▒ Yan─▒t
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+hostname/portÔÇÖlar─▒na telnet komutuyla eri┼şim testi yaparak sisteminizin web servis adreslerine
+telnet earsivws.fitbulut.com 443
+Sovos Bulut e-Ar┼şiv Fatura WS API, SOAP 1.1 standard─▒yla uyumlu olarak ├ğal─▒┼şmaktad─▒r. Web servis
+api.fitbulut.com adresi ile ayn─▒d─▒r. Bu adresten her zaman g├╝ncel sertifikalar indirilebilir.
+EK2 ÔÇô Yetkilendirme (Authentication)
+Web servislere eri┼şim HTTPS ├╝zerinden ÔÇ£HTTP Basic AuthenticationÔÇØ y├Ântemi kullan─▒larak VKN/TCKN
+tamamlanmas─▒ndan ve sistem eri┼şim testlerinin ba┼şar─▒yla yap─▒lmas─▒ndan sonra, e─şer servislerden
+ÔÇ£HTTP 401 - UnauthorizedÔÇØ al─▒n─▒yorsa, ├Âncelikle ba┼şvuru formlar─▒nda bildirilen web servis kullan─▒c─▒ ad─▒
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+WCF Servis Projesi Yarat─▒lmas─▒
+veya Visual Studio men├╝leri ├╝zerinden Project-> Add Service Reference takip ederek Servis ekleme
+Servis ekleme ekran─▒nda zip dosyas─▒ndan ├ğ─▒kart─▒lan WSDL Dok├╝man─▒n─▒n dizini belirtilir ve GO butonuna
+bas─▒l─▒r. Sonras─▒nda ekranda WSDL dosyas─▒nda bulunan Servis ve Servise ait metodlar─▒n bir listesi
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+Burada namespace ServiceReference1 olarak b─▒rak─▒lm─▒┼şt─▒r. OK Butonuna bas─▒ld─▒─ş─▒nda projeye Servis
+Bu ad─▒mdan sonra web servis metodlar─▒na ServiceReference1 namespaceÔÇÖi kullan─▒larak eri┼şilebilir.
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+Sovos Bulut e-Ar┼şiv Fatura web servislerine ba─şlanabilmek i├ğin .Net client programlar─▒nda a┼şa─ş─▒dakine
+de─şi┼ştirmeniz gerekmektedir). Servisin WSDL dosyas─▒ referans olarak eklendi─şinde, zaten benzer bir
+<!--CDM Servis i├ğin Binding Ayar─▒ -->
+<binding name="CustomClientEArsivServicesBinding">
+<!--CDM Servis i├ğin Endpoint Ayar─▒ -->
+<endpoint address="https://<degistiriniz>/ ClientEArsivServicesPort.svc"
+bindingConfiguration="Custom ClientEArsivServicesPortBinding"
+contract="FITOEServices. ClientEArsivServicesPort"
+name="ClientEArsivServicesPort" />
+public interface ClientEArsivServicesPort {
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+Authentication
+.NET uygulalar─▒ndan HTTP Basic Authentication ile authentication bilgisi a┼şa─ş─▒daki kod ├Ârne─şinde
+ClientEArsivServicesPortClient wsClient = new ClientEArsivServicesPortClient ();
+pRequestHeader.Authorization, String.Format("Basic {0}", base64authorization));
+EK4 ÔÇô SOAP UI Authentication ve TLS Ayarlar─▒
+SoapUI program─▒ ile web servislere ba─şlanabilmek i├ğin, Auth tab─▒ndan ÔÇ£Authenticate pre-emptivelyÔÇØ
+modunda HTTP Basic Authentication ayarlar─▒n─▒n yap─▒lmas─▒ ve kullan─▒c─▒ ad─▒ ┼şifre bilgilerinin girilmesi
+ÔÇ£Authorization:BasicÔÇØ bilgisi, base64 format─▒nda kullan─▒c─▒ ad─▒-┼şifreyle birlikte eklenecektir:
+Sovos Bulut e-Ar┼şiv Fatura Web Servis API K─▒lavuzu V2.3
+Do─şru VKN-TCKN ve web servis kullan─▒c─▒ bilgileri ile ba─şlant─▒ sa─şland─▒─ş─▒ durumda web servislerden
+--- PDF: Sovos Bulut e-╦£rsaliye WS API v1.3.pdf pages: 35 ---
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzuna
+Sovos Bulut e-─░rsaliye Web Servis API
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+Bu dok├╝man Sovos Bulut e-─░rsaliye ├ûzel Entegrat├Ârl├╝─ş├╝ sisteminin sa─şlad─▒─ş─▒ Web Servis
+entegrasyonunun kullan─▒m detaylar─▒n─▒ i├ğermektedir. Web servise ve g├╝ncel UBL-TR e-─░rsaliye
+VKN Vergi Kimlik Numaras─▒
+TCKN T.C. Kimlik Numaras─▒
+WS API Web Servis Uygulama Programlama Arabirimi
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+Destek ve Servis
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+E-─░RSALIYE WEB SERVIS API ....................................................................................................................................................... 7
+EK2 ÔÇô YETKILENDIRME (AUTHENTICATION) ................................................................................................................... 29
+EK-4 SOAP UI AUTHENTICATION VE TLS AYARLARI ..................................................................................................... 34
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+VKN/TCKNÔÇÖye ait bir web servis kullan─▒c─▒ ad─▒ ve ┼şifre al─▒nmal─▒d─▒r.
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+E-─░rsaliye Web Servis API
+Sovos Bulut e-─░rsaliye ├ğ├Âz├╝m├╝n├╝ web servisler arac─▒l─▒─ş─▒yla kullanmak isteyen m├╝kellefler, sunulan
+entegrasyon altyap─▒s─▒ arac─▒l─▒─ş─▒yla t├╝m e-─░rsaliye ihtiya├ğlar─▒n─▒ ba┼şka bir aray├╝z/servis kullanmaks─▒z─▒n
+ger├ğekle┼ştirebilirler. Sovos Bulut e-─░rsaliye web servisi, Sovos Bulut Portali ile entegre ├ğal─▒┼şmakta ve t├╝m
+formlar─▒nda bulunan VKN/TCKN, etiket, kullan─▒c─▒ ad─▒ ve ┼şifre bilgileriyle ÔÇ£HTTP Basic AuthenticationÔÇØ
+servisler ├╝zerinden yaln─▒zca API KeyÔÇÖlerinin ba─şl─▒ oldu─şu VKN/TCKNÔÇÖye ait belgelerle ilgili i┼şlemleri
+Servis metodlar─▒na t├╝m ba┼şar─▒l─▒ ve ba┼şar─▒s─▒z eri┼şimler kay─▒t alt─▒na al─▒nmaktad─▒r ve hizmet kalitesi 7x24 takip
+Web servis tan─▒m─▒ ekli ClientEDespatchServices-1.0.wsdl ve referans verilen ┼şema dosyalar─▒nda
+bulunmaktad─▒r. Servis metodlar─▒n─▒n nas─▒l kullan─▒laca─ş─▒ bu dok├╝man i├ğerisinde a├ğ─▒klanm─▒┼şt─▒r. Sunucular
+├╝zerinden WSDL/XSD dosyalar─▒n al─▒m─▒ g├╝venlik ve uyumluluk sebebiyle engellenmi┼ştir. Web servis adresleri,
+bu klavuzun da bulundu─şu https://api.fitbulut.com/docs adresinden sa─şlanmaktad─▒r. Servis durumlar─▒ da
+yine https://api.fitbulut.com/ adresinden takip edilebilmektedir.
+Bulut e-─░rsaliye web servis metodlar─▒, toplu i┼şlemlerde hem istemci hem de sunucu sistemlerde her zaman
+toplamda ├ğok daha y├╝ksek performans sunmaktad─▒r. Bu y├╝zden t├╝m servis metodlar─▒ i├ğin m├╝mk├╝n
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+i├ğin, irsaliye IDÔÇÖlerinin otomatik ya da manuel i┼şaretlenmesi, gerek web servislerle entegrasyon, gerekse
+5D vb) ayr─▒ birer ÔÇ£├Ân ekÔÇØ tan─▒mlarlar. Portal, adapt├Âr, ERP ya da web servislerden irsaliye ya da irsaliye zarf─▒
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+Servisin cevap yap─▒s─▒nda olu┼şan irsaliye IDÔÇÖler yine zarf-irsaliye UUID ve CustDesIDÔÇÖlerle birlikte t├╝m
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+2. Genel servis parametreleri ve belge boyutlar─▒ ile tan─▒mlay─▒c─▒ alanlar─▒n─▒n kontrol├╝
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+servisindeki sendDesUBL methodunda Parameters alan─▒nda a┼şa─ş─▒daki gibi bir de─şer g├Ânderilmelidir.
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+ayr─▒ par├ğada yine zipli olarak verilmektedir. Yani web servis yan─▒t─▒nda, 15 kullan─▒c─▒ listesi par├ğas─▒ zipli olarak
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+API kullan─▒m─▒, servis durumu ve kalitesi 7x24 izlenmektedir. Bu dok├╝manda a├ğ─▒klanan uygun kullan─▒mlara
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+telnet komutuyla eri┼şim testi yaparak sisteminizin web servis adreslerine eri┼şebildi─şini kontrol etmeniz
+telnet efaturaws.fitbulut.com 443
+WS API, SOAP 1.1 standard─▒yla uyumlu olarak ├ğal─▒┼şmaktad─▒r. Web servis istemci uygulamalar─▒n─▒n bu ayar─▒ kendi
+Bulut WS APIÔÇÖye eri┼şimde kullan─▒lan public HTTPS sertifikas─▒ ve k├Âk sertifikalar, api.fitbulut.com adresi ile ayn─▒d─▒r.
+EK2 ÔÇô Yetkilendirme (Authentication)
+Web servislere eri┼şim HTTPS ├╝zerinden ÔÇ£HTTP Basic AuthenticationÔÇØ y├Ântemi kullan─▒larak VKN/TCKN bazl─▒ kullan─▒c─▒
+eri┼şim testlerinin ba┼şar─▒yla yap─▒lmas─▒ndan sonra, e─şer servislerden ÔÇ£HTTP 401 - UnauthorizedÔÇØ al─▒n─▒yorsa, ├Âncelikle
+ba┼şvuru formlar─▒nda bildirilen web servis kullan─▒c─▒ ad─▒ ve ┼şifreleri kontrol edilmelidir. WS ┼şifreleri s├╝reli olarak
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+servise
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+7- OK butonuna bast─▒ktan sonra a┼şa─ş─▒daki gibi servisiniz eklenmi┼ş olacakt─▒r:
+10- Otomatik olarak eklenen basicBinding d├╝─ş├╝m├╝ silenerek customBinding d├╝─ş├╝m├╝
+13- endpoint d├╝─ş├╝m├╝nde address alan─▒na test veya canl─▒ sistemin adresi yaz─▒lmal─▒d─▒r.
+14- endpoint d├╝─ş├╝m├╝nde bindingConfiguration alan─▒na verdi─şiniz isim ile customBinding
+15- endpoint d├╝─ş├╝m├╝nde contract alan─▒ndaki ServiceReference1 ifadesi 6. Madde de verdi─şiniz
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+.Net ile HTTP Basic Authentication
+e-─░rsaliye m├╝┼şteri servislerine eri┼şim sa─şlayabilmeniz i├ğin web servis kullan─▒c─▒ ad─▒ ve ┼şifrenizi her request
+.Net projesinde web servisleri ├ğa─ş─▒rmadan ├Ânce a┼şa─ş─▒daki kodun eklenmesi gerekmektedir:
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+EK-4 SOAP UI Authentication ve TLS Ayarlar─▒
+SoapUI program─▒ ile web servislere ba─şlanabilmek i├ğin, Auth tab─▒ndan ÔÇ£Authenticate pre-emptivelyÔÇØ
+modunda HTTP Basic Authentication ayarlar─▒n─▒n yap─▒lmas─▒ ve kullan─▒c─▒ ad─▒ ┼şifre bilgilerinin girilmesi
+gerekmektedir. Bu ayar sayesinde, g├Ânderilen HTTP isteklerin HTTP HeaderÔÇÖlar─▒na ÔÇ£Authorization:BasicÔÇØ
+Sovos Bulut e-─░rsaliye Web Servis API K─▒lavuzu V1.3
+Do─şru VKN-TCKN ve web servis kullan─▒c─▒ bilgileri ile ba─şlant─▒ sa─şland─▒─ş─▒ durumda web servislerden ba┼şar─▒l─▒

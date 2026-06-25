@@ -14,13 +14,13 @@ const audienceOptions = [
 const inputClass =
   "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-[14px] text-slate-800 outline-none transition focus:border-[#0f1f4d] focus:ring-2 focus:ring-[#0f1f4d]/10";
 
-export function PartnerApplyForm() {
+export function PartnerApplyForm({ defaultEmail = "" }: { defaultEmail?: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [form, setForm] = useState({
     fullName: "",
-    email: "",
+    email: defaultEmail,
     phone: "",
     socialUrl: "",
     audienceType: "BUSINESS",
@@ -70,7 +70,11 @@ export function PartnerApplyForm() {
           Başvurunuz Alındı
         </h2>
         <p className="mt-2 text-[14px] text-emerald-800">
-          Başvurunuz alındı. İnceleme sonrası sizinle iletişime geçeceğiz.
+          Başvurunuz alındı. İnceleme sonrası durumunuzu{" "}
+          <a href="/partnership/status" className="font-bold underline">
+            buradan
+          </a>{" "}
+          takip edebilirsiniz.
         </p>
       </div>
     );

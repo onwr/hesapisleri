@@ -206,6 +206,7 @@ export async function getDashboardPageDataUncached(
 
   const monthExpenses = monthFinance.totalExpense;
   const monthCashIncome = monthFinance.totalIncome;
+  const profit = monthFinance.netCashFlow;
 
   const pendingCollection = unpaidInvoices.reduce(
     (sum, invoice) =>
@@ -224,7 +225,6 @@ export async function getDashboardPageDataUncached(
     );
 
   const totalAccountBalance = sumActiveAccountBalances(accounts);
-  const profit = monthCashIncome - monthExpenses;
   const salesChartData = buildDailySalesChart(monthSalesRows, monthStart);
 
   const statLinks = resolveDashboardStatLinks({

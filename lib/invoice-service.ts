@@ -1,4 +1,5 @@
 import { createNotification } from "@/lib/notification-service";
+import { validateCollectionAccount } from "@/lib/collection-account-utils";
 import { db } from "@/lib/prisma";
 import { applyCustomerCollection } from "@/lib/customer-balance-utils";
 import {
@@ -63,10 +64,10 @@ export type SerializedInvoiceDetail = {
   canCancel: boolean;
 };
 
-import { getActiveAccountOptions } from "@/lib/account-read-service";
+import { getCollectionAccountOptions } from "@/lib/account-read-service";
 
 export async function getInvoiceCollectionAccounts(companyId: string) {
-  return getActiveAccountOptions(companyId);
+  return getCollectionAccountOptions(companyId);
 }
 
 export async function getInvoiceDetailForPage(companyId: string, invoiceId: string) {
@@ -144,22 +145,22 @@ async function recordInvoiceCollection(
     where: {
       id: input.accountId,
       companyId: input.companyId,
-      status: "ACTIVE",
     },
   });
 
-  if (!account) {
+  const validation = validateCollectionAccount(account, input.companyId);
+  if (!validation.ok) {
     return {
       ok: false as const,
-      status: 404,
-      message: "Ödeme hesabı bulunamadı.",
+      status: 400,
+      message: validation.message,
     };
   }
 
   const amount = roundMoney(input.amount);
 
   await tx.account.update({
-    where: { id: account.id },
+    where: { id: validation.account.id },
     data: {
       balance: {
         increment: amount,
@@ -169,19 +170,19 @@ async function recordInvoiceCollection(
 
   await tx.accountTransaction.create({
     data: {
-      accountId: account.id,
+      accountId: validation.account.id,
       type: "INCOME",
       title: buildInvoiceCollectionTitle(input.invoiceNo),
       amount,
       date: input.collectedAt,
       note:
         input.note ??
-        `${input.invoiceNo} numaralı fatura tahsilatı (${account.name}).`,
+        `${input.invoiceNo} numaralı fatura tahsilatı (${validation.account.name}).`,
       invoiceId: input.invoiceId,
     },
   });
 
-  return { ok: true as const, account };
+  return { ok: true as const, account: validation.account };
 }
 
 export async function collectInvoicePayment(input: {

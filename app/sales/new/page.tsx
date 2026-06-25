@@ -19,6 +19,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { AppLoadingScreen } from "@/components/layout/app-loading-screen";
+import { CollectionAccountSelect } from "@/components/cash-bank/collection-account-select";
 import { SaleLineEditFields } from "@/components/sales/sale-line-edit-fields";
 import { WarehouseSelectField } from "@/components/shared/warehouse-select-field";
 import {
@@ -35,6 +36,7 @@ import {
   validateSaleDiscountInput,
   validateSaleLineItems,
 } from "@/lib/sale-calculation-utils";
+import { useCollectionAccounts } from "@/hooks/use-collection-accounts";
 
 const SALES_HERO_CLASS =
   "rounded-[24px] border border-slate-200/70 bg-white p-5 shadow-[0_10px_26px_rgba(15,23,42,0.035)] sm:p-6";
@@ -100,7 +102,9 @@ export default function NewSalePage() {
     "PAID" | "PARTIAL" | "UNPAID"
   >("PAID");
   const [paidAmountInput, setPaidAmountInput] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "BANK">("CASH");
+  const [accountId, setAccountId] = useState("");
+  const { accounts: collectionAccounts, defaultAccountId, loading: accountsLoading } =
+    useCollectionAccounts();
   const [discountType, setDiscountType] = useState<SaleDiscountType>("AMOUNT");
   const [discountValueInput, setDiscountValueInput] = useState("0");
   const [discountNote, setDiscountNote] = useState("");
@@ -112,6 +116,16 @@ export default function NewSalePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!defaultAccountId || accountsLoading) return;
+
+    setAccountId((current) =>
+      current && collectionAccounts.some((account) => account.id === current)
+        ? current
+        : defaultAccountId
+    );
+  }, [defaultAccountId, collectionAccounts, accountsLoading]);
 
   useEffect(() => {
     async function loadData() {
@@ -381,6 +395,12 @@ export default function NewSalePage() {
       }
     }
 
+    if (paymentStatus !== "UNPAID" && !accountId) {
+      setError("Tahsilat hesabı seçin.");
+      setSaving(false);
+      return;
+    }
+
     const discountError = validateSaleDiscountInput(totals.gross, {
       type: discountType,
       value: discountValue,
@@ -420,7 +440,7 @@ export default function NewSalePage() {
               : paymentStatus === "UNPAID"
                 ? 0
                 : collectedAmount,
-          paymentMethod,
+          accountId: paymentStatus === "UNPAID" ? undefined : accountId,
           note,
           discountType,
           discountValue: discountValue,
@@ -747,16 +767,17 @@ export default function NewSalePage() {
                     <label className="text-[11px] font-black uppercase tracking-wide text-slate-400">
                       Tahsilat Hesabı
                     </label>
-                    <select
-                      value={paymentMethod}
-                      onChange={(event) =>
-                        setPaymentMethod(event.target.value as "CASH" | "BANK")
-                      }
-                      className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-[12px] font-bold text-[#0f1f4d] outline-none focus:border-blue-200 focus:ring-4 focus:ring-blue-50"
-                    >
-                      <option value="CASH">Nakit Kasa</option>
-                      <option value="BANK">Banka / Havale</option>
-                    </select>
+                    <div className="mt-2">
+                      <CollectionAccountSelect
+                        accounts={collectionAccounts}
+                        loading={accountsLoading}
+                        value={accountId}
+                        onChange={setAccountId}
+                        required
+                        disabled={saving || accountsLoading}
+                        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-[12px] font-bold text-[#0f1f4d] outline-none focus:border-blue-200 focus:ring-4 focus:ring-blue-50"
+                      />
+                    </div>
                   </div>
                 ) : null}
               </div>

@@ -22,6 +22,7 @@ export type AppModule =
   | "settings-users"
   | "employees"
   | "directory"
+  | "partnership"
   | "admin";
 
 const FULL_ACCESS_ROLES: PermissionRole[] = [
@@ -50,6 +51,14 @@ const MODULE_ACCESS: Record<AppModule, PermissionRole[]> = {
   "settings-users": ["OWNER", "ADMIN", "SUPER_ADMIN"],
   employees: ["OWNER", "ADMIN", "SUPER_ADMIN", "ACCOUNTANT"],
   directory: ["OWNER", "ADMIN", "STAFF", "SUPER_ADMIN"],
+  partnership: [
+    "OWNER",
+    "ADMIN",
+    "ACCOUNTANT",
+    "STAFF",
+    "POS_STAFF",
+    "SUPER_ADMIN",
+  ],
   admin: ["SUPER_ADMIN"],
 };
 

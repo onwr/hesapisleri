@@ -34,6 +34,7 @@ import {
   parseSearchQuery,
   buildSingleCustomerExportHref,
 } from "@/lib/customers-page-utils";
+import { AiPageTriggerButton } from "@/components/ai-assistant/ai-page-trigger-button";
 
 type CustomersPageProps = {
   searchParams: Promise<{
@@ -133,6 +134,10 @@ const activeTab = parseCustomerTab(params.tab);
   return (
     <AppShell>
       <div className="space-y-5">
+        <div className="flex justify-end">
+          <AiPageTriggerButton moduleKey="customers" />
+        </div>
+
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           {actionCards.map((card) => {
             const Icon = card.icon;

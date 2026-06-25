@@ -17,8 +17,8 @@ export async function POST(req: Request, context: RouteContext) {
     const body = await req.json();
 
     const validation = validateMarkEmployeePaymentPaidInput({
-      createTransaction: body.createTransaction,
       relatedAccountId: body.relatedAccountId,
+      requireAccount: true,
     });
 
     if (!validation.ok) {
@@ -34,8 +34,6 @@ export async function POST(req: Request, context: RouteContext) {
       payrollRunId: id,
       paidAt: body.paidAt ? new Date(body.paidAt) : undefined,
       relatedAccountId: body.relatedAccountId,
-      createExpense: body.createExpense,
-      createTransaction: body.createTransaction,
       notes: body.notes,
     });
 

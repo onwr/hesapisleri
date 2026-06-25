@@ -26,6 +26,7 @@ import { guardPageModule } from "@/lib/module-access";
 
 import { CustomerCollectPanel } from "@/components/customers/customer-collect-panel";
 import { CustomerLedgerTable } from "@/components/customers/customer-ledger-table";
+import { getCollectionAccountOptions } from "@/lib/account-read-service";
 import { db } from "@/lib/prisma";
 import { getCustomerDetailLedgerData } from "@/lib/customer-detail-data";
 import { getCustomerGroupColorMap } from "@/lib/customer-group-service";
@@ -128,6 +129,8 @@ const { id } = await params;
 
   const { summary, ledger, openSales, recentSales, recentInvoices } =
     await getCustomerDetailLedgerData(company.id, customer.id);
+
+  const collectionAccounts = await getCollectionAccountOptions(company.id);
 
   const statusBadge = getCustomerStatusBadge(customer.status);
   const showCreatedBanner = query.created === "1";
@@ -492,7 +495,10 @@ const { id } = await params;
                 </h3>
               </div>
 
-              <CustomerCollectPanel openSales={openSales} />
+              <CustomerCollectPanel
+                openSales={openSales}
+                accounts={collectionAccounts}
+              />
             </section>
 
             <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">

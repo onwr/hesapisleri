@@ -5,6 +5,7 @@ import { ProductsFilters } from "@/components/products/products-filters";
 import { ProductsSelectableTable } from "@/components/products/products-selectable-table";
 import { ProductsShell } from "@/components/products/products-shell";
 import { ProductsTablePagination } from "@/components/products/products-table-controls";
+import { AiPageTriggerButton } from "@/components/ai-assistant/ai-page-trigger-button";
 import { PRODUCT_CARD_CLASS } from "@/components/products/product-ui-tokens";
 import { resolveEffectiveRole, canAccessModule, canManageProducts, canManageWarehouses } from "@/lib/permission-utils";
 import {

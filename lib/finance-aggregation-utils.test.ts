@@ -77,18 +77,38 @@ describe("finance aggregation", () => {
     assert.equal(result.transferInTotal, 300);
   });
 
-  it("satış iptali gider tarafına yansır", () => {
+  it("satış iptali ters kayıt olarak ayrılır, operasyonel gidere dahil edilmez", () => {
     const result = aggregateAccountTransactions([
       tx({
         id: "1",
         type: "EXPENSE",
         title: "Satış İptali - SAT-002",
+        note: "[REVERSAL] SAT-002 numaralı satış iptal edildi.",
         amount: 250,
       }),
     ]);
 
+    assert.equal(result.reversalOutTotal, 250);
+    assert.equal(result.financeMirrorOutTotal, 250);
     assert.equal(result.saleCancelExpense, 250);
-    assert.equal(result.totalExpense, 250);
+    assert.equal(result.totalExpense, 0);
+    assert.equal(result.netCashFlow, -250);
+  });
+
+  it("satış düzeltme geri alımı correction olarak ayrılır", () => {
+    const result = aggregateAccountTransactions([
+      tx({
+        id: "1",
+        type: "EXPENSE",
+        title: "Satış Düzeltme Geri Alım - SAT-003",
+        note: "[CORRECTION] önceki tahsilat geri alındı.",
+        amount: 120,
+      }),
+    ]);
+
+    assert.equal(result.correctionOutTotal, 120);
+    assert.equal(result.totalExpense, 0);
+    assert.equal(result.netCashFlow, -120);
   });
 
   it("manuel gider ve kayıtlı gider birleştirilir", () => {

@@ -8,6 +8,7 @@ import {
   getBalanceStatus,
 } from "@/lib/customers-page-utils";
 import { getSaleRemainingAmount, roundMoney } from "@/lib/sale-payment-utils";
+import { isActiveSaleStatus } from "@/lib/sale-query-utils";
 
 export type CustomerLedgerEntryType =
   | "SALE"
@@ -267,15 +268,20 @@ export async function getCustomerDetailLedgerData(
   const ledger = [...ledgerAsc].reverse();
 
   const totalDebt = roundMoney(
-    rawEntries
-      .filter((entry) => entry.type === "SALE" || entry.type === "INVOICE")
-      .reduce((sum, entry) => sum + entry.debit, 0)
+    sales
+      .filter((sale) => isActiveSaleStatus(sale.status))
+      .reduce((sum, sale) => sum + Number(sale.total), 0)
   );
 
   const totalCollected = roundMoney(
-    rawEntries
-      .filter((entry) => entry.type === "COLLECTION")
-      .reduce((sum, entry) => sum + entry.credit, 0)
+    collections
+      .filter((tx) =>
+        sales.some(
+          (sale) =>
+            isActiveSaleStatus(sale.status) && matchesSaleNo(sale.saleNo, tx)
+        )
+      )
+      .reduce((sum, tx) => sum + Number(tx.amount), 0)
   );
 
   const collectionDates = rawEntries

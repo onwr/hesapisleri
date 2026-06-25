@@ -32,6 +32,7 @@ import {
   EMPLOYEE_PAYMENT_FINANCE_BADGE_CLASS,
   shouldShowMarkPaidButton,
 } from "@/lib/employee-payment-finance-utils";
+import { useFinanceAccounts } from "@/hooks/use-finance-accounts";
 import {
   formatEmployeeLedgerBalanceLabel,
   getEmployeeLedgerBalanceTone,
@@ -127,37 +128,10 @@ export function EmployeeDetailClient({
     () => new Date().toISOString().slice(0, 10)
   );
   const [markPaidAccountId, setMarkPaidAccountId] = useState("");
-  const [markPaidCreateExpense, setMarkPaidCreateExpense] = useState(false);
-  const [markPaidCreateTransaction, setMarkPaidCreateTransaction] = useState(false);
   const [markPaidNotes, setMarkPaidNotes] = useState("");
   const [markPaidFormError, setMarkPaidFormError] = useState("");
-  const [cashAccounts, setCashAccounts] = useState<
-    Array<{ id: string; name: string; type: string; balance: number }>
-  >([]);
-  const [accountsLoading, setAccountsLoading] = useState(false);
-
-  useEffect(() => {
-    if (!canProcessPayments || tab !== "payments") return;
-
-    let cancelled = false;
-    setAccountsLoading(true);
-
-    fetch("/api/cash-bank/accounts/list")
-      .then((res) => res.json())
-      .then((json) => {
-        if (cancelled) return;
-        if (json.success && Array.isArray(json.data)) {
-          setCashAccounts(json.data);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setAccountsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [canProcessPayments, tab]);
+  const { accounts: financeAccounts, loading: accountsLoading } =
+    useFinanceAccounts();
 
   async function reload() {
     const res = await fetch(`/api/employees/${employee.id}`);
@@ -407,8 +381,6 @@ export function EmployeeDetailClient({
     setMarkPaidPaymentId(paymentId);
     setMarkPaidAt(new Date().toISOString().slice(0, 10));
     setMarkPaidAccountId("");
-    setMarkPaidCreateExpense(false);
-    setMarkPaidCreateTransaction(false);
     setMarkPaidNotes("");
     setMarkPaidFormError("");
     setError("");
@@ -434,9 +406,7 @@ export function EmployeeDetailClient({
           body: JSON.stringify({
             status: "PAID",
             paidAt: markPaidAt || undefined,
-            relatedAccountId: markPaidAccountId || undefined,
-            createExpense: markPaidCreateExpense,
-            createTransaction: markPaidCreateTransaction,
+            relatedAccountId: markPaidAccountId,
             notes: markPaidNotes || undefined,
           }),
         }
@@ -739,8 +709,9 @@ export function EmployeeDetailClient({
                   className="space-y-3 rounded-2xl border border-slate-100 p-4"
                 >
                   <p className="text-xs font-semibold text-slate-500">
-                    Bekleyen ödemeleri ödendi işaretlerken isteğe bağlı personel
-                    gideri ve kasa/banka hareketi oluşturabilirsiniz.
+                    Bekleyen ödemeleri ödendi işaretlerken ödeme hesabı
+                    seçimi zorunludur; gider ve kasa/banka hareketi seçilen
+                    hesap üzerinde oluşturulur.
                   </p>
                   <div className="flex flex-wrap items-end gap-3">
                     <label className="space-y-1">
@@ -813,6 +784,9 @@ export function EmployeeDetailClient({
                       <th className="py-2 pr-4">Vade</th>
                       <th className="py-2 pr-4">Durum</th>
                       <th className="py-2 pr-4">Ödeme tarihi</th>
+                      <th className="py-2 pr-4">Ödeme hesabı</th>
+                      <th className="py-2 pr-4">Yöntem</th>
+                      <th className="py-2 pr-4">İşlemi yapan</th>
                       <th className="py-2 pr-4">Finans</th>
                       <th className="py-2">İşlem</th>
                     </tr>
@@ -854,6 +828,15 @@ export function EmployeeDetailClient({
                         </td>
                         <td className="py-3 pr-4 text-slate-500">
                           {p.paidAt ? formatEmployeeDate(p.paidAt) : "—"}
+                        </td>
+                        <td className="py-3 pr-4 text-slate-600">
+                          {p.paymentAccount?.name ?? "—"}
+                        </td>
+                        <td className="py-3 pr-4 text-slate-500">
+                          {p.paymentMethodLabel ?? "—"}
+                        </td>
+                        <td className="py-3 pr-4 text-slate-500">
+                          {p.createdByName ?? "—"}
                         </td>
                         <td className="py-3 pr-4">
                           <div className="flex flex-wrap gap-1.5">
@@ -1073,18 +1056,14 @@ export function EmployeeDetailClient({
             : ""
         }
         paymentAmount={markPaidPayment?.amount ?? 0}
-        accounts={cashAccounts}
+        accounts={financeAccounts}
         accountsLoading={accountsLoading}
         paidAt={markPaidAt}
         relatedAccountId={markPaidAccountId}
-        createExpense={markPaidCreateExpense}
-        createTransaction={markPaidCreateTransaction}
         notes={markPaidNotes}
         formError={markPaidFormError}
         onPaidAtChange={setMarkPaidAt}
         onRelatedAccountIdChange={setMarkPaidAccountId}
-        onCreateExpenseChange={setMarkPaidCreateExpense}
-        onCreateTransactionChange={setMarkPaidCreateTransaction}
         onNotesChange={setMarkPaidNotes}
         onClose={closeMarkPaidModal}
         onSubmit={submitMarkPaymentPaid}

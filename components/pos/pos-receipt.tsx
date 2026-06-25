@@ -16,6 +16,12 @@ type ReceiptItem = {
   lineTotal: number;
 };
 
+type ReceiptPayment = {
+  paymentMethod: PosPaymentMethod | string;
+  accountName: string;
+  amount: number;
+};
+
 type PosReceiptProps = {
   companyName: string;
   saleNo: string;
@@ -25,9 +31,8 @@ type PosReceiptProps = {
   vatTotal: number;
   discount: number;
   total: number;
-  paymentMethod: PosPaymentMethod;
   paymentStatus: PosPaymentStatus;
-  collectedAmount?: number;
+  payments: ReceiptPayment[];
 };
 
 export function PosReceipt({
@@ -39,9 +44,8 @@ export function PosReceipt({
   vatTotal,
   discount,
   total,
-  paymentMethod,
   paymentStatus,
-  collectedAmount,
+  payments,
 }: PosReceiptProps) {
   return (
     <div
@@ -115,15 +119,14 @@ export function PosReceipt({
         <div className="mt-4 rounded-lg bg-slate-50 p-3 text-xs">
           <p>
             <span className="font-bold">Ödeme:</span>{" "}
-            {getPosPaymentMethodLabel(paymentMethod)} ·{" "}
             {getPosPaymentStatusLabel(paymentStatus)}
           </p>
-          {paymentStatus === "PARTIAL" && collectedAmount !== undefined ? (
-            <p className="mt-1">
-              <span className="font-bold">Tahsilat:</span>{" "}
-              {formatMoney(collectedAmount)}
+          {payments.map((payment, index) => (
+            <p key={`${payment.accountName}-${index}`} className="mt-1">
+              {getPosPaymentMethodLabel(payment.paymentMethod as PosPaymentMethod)}{" "}
+              · {payment.accountName} · {formatMoney(payment.amount)}
             </p>
-          ) : null}
+          ))}
         </div>
 
         <p className="mt-8 text-center text-[10px] text-slate-400">

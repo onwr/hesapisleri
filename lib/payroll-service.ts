@@ -2,7 +2,7 @@ import type { PayrollRunStatus, Prisma } from "@prisma/client";
 import { db } from "@/lib/prisma";
 import {
   createEmployeePayment,
-  markEmployeePaymentPaid,
+  markEmployeePaymentPaidInTx,
 } from "@/lib/employee-service";
 import { formatEmployeeDisplayName } from "@/lib/employee-utils";
 import { createNotification } from "@/lib/notification-service";
@@ -658,8 +658,6 @@ export async function markPayrollRunPaid(input: {
   payrollRunId: string;
   paidAt?: Date;
   relatedAccountId?: string | null;
-  createExpense?: boolean;
-  createTransaction?: boolean;
   notes?: string;
 }) {
   const run = await getPayrollRunInCompany(input.payrollRunId, input.companyId);
@@ -677,34 +675,49 @@ export async function markPayrollRunPaid(input: {
     );
   }
 
-  if (input.createTransaction && !input.relatedAccountId) {
-    throw new PayrollServiceError(
-      "Kasa/banka hareketi için hesap seçilmelidir."
-    );
+  const accountId = input.relatedAccountId?.trim();
+  if (!accountId) {
+    throw new PayrollServiceError("Ödeme hesabı seçilmelidir.");
   }
 
   const paidAt = input.paidAt ?? new Date();
   let paidCount = 0;
-
-  for (const item of run.items) {
-    if (!item.employeePaymentId) continue;
-
-    await markEmployeePaymentPaid({
-      companyId: input.companyId,
-      actorUserId: input.actorUserId,
-      employeeId: item.employeeId,
-      paymentId: item.employeePaymentId,
-      paidAt,
-      relatedAccountId: input.relatedAccountId,
-      createExpense: input.createExpense,
-      createTransaction: input.createTransaction,
-      notes: input.notes,
-    });
-
-    paidCount += 1;
-  }
+  let lastDisplayName = "";
+  let lastAmountLabel = "";
 
   const updated = await db.$transaction(async (tx) => {
+    for (const item of run.items) {
+      if (!item.employeePaymentId) continue;
+
+      const payment = await tx.employeePayment.findFirst({
+        where: {
+          id: item.employeePaymentId,
+          employeeId: item.employeeId,
+          companyId: input.companyId,
+        },
+      });
+
+      if (!payment) {
+        throw new PayrollServiceError("Bordro ödeme kaydı bulunamadı.", 404);
+      }
+
+      const result = await markEmployeePaymentPaidInTx(tx, {
+        companyId: input.companyId,
+        actorUserId: input.actorUserId,
+        employeeId: item.employeeId,
+        payment,
+        paidAt,
+        relatedAccountId: accountId,
+        notes: input.notes,
+      });
+
+      if (!result.skipNotification) {
+        paidCount += 1;
+        lastDisplayName = result.displayName;
+        lastAmountLabel = result.amountLabel;
+      }
+    }
+
     await tx.payrollRunItem.updateMany({
       where: { payrollRunId: run.id },
       data: { status: "PAID" },

@@ -17,7 +17,7 @@ import {
   type AiTopicKey,
 } from "@/lib/ai-assistant-page-utils";
 import { getInvoiceRemainingAmount } from "@/lib/invoice-payment-utils";
-import { activeSaleStatusFilter } from "@/lib/sale-query-utils";
+import { activeSaleStatusFilter, isActiveSaleStatus } from "@/lib/sale-query-utils";
 import {
   combineFinanceBreakdown,
   mapAccountTransactions,
@@ -187,8 +187,10 @@ export async function getAiAssistantPageData(
 
   const topProduct = productsRaw
     .map((product) => {
-      const relevantItems = product.saleItems.filter((item) =>
-        isInDateRange(item.sale.createdAt, options.from, options.to)
+      const relevantItems = product.saleItems.filter(
+        (item) =>
+          isInDateRange(item.sale.createdAt, options.from, options.to) &&
+          isActiveSaleStatus(item.sale.status)
       );
       const revenue = relevantItems.reduce(
         (sum, item) => sum + Number(item.total),
@@ -206,8 +208,10 @@ export async function getAiAssistantPageData(
 
   const topCustomer = customersRaw
     .map((customer) => {
-      const relevantSales = customer.sales.filter((sale) =>
-        isInDateRange(sale.createdAt, options.from, options.to)
+      const relevantSales = customer.sales.filter(
+        (sale) =>
+          isInDateRange(sale.createdAt, options.from, options.to) &&
+          isActiveSaleStatus(sale.status)
       );
       const revenue = relevantSales.reduce(
         (sum, sale) => sum + Number(sale.total),

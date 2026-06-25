@@ -22,7 +22,10 @@ import {
   REPORT_CARDS,
 } from "@/lib/reports-page-utils";
 import { getInvoiceRemainingAmount } from "@/lib/invoice-payment-utils";
-import { activeSaleStatusFilter } from "@/lib/sale-query-utils";
+import {
+  activeSaleStatusFilter,
+  CANCELLED_SALE_STATUSES,
+} from "@/lib/sale-query-utils";
 
 export type StockReportItem = {
   id: string;
@@ -218,17 +221,8 @@ export async function getReportsPageData(
     );
   }
 
-  if (financeBreakdown.saleCancelExpense > 0) {
-    expenseCategoryMap.set(
-      "Satış İptali",
-      (expenseCategoryMap.get("Satış İptali") || 0) +
-        financeBreakdown.saleCancelExpense
-    );
-  }
-
-  const categoryExpenseTotal = financeBreakdown.totalAccruedExpense +
-    financeBreakdown.manualCashExpense +
-    financeBreakdown.saleCancelExpense;
+  const categoryExpenseTotal =
+    financeBreakdown.totalAccruedExpense + financeBreakdown.manualCashExpense;
 
   const expenseCategories: ExpenseCategoryPoint[] = Array.from(expenseCategoryMap)
     .map(([name, value]) => ({
@@ -244,8 +238,12 @@ export async function getReportsPageData(
 
   const topProducts: TopProductPoint[] = products
     .map((product) => {
-      const relevantItems = product.saleItems.filter((item) =>
-        isInRange(item.sale.createdAt, from, to)
+      const relevantItems = product.saleItems.filter(
+        (item) =>
+          isInRange(item.sale.createdAt, from, to) &&
+          !CANCELLED_SALE_STATUSES.includes(
+            item.sale.status as (typeof CANCELLED_SALE_STATUSES)[number]
+          )
       );
 
       const soldQty = relevantItems.reduce((sum, item) => sum + item.quantity, 0);
@@ -421,7 +419,10 @@ export async function getReportsPageData(
       recordedExpenseTotal: financeBreakdown.recordedExpenseTotal,
       totalAccruedExpense: financeBreakdown.totalAccruedExpense,
       manualCashExpense: financeBreakdown.manualCashExpense,
-      saleCancelExpense: financeBreakdown.saleCancelExpense,
+      saleCancelExpense: financeBreakdown.financeMirrorOutTotal,
+      reversalOutTotal: financeBreakdown.reversalOutTotal,
+      correctionOutTotal: financeBreakdown.correctionOutTotal,
+      financeMirrorOutTotal: financeBreakdown.financeMirrorOutTotal,
       transferInTotal: financeBreakdown.transferInTotal,
       transferOutTotal: financeBreakdown.transferOutTotal,
     },

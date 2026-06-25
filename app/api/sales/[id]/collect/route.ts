@@ -2,14 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createNotification } from "@/lib/notification-service";
 import { db } from "@/lib/prisma";
-import { requireApiModuleAccess } from "@/lib/module-access";
+import { requireAnyApiModuleAccess } from "@/lib/module-access";
 import { getUnpaidInvoiceForSale } from "@/lib/collections-service";
 import {
   derivePaymentStatus,
   getSaleRemainingAmount,
   recordSaleCollection,
   roundMoney,
-  type SalePaymentMethod,
 } from "@/lib/sale-payment-utils";
 import { applyCustomerCollection } from "@/lib/customer-balance-utils";
 import { invalidateDashboardCache } from "@/lib/dashboard-cache-invalidation";
@@ -32,24 +31,9 @@ function parsePaymentDate(value?: string | null) {
   return parsed;
 }
 
-function resolveLegacyPaymentMethod(
-  method?: string | null,
-  paymentMethod?: string | null
-): SalePaymentMethod {
-  const raw = method ?? paymentMethod ?? "CASH";
-
-  if (raw === "BANK" || raw === "CARD" || raw === "TRANSFER") {
-    return "BANK";
-  }
-
-  return "CASH";
-}
-
 const collectSchema = z.object({
   amount: z.number().min(0.01).optional(),
-  paymentMethod: z.enum(["CASH", "BANK", "CARD", "TRANSFER"]).optional(),
-  method: z.enum(["CASH", "BANK", "CARD", "TRANSFER"]).optional(),
-  accountId: z.string().trim().min(1).optional(),
+  accountId: z.string().trim().min(1, "Tahsilat hesabı seçilmelidir."),
   paymentDate: z.string().optional(),
   collectedAt: z.string().optional(),
   note: z.string().optional(),
@@ -58,7 +42,11 @@ const collectSchema = z.object({
 export async function POST(req: Request, { params }: Props) {
   try {
     const { id } = await params;
-    const auth = await requireApiModuleAccess("cash-bank");
+    const auth = await requireAnyApiModuleAccess([
+      "sales",
+      "cash-bank",
+      "invoices",
+    ]);
     if ("error" in auth) return auth.error;
 
     const { userId, companyId } = auth;
@@ -159,11 +147,6 @@ export async function POST(req: Request, { params }: Props) {
       );
     }
 
-    const paymentMethod = resolveLegacyPaymentMethod(
-      parsed.data.method,
-      parsed.data.paymentMethod
-    );
-
     const nextPaidAmount = roundMoney(currentPaid + collectAmount);
     const cappedPaidAmount = roundMoney(Math.min(total, nextPaidAmount));
     const nextPaymentStatus = derivePaymentStatus(total, cappedPaidAmount);
@@ -173,7 +156,6 @@ export async function POST(req: Request, { params }: Props) {
         companyId,
         saleNo: sale.saleNo,
         amount: collectAmount,
-        paymentMethod,
         accountId: parsed.data.accountId,
         collectedAt: paymentDate,
         note: parsed.data.note?.trim() || undefined,

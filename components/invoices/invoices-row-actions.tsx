@@ -20,7 +20,6 @@ import {
   toCollectPaymentTarget,
   type CollectPaymentTarget,
 } from "@/components/collections/collect-payment-dialog";
-import type { CollectionAccountOption } from "@/components/sales/sale-collect-modal";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,10 +31,9 @@ import type { InvoiceRowActionData } from "@/lib/invoices-page-utils";
 
 type InvoicesRowActionsProps = {
   row: InvoiceRowActionData;
-  accounts: CollectionAccountOption[];
 };
 
-export function InvoicesRowActions({ row, accounts }: InvoicesRowActionsProps) {
+export function InvoicesRowActions({ row }: InvoicesRowActionsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
@@ -231,7 +229,6 @@ export function InvoicesRowActions({ row, accounts }: InvoicesRowActionsProps) {
 
       <CollectPaymentDialog
         target={collectTarget}
-        accounts={accounts}
         onClose={() => setCollectTarget(null)}
       />
     </>

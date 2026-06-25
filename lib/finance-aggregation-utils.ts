@@ -3,6 +3,7 @@ import {
   startOfDay,
   startOfMonth,
 } from "@/lib/dashboard-metrics";
+import { getFinanceMirrorKind } from "@/lib/finance-reversal-utils";
 import {
   getTransactionDirection,
   inferTransactionSource,
@@ -29,10 +30,15 @@ export type FinanceAggregationBreakdown = {
   recordedExpenseTotal: number;
   paidExpenseTotal: number;
   manualCashExpense: number;
+  /** @deprecated use financeMirrorOutTotal */
   saleCancelExpense: number;
+  reversalOutTotal: number;
+  correctionOutTotal: number;
+  financeMirrorOutTotal: number;
   transferInTotal: number;
   transferOutTotal: number;
   totalIncome: number;
+  /** Operasyonel gider; ters kayıt/düzeltme hariç */
   totalExpense: number;
   totalAccruedExpense: number;
   netCashFlow: number;
@@ -136,7 +142,8 @@ export function aggregateAccountTransactions(
   let saleCollectionIncome = 0;
   let manualIncome = 0;
   let manualCashExpense = 0;
-  let saleCancelExpense = 0;
+  let reversalOutTotal = 0;
+  let correctionOutTotal = 0;
   let transferInTotal = 0;
   let transferOutTotal = 0;
 
@@ -169,6 +176,7 @@ export function aggregateAccountTransactions(
 
     const source = inferTransactionSource(transaction);
     const direction = getTransactionDirection(transaction);
+    const mirrorKind = getFinanceMirrorKind(transaction);
 
     if (direction === "in") {
       if (source.key === "collection" || source.key === "sale") {
@@ -179,33 +187,53 @@ export function aggregateAccountTransactions(
       continue;
     }
 
-    if (source.key === "cancel") {
-      saleCancelExpense += amount;
-    } else {
-      manualCashExpense += amount;
+    if (mirrorKind === "REVERSAL") {
+      reversalOutTotal += amount;
+      continue;
     }
+
+    if (mirrorKind === "CORRECTION") {
+      correctionOutTotal += amount;
+      continue;
+    }
+
+    if (source.key === "cancel") {
+      reversalOutTotal += amount;
+      continue;
+    }
+
+    manualCashExpense += amount;
   }
 
   saleCollectionIncome = roundCashMoney(saleCollectionIncome);
   manualIncome = roundCashMoney(manualIncome);
   manualCashExpense = roundCashMoney(manualCashExpense);
-  saleCancelExpense = roundCashMoney(saleCancelExpense);
+  reversalOutTotal = roundCashMoney(reversalOutTotal);
+  correctionOutTotal = roundCashMoney(correctionOutTotal);
+  const financeMirrorOutTotal = roundCashMoney(
+    reversalOutTotal + correctionOutTotal
+  );
   transferInTotal = roundCashMoney(transferInTotal);
   transferOutTotal = roundCashMoney(transferOutTotal);
 
   const totalIncome = roundCashMoney(saleCollectionIncome + manualIncome);
-  const totalExpense = roundCashMoney(manualCashExpense + saleCancelExpense);
+  const totalExpense = roundCashMoney(manualCashExpense);
 
   return {
     saleCollectionIncome,
     manualIncome,
     manualCashExpense,
-    saleCancelExpense,
+    saleCancelExpense: financeMirrorOutTotal,
+    reversalOutTotal,
+    correctionOutTotal,
+    financeMirrorOutTotal,
     transferInTotal,
     transferOutTotal,
     totalIncome,
     totalExpense,
-    netCashFlow: roundCashMoney(totalIncome - totalExpense),
+    netCashFlow: roundCashMoney(
+      totalIncome - totalExpense - financeMirrorOutTotal
+    ),
   };
 }
 
@@ -224,10 +252,9 @@ export function combineFinanceBreakdown(
   const paidExpenseTotal = sumPaidExpenseCashOut(expenses, from, to);
   const totalAccruedExpense = sumAccruedExpenses(expenses, from, to);
   const totalExpense = roundCashMoney(
-    paidExpenseTotal +
-      accountPart.manualCashExpense +
-      accountPart.saleCancelExpense
+    paidExpenseTotal + accountPart.manualCashExpense
   );
+  const financeMirrorOutTotal = accountPart.financeMirrorOutTotal;
 
   return {
     ...accountPart,
@@ -235,7 +262,9 @@ export function combineFinanceBreakdown(
     paidExpenseTotal,
     totalAccruedExpense,
     totalExpense,
-    netCashFlow: roundCashMoney(accountPart.totalIncome - totalExpense),
+    netCashFlow: roundCashMoney(
+      accountPart.totalIncome - totalExpense - financeMirrorOutTotal
+    ),
   };
 }
 

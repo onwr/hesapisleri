@@ -1,0 +1,363 @@
+{
+  "generatedAt": "2026-06-22T19:15:48.896Z",
+  "documentVersion": "2.3",
+  "sources": [
+    {
+      "filename": "sovos-e-arsiv-ws-api-v2.3.zip",
+      "sha256": "b3b9c30efe6ffcbd7480cf39d5930b4b5e02307a5ae019b2d9d1c1277499c3f2",
+      "bytes": 2495020
+    },
+    {
+      "filename": "sovos-e-fatura-ws-api-v2.3.zip",
+      "sha256": "62c4c28d8f1ab8ecabc389b5c27e1e990d94dd0287bf187175c3fcdbeb1d272f",
+      "bytes": 13281001
+    },
+    {
+      "filename": "sovos-e-irsaliye-ws-api-v1.3.zip",
+      "sha256": "cca56547bbde4fa8b9c404e2812d68adade755af44f5e864f00d88f0d289df5f",
+      "bytes": 17291765
+    }
+  ],
+  "invoice": {
+    "sourceZip": "sovos-e-fatura-ws-api-v2.3.zip",
+    "wsdlPath": "C:\\Users\\lenov\\AppData\\Local\\Temp\\sovos-wsdl-cJTHFC\\Sovos Bulut e-Fatura WS API v2.3\\EK1 - Teknik Belgeler\\SOAP\\ClientEInvoiceServices-2.2.wsdl",
+    "targetNamespace": "http:/fitcons.com/eInvoice/",
+    "soapVersion": "1.1",
+    "services": [
+      {
+        "name": "ClientEInvoiceServices",
+        "ports": [
+          {
+            "name": "ClientEInvoiceServicesPort",
+            "binding": "tns:ClientEInvoiceServicesBinding",
+            "endpoint": "http://fitcons.com/eInvoice/"
+          }
+        ]
+      }
+    ],
+    "bindings": [
+      {
+        "name": "ClientEInvoiceServicesBinding",
+        "type": "tns:ClientEInvoiceServicesPort",
+        "soapVersion": "1.1",
+        "operations": [
+          {
+            "name": "sendUBL",
+            "soapAction": "sendUBL",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "getUBLList",
+            "soapAction": "getUBLList",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "getUBL",
+            "soapAction": "getUBL",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "getEnvelopeStatus",
+            "soapAction": "getEnvelopeStatus",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "getInvoiceView",
+            "soapAction": "getInvoiceView",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "getRAWUserList",
+            "soapAction": "getRAWUserList",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "getInvResponses",
+            "soapAction": "getInvResponses",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "getPartialUserList",
+            "soapAction": "getPartialUserList",
+            "inputElement": null,
+            "outputElement": null
+          }
+        ]
+      }
+    ],
+    "imports": []
+  },
+  "archive": {
+    "sourceZip": "sovos-e-arsiv-ws-api-v2.3.zip",
+    "wsdlPath": "C:\\Users\\lenov\\AppData\\Local\\Temp\\sovos-wsdl-RanYaT\\Sovos Bulut e-Arşiv Fatura WS API 2.3\\EK1 - Teknik Belgeler\\EArchiveInvoiceService_v2.wsdl",
+    "targetNamespace": "http://fitcons.com/earchive/invoice",
+    "soapVersion": "1.1",
+    "services": [
+      {
+        "name": "eArsivInvoiceService",
+        "ports": [
+          {
+            "name": "eArsivInvoicePort",
+            "binding": "tns:eArsivInvoicePortTypeBinding",
+            "endpoint": "no address"
+          }
+        ]
+      }
+    ],
+    "bindings": [
+      {
+        "name": "eArsivInvoicePortTypeBinding",
+        "type": "tns:eArsivInvoicePortType",
+        "soapVersion": "1.1",
+        "operations": [
+          {
+            "name": "sendInvoice",
+            "soapAction": "sendInvoice",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "sendEnvelope",
+            "soapAction": "sendEnvelope",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "getStatus",
+            "soapAction": "getStatus",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "getSignedInvoice",
+            "soapAction": "getSignedInvoice",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "getInvoiceDocument",
+            "soapAction": "getInvoiceDocument",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "actionService",
+            "soapAction": "actionService",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "cancelInvoice",
+            "soapAction": "cancelInvoice",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "sendReport",
+            "soapAction": "sendReport",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "retriggerOperation",
+            "soapAction": "retriggerOperation",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "generateInvID",
+            "soapAction": "generateInvID",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "getReportStatus",
+            "soapAction": "getReportStatus",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "getReportList",
+            "soapAction": "getReportList",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "getReportData",
+            "soapAction": "getReportData",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "getUserList",
+            "soapAction": "getUserList",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "getPartialUserList",
+            "soapAction": "getPartialUserList",
+            "inputElement": null,
+            "outputElement": null
+          }
+        ]
+      }
+    ],
+    "imports": []
+  },
+  "despatch": {
+    "sourceZip": "sovos-e-irsaliye-ws-api-v1.3.zip",
+    "wsdlPath": "C:\\Users\\lenov\\AppData\\Local\\Temp\\sovos-wsdl-83Ea1Z\\Sovos Bulut e-˜rsaliye WS API v1.3\\EK1 - Teknik Belgeler\\SOAP\\ClientEDespatchServices-1.1.wsdl",
+    "targetNamespace": "http://foriba.com/eDespatch/",
+    "soapVersion": "1.1",
+    "services": [
+      {
+        "name": "ClientEDespatchServices",
+        "ports": [
+          {
+            "name": "ClientEDespatchServicesPort",
+            "binding": "tns:ClientEDespatchServicesBinding",
+            "endpoint": "http://replaceWithActualURL"
+          }
+        ]
+      }
+    ],
+    "bindings": [
+      {
+        "name": "ClientEDespatchServicesBinding",
+        "type": "tns:ClientEDespatchServicesPort",
+        "soapVersion": "1.1",
+        "operations": [
+          {
+            "name": "sendDesUBL",
+            "soapAction": "sendDesUBL",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "getDesUBLList",
+            "soapAction": "getDesUBLList",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "getDesUBL",
+            "soapAction": "getDesUBL",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "getDesReceipts",
+            "soapAction": "getDesReceipts",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "getDesEnvelopeStatus",
+            "soapAction": "getDesEnvelopeStatus",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "getDesView",
+            "soapAction": "getDesView",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "getDesUserList",
+            "soapAction": "getDesUserList",
+            "inputElement": null,
+            "outputElement": null
+          },
+          {
+            "name": "getDesPartialUserList",
+            "soapAction": "getDesPartialUserList",
+            "inputElement": null,
+            "outputElement": null
+          }
+        ]
+      }
+    ],
+    "imports": []
+  },
+  "notes": [
+    "Auth: HTTP Basic Authentication (VKN/TCKN tabanlı kullanıcı adı/şifre).",
+    "E-Fatura bağlantı testi operasyonu: getRAWUserList.",
+    "E-Arşiv bağlantı testi operasyonu: getUserList.",
+    "E-İrsaliye bağlantı testi operasyonu: getDesUserList.",
+    "Gerçek test/canlı URL'ler müşteriye özel verilir; SOVOS_*_ENDPOINT_* env ile yapılandırılır."
+  ],
+  "auth": {
+    "method": "HTTP_BASIC",
+    "header": "Authorization: Basic <base64(username:password)>",
+    "transport": "HTTPS:443"
+  },
+  "endpointPatterns": {
+    "invoice": "https://<musteri-servis-adresi>/ClientEInvoiceServices/ClientEInvoiceServicesPort.svc",
+    "archive": "https://<musteri-servis-adresi>/ClientEArsivServicesPort.svc",
+    "despatch": "https://<musteri-servis-adresi>/ClientEDespatchServices/ClientEDespatchServicesPort.svc"
+  },
+  "envEndpointKeys": {
+    "invoice": {
+      "test": "SOVOS_INVOICE_ENDPOINT_TEST",
+      "live": "SOVOS_INVOICE_ENDPOINT_LIVE"
+    },
+    "archive": {
+      "test": "SOVOS_ARCHIVE_ENDPOINT_TEST",
+      "live": "SOVOS_ARCHIVE_ENDPOINT_LIVE"
+    },
+    "despatch": {
+      "test": "SOVOS_DESPATCH_ENDPOINT_TEST",
+      "live": "SOVOS_DESPATCH_ENDPOINT_LIVE"
+    }
+  },
+  "connectionTests": {
+    "invoice": {
+      "operation": "getRAWUserList",
+      "soapAction": "getRAWUserList",
+      "namespace": "http:/fitcons.com/eInvoice/",
+      "requestElement": "getRAWUserListRequest",
+      "responseElement": "getRAWUserListResponse",
+      "requestFields": [
+        "Identifier",
+        "VKN_TCKN",
+        "Role"
+      ]
+    },
+    "archive": {
+      "operation": "getUserList",
+      "soapAction": "getUserList",
+      "namespace": "http:/fitcons.com/earchive/getuserlist",
+      "requestElement": "getUserListRequest",
+      "responseElement": "getUserListResponse",
+      "requestFields": [
+        "vknTckn"
+      ]
+    },
+    "despatch": {
+      "operation": "getDesUserList",
+      "soapAction": "getDesUserList",
+      "namespace": "http://foriba.com/eDespatch/",
+      "requestElement": "getDesUserListRequest",
+      "responseElement": "getDesUserListResponse",
+      "requestFields": [
+        "Identifier",
+        "VKN_TCKN",
+        "Role"
+      ]
+    }
+  },
+  "archiveHash": {
+    "sendInvoice": "MD5",
+    "signedInvoice": "SHA-256",
+    "branchParam": "customizationParams/paramName=BRANCH"
+  }
+}

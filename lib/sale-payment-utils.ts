@@ -1,4 +1,5 @@
 import type { PaymentStatus } from "@prisma/client";
+import { validateCollectionAccount } from "@/lib/collection-account-utils";
 import { db } from "@/lib/prisma";
 
 type TransactionClient = Omit<
@@ -123,10 +124,26 @@ export async function recordSaleCollection(
     companyId: string;
     saleNo: string;
     amount: number;
-    paymentMethod: SalePaymentMethod;
-    accountId?: string;
+    accountId: string;
     collectedAt?: Date;
     note?: string;
+  },
+  options?: {
+    validateAccount?: (
+      account: {
+        id: string;
+        companyId: string;
+        type: string;
+        status: string;
+        name: string;
+        currency?: string;
+        bankName?: string | null;
+        iban?: string | null;
+      } | null,
+      companyId: string
+    ) =>
+      | { ok: true; account: NonNullable<typeof account> }
+      | { ok: false; message: string };
   }
 ) {
   const amount = roundMoney(input.amount);
@@ -135,30 +152,26 @@ export async function recordSaleCollection(
     return null;
   }
 
-  let account;
+  if (!input.accountId?.trim()) {
+    throw new Error("Tahsilat hesabı seçilmelidir.");
+  }
 
-  if (input.accountId) {
-    account = await tx.account.findFirst({
-      where: {
-        id: input.accountId,
-        companyId: input.companyId,
-        status: "ACTIVE",
-      },
-    });
+  const account = await tx.account.findFirst({
+    where: {
+      id: input.accountId,
+      companyId: input.companyId,
+    },
+  });
 
-    if (!account) {
-      throw new Error("Seçilen ödeme hesabı bulunamadı.");
-    }
-  } else {
-    account = await ensureCollectionAccount(
-      tx,
-      input.companyId,
-      input.paymentMethod
-    );
+  const validation = options?.validateAccount
+    ? options.validateAccount(account, input.companyId)
+    : validateCollectionAccount(account, input.companyId);
+  if (!validation.ok) {
+    throw new Error(validation.message);
   }
 
   await tx.account.update({
-    where: { id: account.id },
+    where: { id: validation.account.id },
     data: {
       balance: {
         increment: amount,
@@ -168,18 +181,18 @@ export async function recordSaleCollection(
 
   await tx.accountTransaction.create({
     data: {
-      accountId: account.id,
+      accountId: validation.account.id,
       type: "INCOME",
       title: `Satış Tahsilatı - ${input.saleNo}`,
       amount,
       date: input.collectedAt ?? new Date(),
       note:
         input.note ??
-        `${getPaymentMethodLabel(input.paymentMethod)} ile ${input.saleNo} numaralı satış tahsilatı.`,
+        `${validation.account.name} hesabına ${input.saleNo} numaralı satış tahsilatı.`,
     },
   });
 
-  return account;
+  return validation.account;
 }
 
 export function getCollectedAmount(total: number, paidAmount: number) {

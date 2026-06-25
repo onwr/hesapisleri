@@ -88,37 +88,6 @@ export async function POST(req: Request) {
       );
     }
 
-    const referenceCompanyId = auth.session.companyId;
-    const { getCompanyUsageSummary } = await import(
-      "@/lib/billing/usage/usage-query-service"
-    );
-    const { getResolvedLimit } = await import(
-      "@/lib/billing/entitlements/entitlement-resolution-service"
-    );
-    const usage = referenceCompanyId
-      ? await getCompanyUsageSummary(referenceCompanyId, {
-          userId: auth.session.userId,
-        })
-      : { MAX_COMPANIES: await db.companyUser.count({
-          where: { userId: auth.session.userId, status: "ACTIVE" },
-        }) };
-    if (referenceCompanyId) {
-      const limit = await getResolvedLimit(referenceCompanyId, "MAX_COMPANIES", {
-        userId: auth.session.userId,
-      });
-      if (limit && !limit.isUnlimited && limit.value != null && usage.MAX_COMPANIES != null) {
-        if (usage.MAX_COMPANIES >= limit.value) {
-          return NextResponse.json(
-            {
-              success: false,
-              message: `Firma limitine ulaşıldı (${usage.MAX_COMPANIES}/${limit.value}).`,
-            },
-            { status: 409 }
-          );
-        }
-      }
-    }
-
     const { company } = await createCompanyForUserInTransaction({
       userId: user.id,
       name: input.name,

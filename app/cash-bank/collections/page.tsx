@@ -35,7 +35,6 @@ export default async function CollectionsPage({
       <CollectionsPageClient
         items={data.items}
         summary={data.summary}
-        accounts={data.accounts}
         customers={data.customers}
         initialFilters={{
           search: params.q,

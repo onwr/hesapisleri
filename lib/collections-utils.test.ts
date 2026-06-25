@@ -243,11 +243,17 @@ describe("collections UI wiring", () => {
 
   it("sale collect modal ve API accountId", () => {
     const modal = read("components/sales/sale-collect-modal.tsx");
+    const select = read("components/cash-bank/collection-account-select.tsx");
     const api = read("app/api/sales/[id]/collect/route.ts");
 
     assert.match(modal, /accountId/);
-    assert.match(modal, /paymentDate/);
+    assert.match(modal, /useCollectionAccounts/);
+    assert.match(select, /Kasalar/);
+    assert.match(select, /Bankalar/);
+    assert.match(select, /COLLECTION_ACCOUNT_EMPTY_MESSAGE/);
+    assert.doesNotMatch(modal, /Nakit Kasa/);
     assert.match(api, /accountId/);
+    assert.match(api, /Tahsilat hesabı seçilmelidir/);
     assert.match(api, /COLLECT_VIA_INVOICE/);
   });
 

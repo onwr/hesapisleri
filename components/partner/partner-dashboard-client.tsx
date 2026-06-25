@@ -19,6 +19,7 @@ type DashboardData = {
   partner: {
     fullName: string;
     email: string;
+    phone?: string | null;
     referralCode: string;
     referralUrl: string;
     commissionRate: number;
@@ -28,17 +29,22 @@ type DashboardData = {
       iban: string | null;
       bankName: string | null;
       accountHolderName: string | null;
+      taxNumber?: string | null;
     };
   };
   metrics: {
     totalClicks: number;
+    uniqueClicks: number;
     monthClicks: number;
     signups: number;
+    monthSignups: number;
     paidCompanies: number;
+    monthPaidConversions: number;
     conversionRate: number;
     pendingEarnings: number;
     approvedEarnings: number;
     paidTotal: number;
+    totalEarnings: number;
     payableTotal: number;
     minimumPayoutAmount: number;
     remainingToMinPayout: number;
@@ -47,6 +53,10 @@ type DashboardData = {
   motivation: {
     monthClicksText: string;
     payoutText: string;
+    signupGoalProgress: number;
+    signupGoalTarget: number;
+    estimatedMonthlyEarnings: number;
+    partnerLevel: string;
   };
 };
 
@@ -61,6 +71,37 @@ const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "payouts", label: "Ödemeler" },
   { key: "profile", label: "Profil" },
 ];
+
+const profilePaymentFields = [
+  {
+    key: "accountHolderName" as const,
+    label: "Hesap sahibi adı",
+    placeholder: "Banka hesabındaki ad soyad",
+  },
+  {
+    key: "iban" as const,
+    label: "IBAN",
+    placeholder: "TR00 0000 0000 0000 0000 0000 00",
+  },
+  {
+    key: "bankName" as const,
+    label: "Banka adı",
+    placeholder: "Örn. Ziraat Bankası",
+  },
+  {
+    key: "taxNumber" as const,
+    label: "Vergi no / T.C. kimlik no",
+    placeholder: "Komisyon ödemesi için (isteğe bağlı)",
+  },
+  {
+    key: "phone" as const,
+    label: "İletişim telefonu",
+    placeholder: "05xx xxx xx xx",
+  },
+];
+
+const profileInputClass =
+  "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-[14px] text-[#0f1f4d] outline-none transition focus:border-[#0f1f4d] focus:ring-2 focus:ring-[#0f1f4d]/10";
 
 function formatDate(value: string | null) {
   if (!value) return "—";
@@ -104,11 +145,11 @@ export function PartnerDashboardClient() {
 
       setData(json.data);
       setProfileForm({
-        phone: "",
+        phone: json.data.partner.phone ?? "",
         iban: json.data.partner.payoutInfo.iban ?? "",
         bankName: json.data.partner.payoutInfo.bankName ?? "",
         accountHolderName: json.data.partner.payoutInfo.accountHolderName ?? "",
-        taxNumber: "",
+        taxNumber: json.data.partner.payoutInfo.taxNumber ?? "",
       });
     } catch {
       setError("Panel verileri yüklenirken bir hata oluştu.");
@@ -235,37 +276,88 @@ export function PartnerDashboardClient() {
           </button>
         </div>
         <p className="mt-3 text-[13px] text-slate-600">
-          Komisyon oranınız: %{partner.commissionRate} · {motivation.payoutText}
+          Kod: {partner.referralCode} · Komisyon: %{partner.commissionRate} ·{" "}
+          {motivation.payoutText}
         </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className={`${cardBase} border-slate-200/70 bg-slate-50/60`}>
+          <p className="text-[11px] font-bold uppercase text-slate-500">
+            Bu Ay Hedef
+          </p>
+          <p className="mt-2 text-[20px] font-extrabold text-[#0f1f4d]">
+            {metrics.monthSignups}/{motivation.signupGoalTarget} kayıt
+          </p>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
+            <div
+              className="h-full rounded-full bg-blue-600 transition-all"
+              style={{ width: `${motivation.signupGoalProgress}%` }}
+            />
+          </div>
+        </div>
+        <div className={`${cardBase} border-slate-200/70 bg-slate-50/60`}>
+          <p className="text-[11px] font-bold uppercase text-slate-500">
+            Tahmini Kazanç (Bu Ay)
+          </p>
+          <p className="mt-2 text-[20px] font-extrabold text-emerald-700">
+            {formatMoney(motivation.estimatedMonthlyEarnings)}
+          </p>
+        </div>
+        <div className={`${cardBase} border-slate-200/70 bg-slate-50/60`}>
+          <p className="text-[11px] font-bold uppercase text-slate-500">
+            Partner Seviyesi
+          </p>
+          <p className="mt-2 text-[20px] font-extrabold text-[#0f1f4d]">
+            {motivation.partnerLevel}
+          </p>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           title="Toplam Tıklama"
           value={metrics.totalClicks}
-          subtitle={`Bu ay ${metrics.monthClicks}`}
+          subtitle={`Tekil ${metrics.uniqueClicks} · Bu ay ${metrics.monthClicks}`}
           className="border-cyan-200 bg-cyan-50 text-cyan-800"
           icon={<MousePointerClick size={18} />}
         />
         <MetricCard
           title="Kayıt Sayısı"
           value={metrics.signups}
-          subtitle={`Dönüşüm %${metrics.conversionRate}`}
+          subtitle={`Bu ay ${metrics.monthSignups} · Dönüşüm %${metrics.conversionRate}`}
           className="border-violet-200 bg-violet-50 text-violet-800"
           icon={<TrendingUp size={18} />}
         />
         <MetricCard
-          title="Bekleyen Kazanç"
-          value={formatMoney(metrics.pendingEarnings + metrics.approvedEarnings)}
-          subtitle={formatMoney(metrics.payableTotal) + " ödenebilir"}
+          title="Ücretli Dönüşüm"
+          value={metrics.paidCompanies}
+          subtitle={`Bu ay ${metrics.monthPaidConversions}`}
+          className="border-indigo-200 bg-indigo-50 text-indigo-800"
+          icon={<TrendingUp size={18} />}
+        />
+        <MetricCard
+          title="Toplam Kazanç"
+          value={formatMoney(metrics.totalEarnings)}
+          subtitle={`Bekleyen ${formatMoney(metrics.pendingEarnings + metrics.approvedEarnings)}`}
           className="border-emerald-200 bg-emerald-50 text-emerald-800"
+          icon={<Wallet size={18} />}
+        />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <MetricCard
+          title="Onaylanan Kazanç"
+          value={formatMoney(metrics.approvedEarnings)}
+          subtitle={formatMoney(metrics.payableTotal) + " ödenebilir"}
+          className="border-emerald-200 bg-white text-emerald-800"
           icon={<Wallet size={18} />}
         />
         <MetricCard
           title="Ödenen Toplam"
           value={formatMoney(metrics.paidTotal)}
-          subtitle={`${metrics.paidCompanies} ödeme yapan firma`}
-          className="border-orange-200 bg-orange-50 text-orange-800"
+          subtitle={`Min. ödeme ${formatMoney(metrics.minimumPayoutAmount)}`}
+          className="border-orange-200 bg-white text-orange-800"
           icon={<Wallet size={18} />}
         />
       </div>
@@ -358,29 +450,39 @@ export function PartnerDashboardClient() {
           onSubmit={saveProfile}
           className={`${cardBase} space-y-4 border-slate-200/70 bg-white`}
         >
-          <h3 className="text-[16px] font-extrabold text-[#0f1f4d]">Ödeme Bilgileri</h3>
-          {(["iban", "bankName", "accountHolderName", "taxNumber", "phone"] as const).map(
-            (field) => (
-              <label key={field} className="block">
-                <span className="mb-1 block text-[12px] font-bold uppercase text-slate-400">
-                  {field}
-                </span>
-                <input
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-[14px]"
-                  value={profileForm[field]}
-                  onChange={(e) =>
-                    setProfileForm({ ...profileForm, [field]: e.target.value })
-                  }
-                />
-              </label>
-            )
-          )}
+          <div>
+            <h3 className="text-[16px] font-extrabold text-[#0f1f4d]">
+              Ödeme Bilgileri
+            </h3>
+            <p className="mt-1 text-[13px] leading-5 text-slate-500">
+              Komisyon ödemelerinin aktarılacağı banka hesabı ve iletişim
+              bilgilerinizi girin.
+            </p>
+          </div>
+
+          {profilePaymentFields.map((field) => (
+            <label key={field.key} className="block">
+              <span className="mb-1.5 block text-[12px] font-bold text-slate-500">
+                {field.label}
+              </span>
+              <input
+                className={profileInputClass}
+                value={profileForm[field.key]}
+                onChange={(e) =>
+                  setProfileForm({ ...profileForm, [field.key]: e.target.value })
+                }
+                placeholder={field.placeholder}
+                autoComplete={field.key === "iban" ? "off" : undefined}
+              />
+            </label>
+          ))}
+
           <button
             type="submit"
             disabled={savingProfile}
             className="rounded-2xl bg-[#0f1f4d] px-5 py-3 text-[14px] font-bold text-white disabled:opacity-60"
           >
-            {savingProfile ? "Kaydediliyor..." : "Kaydet"}
+            {savingProfile ? "Kaydediliyor..." : "Bilgileri Kaydet"}
           </button>
         </form>
       ) : null}

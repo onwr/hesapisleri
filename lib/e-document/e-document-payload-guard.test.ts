@@ -16,7 +16,7 @@ describe("e-document payload guard", () => {
           environment: "STAGE",
           username: "wsadminuser",
         } as never),
-      /eFinans bilgileri Trendyol/
+      /Sovos veya eFinans bilgileri Trendyol/
     );
   });
 
@@ -31,7 +31,36 @@ describe("e-document payload guard", () => {
           environment: "STAGE",
           email: "ornek@firma.com",
         } as never),
-      /Trendyol bilgileri eFinans/
+      /Trendyol veya Sovos bilgileri eFinans/
+    );
+  });
+
+  it("sovos alanlarını trendyol isteğinde reddeder", () => {
+    assert.throws(
+      () =>
+        assertEDocumentProviderPayloadIsolation({
+          provider: "TRENDYOL_EFATURAM",
+          companyId: "c1",
+          connectionMode: "DIRECT_ACCOUNT",
+          environment: "STAGE",
+          taxId: "1234567890",
+        } as never),
+      /Sovos veya eFinans bilgileri Trendyol/
+    );
+  });
+
+  it("trendyol alanlarını sovos isteğinde reddeder", () => {
+    assert.throws(
+      () =>
+        assertEDocumentProviderPayloadIsolation({
+          provider: "SOVOS",
+          companyId: "c1",
+          environment: "STAGE",
+          taxId: "1234567890",
+          useSameArchiveCredentials: true,
+          email: "ornek@firma.com",
+        } as never),
+      /Trendyol veya eFinans bilgileri Sovos/
     );
   });
 

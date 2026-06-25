@@ -1,9 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { Loader2, Wallet } from "lucide-react";
+import { CollectionAccountSelect } from "@/components/cash-bank/collection-account-select";
+import {
+  resolveDefaultCollectionAccountId,
+  type CollectionAccountOption,
+} from "@/lib/collection-account-utils";
 import { formatMoney } from "@/lib/invoice-form-utils";
 
 type OpenSale = {
@@ -17,9 +22,13 @@ type OpenSale = {
 
 type CustomerCollectPanelProps = {
   openSales: OpenSale[];
+  accounts: CollectionAccountOption[];
 };
 
-export function CustomerCollectPanel({ openSales }: CustomerCollectPanelProps) {
+export function CustomerCollectPanel({
+  openSales,
+  accounts,
+}: CustomerCollectPanelProps) {
   if (openSales.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center">
@@ -36,25 +45,40 @@ export function CustomerCollectPanel({ openSales }: CustomerCollectPanelProps) {
   return (
     <div className="space-y-3">
       {openSales.map((sale) => (
-        <CustomerSaleCollectCard key={sale.id} sale={sale} />
+        <CustomerSaleCollectCard key={sale.id} sale={sale} accounts={accounts} />
       ))}
     </div>
   );
 }
 
-function CustomerSaleCollectCard({ sale }: { sale: OpenSale }) {
+function CustomerSaleCollectCard({
+  sale,
+  accounts,
+}: {
+  sale: OpenSale;
+  accounts: CollectionAccountOption[];
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [amount, setAmount] = useState(sale.remainingAmount.toFixed(2));
-  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "BANK">("CASH");
+  const [accountId, setAccountId] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setAccountId(resolveDefaultCollectionAccountId(accounts));
+  }, [accounts]);
 
   function handleCollect() {
     setMessage(null);
     setError(null);
 
     const parsedAmount = Number(amount);
+
+    if (!accountId) {
+      setError("Tahsilat hesabı seçin.");
+      return;
+    }
 
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
       setError("Geçerli bir tahsilat tutarı girin.");
@@ -70,7 +94,7 @@ function CustomerSaleCollectCard({ sale }: { sale: OpenSale }) {
           },
           body: JSON.stringify({
             amount: parsedAmount,
-            paymentMethod,
+            accountId,
           }),
         });
 
@@ -113,7 +137,7 @@ function CustomerSaleCollectCard({ sale }: { sale: OpenSale }) {
         </span>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-[1fr_160px_auto]">
+      <div className="grid gap-3 md:grid-cols-[1fr_200px_auto]">
         <div>
           <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-slate-500">
             Tahsil tutarı
@@ -130,25 +154,22 @@ function CustomerSaleCollectCard({ sale }: { sale: OpenSale }) {
 
         <div>
           <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-slate-500">
-            Hesap
+            Tahsilat hesabı
           </label>
-          <select
-            value={paymentMethod}
-            onChange={(event) =>
-              setPaymentMethod(event.target.value as "CASH" | "BANK")
-            }
+          <CollectionAccountSelect
+            accounts={accounts}
+            value={accountId}
+            onChange={setAccountId}
+            disabled={isPending}
             className="h-10 w-full rounded-xl border border-orange-200 bg-white px-3 text-[13px] font-bold text-[#0f1f4d] outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-100"
-          >
-            <option value="CASH">Nakit Kasa</option>
-            <option value="BANK">Banka / Havale</option>
-          </select>
+          />
         </div>
 
         <div className="flex items-end">
           <button
             type="button"
             onClick={handleCollect}
-            disabled={isPending}
+            disabled={isPending || accounts.length === 0}
             className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-orange-600 px-4 text-[12px] font-black text-white disabled:opacity-60"
           >
             {isPending ? <Loader2 size={15} className="animate-spin" /> : null}

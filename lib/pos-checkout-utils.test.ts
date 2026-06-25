@@ -3,8 +3,9 @@ import { describe, it } from "node:test";
 import {
   buildPosSaleItemTotal,
   calculatePosTotals,
-  mapPosPaymentMethodToCollectionMethod,
   posRequiresCollectionAccount,
+  sumPosPaymentAmounts,
+  validatePosCheckoutPayments,
 } from "./pos-checkout-utils";
 import { getCustomerDebtDelta as getDebt } from "./customer-balance-utils";
 import { resolveSalePayment } from "./sale-payment-utils";
@@ -30,13 +31,16 @@ describe("pos checkout utils", () => {
     assert.equal(totals.total, 0);
   });
 
-  it("nakit ve kart tahsilatı kasa hesabına gider", () => {
-    assert.equal(mapPosPaymentMethodToCollectionMethod("CASH"), "CASH");
-    assert.equal(mapPosPaymentMethodToCollectionMethod("CARD"), "CASH");
+  it("PAID satışta ödeme satırları toplamı kontrol edilir", () => {
     assert.equal(
-      mapPosPaymentMethodToCollectionMethod("BANK_TRANSFER"),
-      "BANK"
+      validatePosCheckoutPayments({
+        payments: [{ paymentMethod: "CASH", amount: 120, accountId: "cash-1" }],
+        paymentStatus: "PAID",
+        total: 120,
+      }),
+      null
     );
+    assert.equal(sumPosPaymentAmounts([{ amount: 120 }]), 120);
   });
 
   it("PAID satışta tahsilat hesabı gerekir", () => {

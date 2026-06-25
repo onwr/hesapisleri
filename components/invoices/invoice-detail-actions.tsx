@@ -5,13 +5,6 @@ import { useState } from "react";
 import { Loader2, Trash2, Wallet } from "lucide-react";
 import { InvoiceCollectModal } from "@/components/invoices/invoice-collect-modal";
 
-type AccountOption = {
-  id: string;
-  name: string;
-  type: string;
-  balance: number;
-};
-
 type InvoiceDetailActionsProps = {
   invoiceId: string;
   invoiceNo: string;
@@ -20,7 +13,6 @@ type InvoiceDetailActionsProps = {
   remainingAmount: number;
   canCollect: boolean;
   canCancel: boolean;
-  accounts: AccountOption[];
 };
 
 export function InvoiceDetailActions({
@@ -31,7 +23,6 @@ export function InvoiceDetailActions({
   remainingAmount,
   canCollect,
   canCancel,
-  accounts,
 }: InvoiceDetailActionsProps) {
   const router = useRouter();
   const [collectOpen, setCollectOpen] = useState(false);
@@ -119,7 +110,6 @@ export function InvoiceDetailActions({
           total={total}
           paidAmount={paidAmount}
           remainingAmount={remainingAmount}
-          accounts={accounts}
         />
       ) : null}
     </>

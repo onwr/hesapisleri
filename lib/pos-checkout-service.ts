@@ -2,10 +2,7 @@ import { db } from "@/lib/prisma";
 import { invalidateDashboardCache } from "@/lib/dashboard-cache-invalidation";
 import { createNotification } from "@/lib/notification-service";
 import { applyCustomerDebtFromDocument } from "@/lib/customer-balance-utils";
-import {
-  recordSaleCollection,
-  resolveSalePayment,
-} from "@/lib/sale-payment-utils";
+import { recordSaleCollection, resolveSalePayment } from "@/lib/sale-payment-utils";
 import type { StockWarningItem } from "@/lib/stock-policy";
 import {
   SaleStockValidationError,
@@ -18,12 +15,11 @@ import {
   buildPosSaleNote,
   calculatePosTotals,
   generatePosSaleNo,
-  mapPosPaymentMethodToCollectionMethod,
   type PosCheckoutInput,
 } from "@/lib/pos-checkout-utils";
+import { validatePosPaymentAccount } from "@/lib/pos-payment-account-utils";
 import { validateSaleLineItems } from "@/lib/sale-calculation-utils";
 import { assertOptionalTenantCustomer } from "@/lib/tenant/tenant-resource";
-import { TenantNotFoundError } from "@/lib/tenant/tenant-errors";
 
 export { SaleStockValidationError };
 
@@ -83,7 +79,7 @@ export async function executePosCheckout(input: {
         paymentStatus: payment.paymentStatus,
         paidAmount: payment.paidAmount,
         note: buildPosSaleNote({
-          paymentMethod: data.paymentMethod,
+          payments: data.payments,
           paymentStatus: payment.paymentStatus,
           note: data.note,
         }),
@@ -102,6 +98,17 @@ export async function executePosCheckout(input: {
       include: {
         items: true,
         customer: true,
+        payments: {
+          include: {
+            account: {
+              select: {
+                id: true,
+                name: true,
+                type: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -114,19 +121,113 @@ export async function executePosCheckout(input: {
     );
 
     if (payment.paidAmount > 0) {
-      await recordSaleCollection(tx, {
-        companyId,
-        saleNo: createdSale.saleNo,
-        amount: payment.paidAmount,
-        paymentMethod: mapPosPaymentMethodToCollectionMethod(
-          data.paymentMethod
-        ),
-        accountId: data.accountId,
-        note:
-          payment.paymentStatus === "PARTIAL"
-            ? `${createdSale.saleNo} numaralı POS satışı için kısmi tahsilat.`
-            : `${createdSale.saleNo} numaralı POS satış tahsilatı.`,
+      for (const paymentLine of data.payments) {
+        const account = await tx.account.findFirst({
+          where: {
+            id: paymentLine.accountId,
+            companyId,
+          },
+        });
+
+        const validation = validatePosPaymentAccount(
+          account,
+          companyId,
+          paymentLine.paymentMethod
+        );
+
+        if (!validation.ok) {
+          throw new Error(validation.message);
+        }
+
+        await tx.salePayment.create({
+          data: {
+            companyId,
+            saleId: createdSale.id,
+            accountId: validation.account.id,
+            paymentMethod: paymentLine.paymentMethod,
+            amount: paymentLine.amount,
+          },
+        });
+
+        await recordSaleCollection(
+          tx,
+          {
+            companyId,
+            saleNo: createdSale.saleNo,
+            amount: paymentLine.amount,
+            accountId: validation.account.id,
+            note: `${getPosPaymentCollectionNote(paymentLine.paymentMethod)} · ${validation.account.name} · ${createdSale.saleNo}`,
+          },
+          {
+            validateAccount: (selectedAccount, tenantId) =>
+              validatePosPaymentAccount(
+                selectedAccount,
+                tenantId,
+                paymentLine.paymentMethod
+              ),
+          }
+        );
+      }
+
+      const saleWithPayments = await tx.sale.findUniqueOrThrow({
+        where: { id: createdSale.id },
+        include: {
+          items: true,
+          customer: true,
+          payments: {
+            include: {
+              account: {
+                select: {
+                  id: true,
+                  name: true,
+                  type: true,
+                },
+              },
+            },
+          },
+        },
       });
+
+      await applyCustomerDebtFromDocument(
+        tx,
+        companyId,
+        data.customerId || null,
+        totals.total,
+        payment.paidAmount
+      );
+
+      const stockWarningNote =
+        stockWarnings.length > 0
+          ? ` (${stockWarnings.length} kalemde stok uyarısı)`
+          : "";
+
+      await tx.activityLog.create({
+        data: {
+          companyId,
+          userId,
+          action: "CREATE",
+          module: "pos",
+          message: `${saleWithPayments.saleNo} numaralı POS satışı oluşturuldu.${stockWarningNote}`,
+        },
+      });
+
+      await createNotification(
+        {
+          companyId,
+          userId,
+          type: "SUCCESS",
+          category: "SALES",
+          module: "pos",
+          entityType: "SALE",
+          entityId: saleWithPayments.id,
+          actionUrl: `/sales/${saleWithPayments.id}`,
+          title: "POS satışı tamamlandı",
+          message: `${saleWithPayments.saleNo} numaralı hızlı satış başarıyla tamamlandı.`,
+        },
+        tx
+      );
+
+      return saleWithPayments;
     }
 
     await applyCustomerDebtFromDocument(
@@ -174,4 +275,10 @@ export async function executePosCheckout(input: {
   invalidateDashboardCache(companyId, "pos-checkout");
 
   return { sale, stockWarnings };
+}
+
+function getPosPaymentCollectionNote(method: PosCheckoutInput["payments"][number]["paymentMethod"]) {
+  if (method === "CASH") return "Nakit tahsilat";
+  if (method === "CARD") return "Kart tahsilat";
+  return "Havale/EFT tahsilat";
 }

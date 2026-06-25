@@ -114,7 +114,21 @@ async function cleanupDemoData() {
   });
 
   if (demoCompany) {
-    await db.company.delete({ where: { id: demoCompany.id } });
+    const companyId = demoCompany.id;
+
+    await db.$transaction(async (tx) => {
+      // WarehouseTransferItem.productId FK has no onDelete cascade.
+      await tx.warehouseTransferItem.deleteMany({
+        where: { transfer: { companyId } },
+      });
+
+      await tx.warehouseTransfer.deleteMany({
+        where: { companyId },
+      });
+
+      await tx.company.delete({ where: { id: companyId } });
+    });
+
     console.log("Eski demo firma verisi temizlendi.");
   }
 
@@ -720,7 +734,6 @@ async function createCompletedSale(
         companyId: ctx.companyId,
         saleNo,
         amount: payment.paidAmount,
-        paymentMethod: input.paymentMethod ?? "CASH",
         accountId: input.accountId ?? ctx.cashAccountId,
       });
     }
@@ -956,6 +969,9 @@ async function seedSalesAndInvoices(ctx: DemoContext) {
       userId: index % 2 === 0 ? ctx.ownerUserId : ctx.staffUserId,
       order: {
         ...orderSeed,
+        externalOrderId: orderSeed.externalOrderId
+          ? `${orderSeed.externalOrderId}-${index + 1}`
+          : undefined,
         shippedAt: orderSeed.shippedAt ?? (orderSeed.orderStatus === "SHIPPING" || orderSeed.orderStatus === "DELIVERED" ? daysAgo(4) : undefined),
         deliveredAt: orderSeed.deliveredAt ?? (orderSeed.orderStatus === "DELIVERED" ? daysAgo(1) : undefined),
       },

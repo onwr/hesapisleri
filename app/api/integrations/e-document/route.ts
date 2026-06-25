@@ -38,6 +38,24 @@ const upsertSchema = z.discriminatedUnion("provider", [
     .strict(),
   z
     .object({
+      provider: z.literal("SOVOS"),
+      environment: z.enum(["STAGE", "LIVE"]).default("STAGE"),
+      externalCompanyCode: z.string().trim().optional().nullable(),
+      taxId: z.string().trim().min(10).max(11),
+      invoiceUsername: z.string().trim().optional(),
+      invoicePassword: z.string().optional(),
+      useSameArchiveCredentials: z.boolean().default(true),
+      archiveUsername: z.string().trim().optional(),
+      archivePassword: z.string().optional(),
+      senderIdentifier: z.string().trim().optional().nullable(),
+      receiverIdentifier: z.string().trim().optional().nullable(),
+      branchCode: z.string().trim().optional().nullable(),
+      invoiceSeries: z.string().trim().optional().nullable(),
+      archiveSeries: z.string().trim().optional().nullable(),
+    })
+    .strict(),
+  z
+    .object({
       provider: z.literal("OTHER"),
     })
     .strict(),
@@ -94,9 +112,11 @@ export async function PATCH(req: Request) {
     const message =
       parsed.data.provider === "EFINANS"
         ? "eFinans ayarları kaydedildi. API entegrasyonu henüz hazır değil."
-        : parsed.data.provider === "TRENDYOL_EFATURAM"
-          ? "Trendyol E-Faturam bağlantısı kaydedildi."
-          : "Sağlayıcı seçimi kaydedildi.";
+        : parsed.data.provider === "SOVOS"
+          ? "Sovos servis sözleşmesi hazırlanıyor; ayarlar kaydedildi."
+          : parsed.data.provider === "TRENDYOL_EFATURAM"
+            ? "Trendyol E-Faturam bağlantısı kaydedildi."
+            : "Sağlayıcı seçimi kaydedildi.";
 
     return NextResponse.json({ success: true, data: summary, message });
   } catch (error) {

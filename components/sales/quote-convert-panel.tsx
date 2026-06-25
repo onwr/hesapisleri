@@ -8,7 +8,10 @@ import {
   CreditCard,
   Loader2,
 } from "lucide-react";
+import { CollectionAccountSelect } from "@/components/cash-bank/collection-account-select";
 import { WarehouseSelectField } from "@/components/shared/warehouse-select-field";
+import { useCollectionAccounts } from "@/hooks/use-collection-accounts";
+import { resolveDefaultCollectionAccountId } from "@/lib/collection-account-utils";
 import { formatMoney } from "@/lib/format-utils";
 
 type QuoteConvertPanelProps = {
@@ -25,12 +28,13 @@ export function QuoteConvertPanel({
   defaultOpen = false,
 }: QuoteConvertPanelProps) {
   const router = useRouter();
+  const { accounts, loading: accountsLoading } = useCollectionAccounts();
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [paymentStatus, setPaymentStatus] = useState<
     "UNPAID" | "PAID" | "PARTIAL"
   >("UNPAID");
   const [collectedAmountInput, setCollectedAmountInput] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "BANK">("CASH");
+  const [accountId, setAccountId] = useState("");
   const [warehouses, setWarehouses] = useState<
     Array<{ id: string; name: string; code?: string | null; isDefault?: boolean }>
   >([]);
@@ -39,6 +43,16 @@ export function QuoteConvertPanel({
   const [selectedWarehouseId, setSelectedWarehouseId] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (accountsLoading) return;
+
+    setAccountId((current) =>
+      current && accounts.some((account) => account.id === current)
+        ? current
+        : resolveDefaultCollectionAccountId(accounts)
+    );
+  }, [accounts, accountsLoading]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -95,6 +109,11 @@ export function QuoteConvertPanel({
       }
     }
 
+    if (paymentStatus !== "UNPAID" && !accountId) {
+      setError("Tahsilat hesabı seçin.");
+      return;
+    }
+
     const confirmed = window.confirm(
       `${saleNo} numaralı teklifi satışa dönüştürmek istediğinize emin misiniz? Bu işlem stok düşer ve cari bakiyeyi etkiler.`
     );
@@ -120,7 +139,7 @@ export function QuoteConvertPanel({
                 : paymentStatus === "UNPAID"
                   ? 0
                   : collectedAmount,
-            paymentMethod,
+            accountId: paymentStatus === "UNPAID" ? undefined : accountId,
           }),
         });
 
@@ -283,16 +302,17 @@ export function QuoteConvertPanel({
             <CreditCard size={14} />
             Tahsilat Hesabı
           </label>
-          <select
-            value={paymentMethod}
-            onChange={(event) =>
-              setPaymentMethod(event.target.value as "CASH" | "BANK")
-            }
-            className="mt-2 h-11 w-full rounded-xl border border-slate-200 px-4 text-[12px] font-bold text-slate-950 outline-none focus:border-emerald-200 focus:ring-4 focus:ring-emerald-50"
-          >
-            <option value="CASH">Nakit Kasa</option>
-            <option value="BANK">Banka / Havale</option>
-          </select>
+          <div className="mt-2">
+            <CollectionAccountSelect
+              accounts={accounts}
+              loading={accountsLoading}
+              value={accountId}
+              onChange={setAccountId}
+              disabled={isPending || accountsLoading}
+              required
+              className="h-11 w-full rounded-xl border border-slate-200 px-4 text-[12px] font-bold text-slate-950 outline-none focus:border-emerald-200 focus:ring-4 focus:ring-emerald-50"
+            />
+          </div>
         </div>
       ) : null}
 
@@ -305,7 +325,10 @@ export function QuoteConvertPanel({
       <button
         type="button"
         onClick={() => void handleConvert()}
-        disabled={isPending}
+        disabled={
+          isPending ||
+          (paymentStatus !== "UNPAID" && accounts.length === 0)
+        }
         className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-linear-to-r from-emerald-500 to-green-600 text-sm font-black text-white shadow-lg shadow-emerald-100 transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:px-8"
       >
         {isPending ? <Loader2 className="animate-spin" size={18} /> : null}

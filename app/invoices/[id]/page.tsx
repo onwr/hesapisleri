@@ -22,7 +22,6 @@ import {
 } from "@/lib/invoice-detail-utils";
 import { formatMoney } from "@/lib/invoice-form-utils";
 import {
-  getInvoiceCollectionAccounts,
   getInvoiceDetailForPage,
 } from "@/lib/invoice-service";
 import {
@@ -61,9 +60,8 @@ const { id } = await params;
 
   if (!invoice) notFound();
 
-  const [detail, accounts, eDocument, documentSubmission] = await Promise.all([
+  const [detail, eDocument, documentSubmission] = await Promise.all([
     getInvoiceDetailForPage(company.id, id),
-    getInvoiceCollectionAccounts(company.id),
     getEDocumentIntegrationSummary(company.id),
     db.invoiceDocumentSubmission.findFirst({
       where: { companyId: company.id, invoiceId: id },
@@ -178,7 +176,6 @@ const { id } = await params;
                 remainingAmount={detail.remainingAmount}
                 canCollect={detail.canCollect}
                 canCancel={detail.canCancel}
-                accounts={accounts}
               />
             </div>
           </div>
@@ -218,6 +215,11 @@ const { id } = await params;
             invoiceId={invoice.id}
             customerTaxNo={invoice.customer?.taxNo}
             integrationConnected={
+              eDocument.provider === "TRENDYOL_EFATURAM" &&
+              eDocument.status === "CONNECTED"
+            }
+            previewEnabled={eDocument.hasCredentials}
+            submitEnabled={
               eDocument.provider === "TRENDYOL_EFATURAM" &&
               eDocument.status === "CONNECTED"
             }

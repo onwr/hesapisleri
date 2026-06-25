@@ -10,6 +10,7 @@ const cdnHostname = (() => {
 })();
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ["libxmljs2"],
   images: {
     remotePatterns: [
       {

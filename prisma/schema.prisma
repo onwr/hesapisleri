@@ -100,6 +100,7 @@ enum EfaturamConnectionMode {
 enum EDocumentProvider {
   TRENDYOL_EFATURAM
   EFINANS
+  SOVOS
   OTHER
 }
 
@@ -110,6 +111,7 @@ enum EfaturamEnvironment {
 
 enum EfaturamIntegrationStatus {
   DISCONNECTED
+  PARTIALLY_CONNECTED
   CONNECTED
   ERROR
 }
@@ -171,6 +173,12 @@ enum FinancialSnapshotStatus {
   NEEDS_REVIEW
 }
 
+enum EDocumentSnapshotStatus {
+  PREVIEW
+  READY
+  LOCKED
+}
+
 enum StockMovementType {
   IN
   OUT
@@ -200,6 +208,12 @@ enum AccountType {
   CREDIT_CARD
   POS
   OTHER
+}
+
+enum PosPaymentMethod {
+  CASH
+  CARD
+  BANK_TRANSFER
 }
 
 enum TransactionType {
@@ -572,7 +586,8 @@ model User {
   consents           UserConsent[]
   companyUsers       CompanyUser[]
   sentInvites        CompanyInvite[]     @relation("SentInvites")
-  sales              Sale[]
+  sales              Sale[]              @relation("SaleCreatedBy")
+  cancelledSales     Sale[]              @relation("SaleCancelledBy")
   expenses           Expense[]
   notifications      Notification[]
   activityLogs       ActivityLog[]
@@ -580,6 +595,8 @@ model User {
   calendarEvents     CalendarEvent[]
   directoryContacts  DirectoryContact[]  @relation("DirectoryContactCreator")
   createdSuppliers   Supplier[]          @relation("SupplierCreator")
+  aiConversations    AIConversation[]
+  aiUsageLogs        AIUsageLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -617,6 +634,7 @@ model Company {
   products                   Product[]
   categories                 ProductCategory[]
   sales                      Sale[]
+  salePayments               SalePayment[]
   invoices                   Invoice[]
   expenses                   Expense[]
   expenseCategories          ExpenseCategory[]
@@ -638,8 +656,10 @@ model Company {
   marketplaceIntegrations    MarketplaceIntegration[]
   marketplaceSyncRuns        MarketplaceSyncRun[]
   productChannelMappings     ProductChannelMapping[]
-  efaturamIntegration        EfaturamIntegration?
-  invoiceDocumentSubmissions InvoiceDocumentSubmission[]
+  efaturamIntegration              EfaturamIntegration?
+  invoiceDocumentSubmissions       InvoiceDocumentSubmission[]
+  eDocumentTaxpayerLookupCaches    EDocumentTaxpayerLookupCache[]
+  eDocumentGibUserListCache        EDocumentGibUserListCache?
   calendarEvents             CalendarEvent[]
   employees                  Employee[]
   employeeSalaries           EmployeeSalary[]
@@ -664,6 +684,10 @@ model Company {
   usagePeriods               UsagePeriod[]
   usageEvents                UsageEvent[]
   usageCredits               CompanyUsageCredit[]
+  aiSettings                 CompanyAISettings?
+  aiConversations            AIConversation[]
+  aiUsageLogs                AIUsageLog[]
+  aiInsightCaches            AIInsightCache[]
 
   referringPartnerId String?
   referringPartner   PartnerProfile? @relation("ReferredCompanies", fields: [referringPartnerId], references: [id], onDelete: SetNull)
@@ -1132,7 +1156,7 @@ model Sale {
   customer   Customer? @relation(fields: [customerId], references: [id])
 
   userId String?
-  user   User?   @relation(fields: [userId], references: [id])
+  user   User?   @relation("SaleCreatedBy", fields: [userId], references: [id])
 
   saleNo   String  @unique
   subtotal Decimal @default(0)
@@ -1157,8 +1181,17 @@ model Sale {
   warehouseId String?
   warehouse   Warehouse? @relation(fields: [warehouseId], references: [id])
 
-  items   SaleItem[]
-  invoice Invoice?
+  saleDate DateTime @default(now())
+
+  cancelledAt       DateTime?
+  cancelledByUserId String?
+  cancelledByUser   User?     @relation("SaleCancelledBy", fields: [cancelledByUserId], references: [id])
+  cancelReason      String?
+  cancelNote        String?
+
+  items    SaleItem[]
+  payments SalePayment[]
+  invoice  Invoice?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1169,6 +1202,7 @@ model Sale {
   @@index([companyId, orderStatus])
   @@index([companyId, sourceChannel])
   @@index([companyId, createdAt])
+  @@index([companyId, saleDate])
 }
 
 model SaleItem {
@@ -1190,6 +1224,28 @@ model SaleItem {
   total     Decimal
 
   createdAt DateTime @default(now())
+}
+
+model SalePayment {
+  id String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  saleId String
+  sale   Sale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  paymentMethod PosPaymentMethod
+  amount        Decimal
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId])
+  @@index([saleId])
+  @@index([accountId])
 }
 
 model MarketplaceIntegration {
@@ -1261,6 +1317,7 @@ model ProductChannelMapping {
   @@index([productId])
 }
 
+/// Provider-agnostic e-document integration (legacy table name preserved).
 model EfaturamIntegration {
   id                   String                    @id @default(cuid())
   companyId            String                    @unique
@@ -1271,13 +1328,24 @@ model EfaturamIntegration {
   prefix               String?
   xsltCode             String?
   externalCompanyCode  String?
+  taxId                String?
+  senderIdentifier     String?
+  receiverIdentifier   String?
+  branchCode           String?
+  invoiceSeries        String?
+  archiveSeries        String?
+  capabilities         Json?
   providerCompanyId    String?
   providerUserId       String?
   partnerCustomerId    String?
   credentialsEncrypted String?
   tokenExpiresAt       DateTime?
   lastError            String?
+  lastErrorCode        String?
+  lastErrorMessage     String?
   lastConnectedAt      DateTime?
+  lastTestedAt         DateTime?
+  lastSuccessfulAt     DateTime?
   createdAt            DateTime                  @default(now())
   updatedAt            DateTime                  @updatedAt
 
@@ -1319,6 +1387,40 @@ model InvoiceDocumentSubmission {
   @@index([providerInvoiceUuid])
 }
 
+/// Sovos/GİB mükellef listesi senkron cache (getRAWUserList / getPartialUserList).
+model EDocumentGibUserListCache {
+  id             String   @id @default(cuid())
+  companyId      String   @unique
+  syncOperation  String
+  userIndex      Json
+  syncedAt       DateTime
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([expiresAt])
+}
+
+/// Tenant + taxId bazlı kısa süreli mükellef sorgu cache.
+model EDocumentTaxpayerLookupCache {
+  id        String   @id @default(cuid())
+  companyId String
+  taxId     String
+  result    Json
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, taxId])
+  @@index([companyId])
+  @@index([expiresAt])
+}
+
 model Invoice {
   id String @id @default(cuid())
 
@@ -1348,6 +1450,16 @@ model Invoice {
   gibMessage String?
   pdfUrl     String?
   xmlUrl     String?
+
+  sellerSnapshot         Json?
+  buyerSnapshot          Json?
+  lineSnapshots          Json?
+  internetSaleSnapshot   Json?
+  financialSnapshot      Json?
+  eDocumentSnapshotAt    DateTime?
+  eDocumentSnapshotStatus EDocumentSnapshotStatus?
+  eDocumentRevisionHash  String?
+  eDocumentSnapshotHash  String?
 
   dueDate   DateTime?
   createdAt DateTime  @default(now())
@@ -1466,6 +1578,7 @@ model Account {
   transactions     AccountTransaction[]
   expenses         Expense[]
   employeePayments EmployeePayment[]    @relation("EmployeePaymentAccount")
+  salePayments     SalePayment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3042,4 +3155,120 @@ model PartnerSettings {
   termsText              String?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
+}
+
+model CompanyAISettings {
+  id        String  @id @default(cuid())
+  companyId String  @unique
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  enabled               Boolean @default(true)
+  provider              String  @default("openai")
+  model                 String?
+  defaultLanguage       String  @default("tr")
+  maxResponseTokens     Int     @default(800)
+  monthlyCostWarningUsd Decimal? @db.Decimal(10, 4)
+  readOnlyMode          Boolean @default(true)
+  requireUserApproval   Boolean @default(true)
+  autoDisableOnCostExceeded Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AIConversation {
+  id        String @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title    String?
+  provider String?
+  model    String?
+
+  messages        AIMessage[]
+  usageLogs       AIUsageLog[]
+  toolExecutions  AIToolExecution[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, userId])
+  @@index([userId, updatedAt])
+}
+
+model AIMessage {
+  id             String         @id @default(cuid())
+  conversationId String
+  conversation   AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  role              String
+  content           String
+  structuredContent Json?
+  sourceModules     String[] @default([])
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+model AIUsageLog {
+  id             String          @id @default(cuid())
+  companyId      String
+  company        Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversationId String?
+  conversation   AIConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  provider         String
+  model            String
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  totalTokens      Int      @default(0)
+  estimatedCostUsd Decimal? @db.Decimal(10, 6)
+  durationMs       Int      @default(0)
+  toolNames        String[] @default([])
+  success          Boolean  @default(true)
+  errorCode        String?
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model AIToolExecution {
+  id             String         @id @default(cuid())
+  conversationId String
+  conversation   AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  toolName   String
+  inputHash  String?
+  success    Boolean @default(true)
+  durationMs Int     @default(0)
+  errorCode  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+model AIInsightCache {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  cacheKey  String
+  content   Json
+  provider  String?
+  model     String?
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, cacheKey])
+  @@index([expiresAt])
 }

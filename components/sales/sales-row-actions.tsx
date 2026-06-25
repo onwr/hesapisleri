@@ -19,7 +19,7 @@ import {
   toCollectPaymentTarget,
   type CollectPaymentTarget,
 } from "@/components/collections/collect-payment-dialog";
-import type { CollectionAccountOption } from "@/components/sales/sale-collect-modal";
+import { SaleCancelDialog } from "@/components/sales/sale-cancel-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,16 +31,16 @@ import type { SalesRowActionData } from "@/lib/sales-page-utils";
 
 type SalesRowActionsProps = {
   row: SalesRowActionData;
-  accounts: CollectionAccountOption[];
 };
 
-export function SalesRowActions({ row, accounts }: SalesRowActionsProps) {
+export function SalesRowActions({ row }: SalesRowActionsProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [collectTarget, setCollectTarget] = useState<CollectPaymentTarget | null>(
     null
   );
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
 
   function handleDownload() {
     if (row.pdfUrl) {
@@ -84,7 +84,22 @@ export function SalesRowActions({ row, accounts }: SalesRowActionsProps) {
     }
   }
 
-  async function handleCancel() {
+  function handleCancel() {
+    if (row.isQuote) {
+      void handleQuoteOrInvoiceCancel();
+      return;
+    }
+
+    if (row.sourceType === "sale") {
+      setMessage(null);
+      setCancelDialogOpen(true);
+      return;
+    }
+
+    void handleQuoteOrInvoiceCancel();
+  }
+
+  async function handleQuoteOrInvoiceCancel() {
     const confirmed = window.confirm(
       `${row.documentNo} numaralı kaydı iptal etmek istediğinize emin misiniz?`
     );
@@ -97,9 +112,7 @@ export function SalesRowActions({ row, accounts }: SalesRowActionsProps) {
       ? `/api/sales/${row.sourceId}/cancel-quote`
       : row.sourceType === "invoice"
         ? `/api/invoices/${row.sourceId}`
-        : row.sourceType === "sale"
-          ? `/api/sales/${row.sourceId}`
-          : null;
+        : null;
 
     const method = row.isQuote ? "POST" : "PATCH";
     const body = row.isQuote
@@ -315,9 +328,20 @@ export function SalesRowActions({ row, accounts }: SalesRowActionsProps) {
 
       <CollectPaymentDialog
         target={collectTarget}
-        accounts={accounts}
         onClose={() => setCollectTarget(null)}
       />
+
+      {row.sourceType === "sale" && row.saleId ? (
+        <SaleCancelDialog
+          saleId={row.saleId}
+          saleNo={row.documentNo}
+          open={cancelDialogOpen}
+          onOpenChange={setCancelDialogOpen}
+          onSuccess={() => {
+            router.refresh();
+          }}
+        />
+      ) : null}
     </>
   );
 }

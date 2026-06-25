@@ -129,10 +129,9 @@ describe("assistant permissions", () => {
 
 describe("assistant API integration", () => {
   it("chat handler auth ve validasyon içerir", () => {
-    const handlers = read("lib/assistant-api-handlers.ts");
+    const handlers = read("lib/ai/ai-api-handlers.ts");
     assert.match(handlers, /requireApiModuleAccess\("ai-assistant"\)/);
-    assert.match(handlers, /assistantChatBodySchema/);
-    assert.match(handlers, /status: 503/);
+    assert.match(handlers, /chatSchema/);
     assert.match(handlers, /status: 400/);
   });
 
@@ -146,7 +145,7 @@ describe("assistant API integration", () => {
 describe("assistant UI integration", () => {
   it("chat panel API endpoint kullanır", () => {
     const panel = read("components/ai-assistant/ai-assistant-chat-panel.tsx");
-    assert.match(panel, /\/api\/assistant\/chat/);
+    assert.match(panel, /\/api\/ai\/chat/);
     assert.match(panel, /Lütfen bir mesaj yazın/);
     assert.match(panel, /Tekrar dene/);
     assert.match(panel, /Tam ekran/);

@@ -5,7 +5,6 @@ import { db } from "@/lib/prisma";
 import {
   recordSaleCollection,
   resolveSalePayment,
-  type SalePaymentMethod,
 } from "@/lib/sale-payment-utils";
 import {
   applyCustomerCollection,
@@ -44,7 +43,7 @@ const createSaleSchema = z.object({
   paymentStatus: z.enum(["PAID", "UNPAID", "PARTIAL"]).default("PAID"),
   collectedAmount: z.number().min(0).optional(),
   paidAmount: z.number().min(0).optional(),
-  paymentMethod: z.enum(["CASH", "BANK"]).default("CASH"),
+  accountId: z.string().trim().min(1).optional(),
   note: z.string().optional(),
   discount: z.number().min(0).default(0),
   discountType: z.enum(["AMOUNT", "PERCENT"]).optional(),
@@ -73,7 +72,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { customerId, note, items, paymentMethod, paymentStatus, warehouseId } =
+    const { customerId, note, items, paymentStatus, warehouseId, accountId } =
       parsed.data;
 
     const lineError = validateSaleLineItems(items);
@@ -122,6 +121,13 @@ export async function POST(req: Request) {
               ? error.message
               : "Ödeme bilgileri geçersiz.",
         },
+        { status: 400 }
+      );
+    }
+
+    if (payment.paidAmount > 0 && !accountId) {
+      return NextResponse.json(
+        { success: false, message: "Tahsilat hesabı seçilmelidir." },
         { status: 400 }
       );
     }
@@ -194,7 +200,7 @@ export async function POST(req: Request) {
           companyId: tenant.companyId,
           saleNo: createdSale.saleNo,
           amount: payment.paidAmount,
-          paymentMethod: paymentMethod as SalePaymentMethod,
+          accountId: accountId!,
           note:
             payment.paymentStatus === "PARTIAL"
               ? `${createdSale.saleNo} numaralı satış için kısmi tahsilat.`

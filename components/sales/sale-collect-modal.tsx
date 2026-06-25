@@ -4,15 +4,13 @@ import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, Wallet, X } from "lucide-react";
+import { CollectionAccountSelect } from "@/components/cash-bank/collection-account-select";
+import { useCollectionAccounts } from "@/hooks/use-collection-accounts";
+import { resolveDefaultCollectionAccountId } from "@/lib/collection-account-utils";
 import { formatInvoiceMoney } from "@/lib/invoices-page-utils";
 import { previewSalePaymentStatus } from "@/lib/collections-utils";
 
-export type CollectionAccountOption = {
-  id: string;
-  name: string;
-  type: string;
-  balance: number;
-};
+export type { CollectionAccountOption } from "@/lib/collection-account-utils";
 
 type SaleCollectModalProps = {
   open: boolean;
@@ -22,7 +20,6 @@ type SaleCollectModalProps = {
   total: number;
   paidAmount: number;
   remainingAmount: number;
-  accounts: CollectionAccountOption[];
   invoiceRedirectHint?: boolean;
   invoiceId?: string | null;
   onOpenInvoiceCollect?: (invoiceId: string) => void;
@@ -36,12 +33,12 @@ export function SaleCollectModal({
   total,
   paidAmount,
   remainingAmount,
-  accounts,
   invoiceRedirectHint = false,
   invoiceId,
   onOpenInvoiceCollect,
 }: SaleCollectModalProps) {
   const router = useRouter();
+  const { accounts, loading: accountsLoading } = useCollectionAccounts();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [accountId, setAccountId] = useState("");
@@ -49,21 +46,26 @@ export function SaleCollectModal({
   const [collectedAt, setCollectedAt] = useState(
     new Date().toISOString().split("T")[0]
   );
-  const [method, setMethod] = useState<"CASH" | "BANK" | "CARD" | "TRANSFER">(
-    "CASH"
-  );
   const [note, setNote] = useState("");
 
   useEffect(() => {
-    if (open) {
-      setAccountId(accounts[0]?.id ?? "");
-      setAmount(remainingAmount.toFixed(2));
-      setCollectedAt(new Date().toISOString().split("T")[0]);
-      setMethod("CASH");
-      setNote("");
-      setError("");
-    }
-  }, [open, accounts, remainingAmount]);
+    if (!open) return;
+
+    setAmount(remainingAmount.toFixed(2));
+    setCollectedAt(new Date().toISOString().split("T")[0]);
+    setNote("");
+    setError("");
+  }, [open, remainingAmount]);
+
+  useEffect(() => {
+    if (!open || accountsLoading) return;
+
+    setAccountId((current) =>
+      current && accounts.some((account) => account.id === current)
+        ? current
+        : resolveDefaultCollectionAccountId(accounts)
+    );
+  }, [open, accounts, accountsLoading]);
 
   const parsedAmount = Number(amount);
   const selectedAccount = useMemo(
@@ -100,7 +102,7 @@ export function SaleCollectModal({
     }
 
     if (!accountId) {
-      setError("Ödeme hesabı seçin.");
+      setError("Tahsilat hesabı seçin.");
       setSaving(false);
       return;
     }
@@ -127,7 +129,6 @@ export function SaleCollectModal({
           accountId,
           amount: parsedAmount,
           paymentDate: collectedAt,
-          method,
           note: note.trim() || undefined,
         }),
       });
@@ -157,6 +158,13 @@ export function SaleCollectModal({
   if (!open) {
     return null;
   }
+
+  const canSubmit =
+    invoiceRedirectHint ||
+    (!saving &&
+      !accountsLoading &&
+      accounts.length > 0 &&
+      Boolean(accountId));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4">
@@ -211,41 +219,16 @@ export function SaleCollectModal({
                 />
               </Field>
 
-              <Field label="Ödeme Hesabı" required>
-                <select
+              <Field label="Tahsilat Hesabı" required>
+                <CollectionAccountSelect
+                  accounts={accounts}
+                  loading={accountsLoading}
                   value={accountId}
-                  onChange={(event) => setAccountId(event.target.value)}
+                  onChange={setAccountId}
                   required
+                  disabled={saving || accountsLoading}
                   className={inputClass}
-                >
-                  <option value="">Hesap seçin</option>
-                  {accounts.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name} ({formatInvoiceMoney(account.balance)})
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label="Ödeme Yöntemi" required>
-                <select
-                  value={method}
-                  onChange={(event) =>
-                    setMethod(
-                      event.target.value as
-                        | "CASH"
-                        | "BANK"
-                        | "CARD"
-                        | "TRANSFER"
-                    )
-                  }
-                  className={inputClass}
-                >
-                  <option value="CASH">Nakit</option>
-                  <option value="BANK">Banka / Havale</option>
-                  <option value="CARD">Kart</option>
-                  <option value="TRANSFER">Transfer</option>
-                </select>
+                />
               </Field>
 
               {projectedBalance !== null ? (
@@ -300,7 +283,7 @@ export function SaleCollectModal({
           <div className="flex gap-3 pt-1">
             <button
               type="submit"
-              disabled={saving || (!invoiceRedirectHint && accounts.length === 0)}
+              disabled={!canSubmit}
               className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-linear-to-r from-blue-600 to-violet-600 text-[13px] font-black text-white disabled:opacity-60"
             >
               {saving ? (

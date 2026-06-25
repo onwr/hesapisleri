@@ -2,31 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { InvoiceCollectModal } from "@/components/invoices/invoice-collect-modal";
-import {
-  SaleCollectModal,
-  type CollectionAccountOption,
-} from "@/components/sales/sale-collect-modal";
+import { SaleCollectModal } from "@/components/sales/sale-collect-modal";
+import type { CollectPaymentTarget } from "@/components/collections/collect-payment-dialog.types";
 
-export type CollectPaymentTarget = {
-  type: "SALE" | "INVOICE";
-  id: string;
-  documentNo: string;
-  total: number;
-  paidAmount: number;
-  remainingAmount: number;
-  viaInvoice?: boolean;
-  linkedInvoiceId?: string | null;
-};
+export type { CollectPaymentTarget } from "@/components/collections/collect-payment-dialog.types";
 
 type CollectPaymentDialogProps = {
   target: CollectPaymentTarget | null;
-  accounts: CollectionAccountOption[];
   onClose: () => void;
 };
 
 export function CollectPaymentDialog({
   target,
-  accounts,
   onClose,
 }: CollectPaymentDialogProps) {
   const [activeTarget, setActiveTarget] = useState<CollectPaymentTarget | null>(
@@ -71,7 +58,6 @@ export function CollectPaymentDialog({
         total={activeTarget.total}
         paidAmount={activeTarget.paidAmount}
         remainingAmount={activeTarget.remainingAmount}
-        accounts={accounts}
       />
     );
   }
@@ -85,7 +71,6 @@ export function CollectPaymentDialog({
       total={activeTarget.total}
       paidAmount={activeTarget.paidAmount}
       remainingAmount={activeTarget.remainingAmount}
-      accounts={accounts}
       invoiceRedirectHint={activeTarget.viaInvoice}
       invoiceId={activeTarget.linkedInvoiceId}
       onOpenInvoiceCollect={(invoiceId) => {

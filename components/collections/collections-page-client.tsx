@@ -23,7 +23,6 @@ import {
   toCollectPaymentTarget,
   type CollectPaymentTarget,
 } from "@/components/collections/collect-payment-dialog";
-import type { CollectionAccountOption } from "@/components/sales/sale-collect-modal";
 import {
   buildCollectionsQuery,
   parseDateParam,
@@ -46,7 +45,6 @@ type CustomerOption = {
 type CollectionsPageClientProps = {
   items: PendingCollectionItem[];
   summary: PendingCollectionsSummary;
-  accounts: CollectionAccountOption[];
   customers: CustomerOption[];
   initialFilters: {
     search?: string;
@@ -104,7 +102,6 @@ const AVATAR_COLORS = [
 export function CollectionsPageClient({
   items,
   summary,
-  accounts,
   customers,
   initialFilters,
 }: CollectionsPageClientProps) {
@@ -712,7 +709,6 @@ export function CollectionsPageClient({
 
       <CollectPaymentDialog
         target={collectTarget}
-        accounts={accounts}
         onClose={() => setCollectTarget(null)}
       />
     </div>

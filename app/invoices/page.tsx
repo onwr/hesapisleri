@@ -18,8 +18,8 @@ import {
   InvoicesTableToolbar,
 } from "@/components/invoices/invoices-table-controls";
 import { InvoicesSidebarWidgets } from "@/components/invoices/invoices-sidebar-widgets";
+import { AiPageTriggerButton } from "@/components/ai-assistant/ai-page-trigger-button";
 import { endOfMonth, startOfMonth } from "@/lib/dashboard-metrics";
-import { getInvoiceCollectionAccounts } from "@/lib/invoice-service";
 import { getInvoicesPageData } from "@/lib/invoices-page-data";
 import {
   buildInvoicesQuery,
@@ -103,8 +103,6 @@ const now = new Date();
     q: searchQuery,
   });
 
-  const collectionAccounts = await getInvoiceCollectionAccounts(company.id);
-
   const hasFilters =
     Boolean(searchQuery) ||
     activeTab !== "all" ||
@@ -114,6 +112,10 @@ const now = new Date();
   return (
     <AppShell>
       <div className="space-y-5">
+        <div className="flex justify-end">
+          <AiPageTriggerButton moduleKey="invoices" />
+        </div>
+
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           {actionCards.map((card) => {
             const Icon = actionIconMap[card.iconKey];
@@ -269,10 +271,7 @@ const now = new Date();
                       </td>
 
                       <td className="px-2 py-2.5">
-                        <InvoicesRowActions
-                          row={mapInvoiceRowActions(invoice)}
-                          accounts={collectionAccounts}
-                        />
+                        <InvoicesRowActions row={mapInvoiceRowActions(invoice)} />
                       </td>
                     </tr>
                   ))}

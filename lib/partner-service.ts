@@ -21,6 +21,7 @@ import {
   getEarningStatusLabel,
   hashPartnerIp,
   normalizePartnerEmail,
+  PARTNER_MONTHLY_SIGNUP_GOAL,
   partnerApplicationSchema,
   rejectPartnerApplicationSchema,
   sanitizeReferralCode,
@@ -45,6 +46,34 @@ export async function resolvePartnerForUser(userId: string, email: string) {
   });
 }
 
+export type PublicReferralSignupInfo = {
+  referralCode: string;
+  partnerName: string | null;
+};
+
+export async function resolvePublicReferralSignupInfo(
+  code: string
+): Promise<PublicReferralSignupInfo | null> {
+  const referralCode = sanitizeReferralCode(code);
+  if (!referralCode) return null;
+
+  const partner = await db.partnerProfile.findFirst({
+    where: {
+      referralCode,
+      status: "ACTIVE",
+    },
+    select: {
+      fullName: true,
+      referralCode: true,
+    },
+  });
+
+  return {
+    referralCode: partner?.referralCode ?? referralCode,
+    partnerName: partner?.fullName ?? null,
+  };
+}
+
 function serializePartner(partner: {
   id: string;
   fullName: string;
@@ -58,6 +87,7 @@ function serializePartner(partner: {
   iban: string | null;
   bankName: string | null;
   accountHolderName: string | null;
+  taxNumber?: string | null;
 }) {
   return {
     id: partner.id,
@@ -74,6 +104,7 @@ function serializePartner(partner: {
       iban: partner.iban,
       bankName: partner.bankName,
       accountHolderName: partner.accountHolderName,
+      taxNumber: partner.taxNumber ?? null,
     },
   };
 }
@@ -331,16 +362,29 @@ export async function getPartnerDashboardStats(partnerId: string) {
   const [
     totalClicks,
     monthClicks,
+    uniqueIpGroups,
+    clicksWithoutIp,
     signups,
+    monthSignups,
     paidCompanies,
+    monthPaidConversions,
     pendingEarnings,
     approvedEarnings,
     paidEarnings,
     payableEarnings,
+    monthEarnings,
+    monthConversionCommission,
   ] = await Promise.all([
     db.partnerReferralClick.count({ where: { partnerId } }),
     db.partnerReferralClick.count({
       where: { partnerId, clickedAt: { gte: start } },
+    }),
+    db.partnerReferralClick.groupBy({
+      by: ["ipHash"],
+      where: { partnerId, ipHash: { not: null } },
+    }),
+    db.partnerReferralClick.count({
+      where: { partnerId, ipHash: null },
     }),
     db.partnerConversion.count({
       where: { partnerId, type: "SIGNUP", status: { not: "CANCELLED" } },
@@ -348,8 +392,24 @@ export async function getPartnerDashboardStats(partnerId: string) {
     db.partnerConversion.count({
       where: {
         partnerId,
+        type: "SIGNUP",
+        status: { not: "CANCELLED" },
+        occurredAt: { gte: start },
+      },
+    }),
+    db.partnerConversion.count({
+      where: {
+        partnerId,
         type: { in: ["PAID_MEMBERSHIP", "RENEWAL"] },
         status: { not: "CANCELLED" },
+      },
+    }),
+    db.partnerConversion.count({
+      where: {
+        partnerId,
+        type: { in: ["PAID_MEMBERSHIP", "RENEWAL"] },
+        status: { not: "CANCELLED" },
+        occurredAt: { gte: start },
       },
     }),
     db.partnerEarning.aggregate({
@@ -371,37 +431,75 @@ export async function getPartnerDashboardStats(partnerId: string) {
       },
       _sum: { amount: true },
     }),
+    db.partnerEarning.aggregate({
+      where: {
+        partnerId,
+        createdAt: { gte: start },
+        amount: { gt: 0 },
+      },
+      _sum: { amount: true },
+    }),
+    db.partnerConversion.aggregate({
+      where: {
+        partnerId,
+        occurredAt: { gte: start },
+        status: { not: "CANCELLED" },
+        type: { in: ["PAID_MEMBERSHIP", "RENEWAL"] },
+      },
+      _sum: { commissionAmount: true },
+    }),
   ]);
+
+  const uniqueClicks = uniqueIpGroups.length + clicksWithoutIp;
 
   const pendingTotal = Number(pendingEarnings._sum.amount ?? 0);
   const approvedTotal = Number(approvedEarnings._sum.amount ?? 0);
   const paidTotal = Number(paidEarnings._sum.amount ?? 0);
   const payableTotal = Number(payableEarnings._sum.amount ?? 0);
+  const monthEarningsTotal = Number(monthEarnings._sum.amount ?? 0);
+  const monthCommissionTotal = Number(
+    monthConversionCommission._sum.commissionAmount ?? 0
+  );
+  const totalEarnings = pendingTotal + approvedTotal + paidTotal;
   const minPayout = Number(settings.minimumPayoutAmount);
   const remainingToMin = Math.max(0, minPayout - payableTotal);
+  const estimatedMonthlyEarnings =
+    monthEarningsTotal > 0 ? monthEarningsTotal : monthCommissionTotal;
+  const signupGoalProgress = Math.min(
+    100,
+    Math.round((monthSignups / PARTNER_MONTHLY_SIGNUP_GOAL) * 100)
+  );
 
   return {
     partner: serializePartner(partner),
     metrics: {
       totalClicks,
+      uniqueClicks,
       monthClicks,
       signups,
+      monthSignups,
       paidCompanies,
+      monthPaidConversions,
       conversionRate: calculateConversionRate(totalClicks, signups),
       pendingEarnings: pendingTotal,
       approvedEarnings: approvedTotal,
       paidTotal,
+      totalEarnings,
       payableTotal,
       minimumPayoutAmount: minPayout,
       remainingToMinPayout: remainingToMin,
       canRequestPayout: payableTotal >= minPayout,
     },
     motivation: {
-      monthClicksText: `Bu ay ${monthClicks} tıklama aldınız`,
+      monthClicksText: `Bu ay ${monthClicks} tıklama · ${monthSignups} kayıt · ${monthPaidConversions} dönüşüm`,
       payoutText:
         remainingToMin > 0
           ? `İlk ödemenize ₺${remainingToMin.toLocaleString("tr-TR")} kaldı`
           : "Ödeme talebi için yeterli bakiyeniz var",
+      signupGoalProgress,
+      signupGoalTarget: PARTNER_MONTHLY_SIGNUP_GOAL,
+      estimatedMonthlyEarnings,
+      partnerLevel: getBadgeTypeLabel(partner.badgeType),
     },
   };
 }

@@ -20,9 +20,10 @@ export default function RootLayout({
   children: ReactNode;
 }>) {
   return (
-    <html lang="tr" className={`${plusJakarta.variable} h-full`}>
+    <html lang="tr" className={`${plusJakarta.variable} h-full`} suppressHydrationWarning>
       <body
         className={`${plusJakarta.variable} min-h-full font-sans antialiased`}
+        suppressHydrationWarning
       >
         {children}
       </body>

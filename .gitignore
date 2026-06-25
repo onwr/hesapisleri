@@ -41,3 +41,8 @@ yarn-error.log*
 next-env.d.ts
 
 /lib/generated/prisma
+
+# Sovos private docs & credentials (never commit)
+/docs/private/sovos/*
+!/docs/private/sovos/README.md
+

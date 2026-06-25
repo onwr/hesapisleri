@@ -66,6 +66,26 @@ describe("entitlement-errors", () => {
   });
 });
 
+describe("entitlement operational unlimited policy", () => {
+  it("operational enforcement is disabled for plan limits and features", async () => {
+    const { isOperationalLimitEnforcementEnabled } = await import(
+      "./entitlement-operational-policy"
+    );
+    const { checkCompanyLimit, checkCompanyFeature } = await import(
+      "./entitlement-enforcement-service"
+    );
+
+    assert.equal(isOperationalLimitEnforcementEnabled("MAX_WAREHOUSES"), false);
+    assert.equal(await checkCompanyFeature("c1", "E_DOCUMENT"), true);
+
+    const limit = await checkCompanyLimit("c1", "MAX_WAREHOUSES", {
+      incrementBy: 5,
+    });
+    assert.equal(limit.allowed, true);
+    assert.equal(limit.canCreate, true);
+  });
+});
+
 describe("entitlement-resolution registry metadata", () => {
   it("metered limits use MONTHLY reset", () => {
     assert.equal(getEntitlementMeta("MONTHLY_OCR_SCANS")?.metered, true);

@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { roundMoney } from "@/lib/sale-payment-utils";
-import type { SalePaymentMethod } from "@/lib/sale-payment-utils";
 import {
   calculateSaleTotals,
   type SaleLineItemInput,
@@ -17,17 +16,42 @@ export const posItemSchema = z.object({
   vatRate: z.number().min(0).max(100).default(20),
 });
 
-export const posCheckoutSchema = z.object({
-  customerId: z.string().optional(),
-  warehouseId: z.string().optional(),
-  paymentMethod: z.enum(["CASH", "CARD", "BANK_TRANSFER"]).default("CASH"),
-  paymentStatus: z.enum(["PAID", "UNPAID", "PARTIAL"]).default("PAID"),
-  collectedAmount: z.number().min(0).optional(),
-  discount: z.number().min(0).default(0),
-  accountId: z.string().optional(),
-  note: z.string().optional(),
-  items: z.array(posItemSchema).min(1, "En az bir ürün ekleyin."),
+export const posPaymentLineSchema = z.object({
+  paymentMethod: z.enum(["CASH", "CARD", "BANK_TRANSFER"]),
+  amount: z.number().positive("Ödeme tutarı sıfırdan büyük olmalıdır."),
+  accountId: z.string().min(1, "Tahsilat hesabı seçilmelidir."),
 });
+
+export type PosPaymentLineInput = z.infer<typeof posPaymentLineSchema>;
+
+export const posCheckoutSchema = z
+  .object({
+    customerId: z.string().optional(),
+    warehouseId: z.string().optional(),
+    paymentStatus: z.enum(["PAID", "UNPAID", "PARTIAL"]).default("PAID"),
+    collectedAmount: z.number().min(0).optional(),
+    discount: z.number().min(0).default(0),
+    note: z.string().optional(),
+    items: z.array(posItemSchema).min(1, "En az bir ürün ekleyin."),
+    payments: z.array(posPaymentLineSchema).default([]),
+  })
+  .superRefine((data, ctx) => {
+    const totals = calculatePosTotals(data.items, data.discount);
+    const paymentError = validatePosCheckoutPayments({
+      payments: data.payments,
+      paymentStatus: data.paymentStatus,
+      total: totals.total,
+      collectedAmount: data.collectedAmount,
+    });
+
+    if (paymentError) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: paymentError,
+        path: ["payments"],
+      });
+    }
+  });
 
 export type PosCheckoutInput = z.infer<typeof posCheckoutSchema>;
 
@@ -63,10 +87,47 @@ export function calculatePosTotals(
   };
 }
 
-export function mapPosPaymentMethodToCollectionMethod(
-  method: PosPaymentMethod
-): SalePaymentMethod {
-  return method === "BANK_TRANSFER" ? "BANK" : "CASH";
+export function sumPosPaymentAmounts(payments: Array<{ amount: number }>) {
+  return roundMoney(
+    payments.reduce((sum, payment) => sum + payment.amount, 0)
+  );
+}
+
+export function validatePosCheckoutPayments(input: {
+  payments: PosPaymentLineInput[];
+  paymentStatus: PosPaymentStatus;
+  total: number;
+  collectedAmount?: number;
+}) {
+  const total = roundMoney(input.total);
+
+  if (input.paymentStatus === "UNPAID") {
+    if (input.payments.length > 0) {
+      return "Ödenmemiş satışta tahsilat satırı gönderilemez.";
+    }
+    return null;
+  }
+
+  if (input.payments.length === 0) {
+    return "Tahsilat için en az bir ödeme satırı ve hesap seçimi gerekir.";
+  }
+
+  const expectedPaid =
+    input.paymentStatus === "PARTIAL"
+      ? roundMoney(input.collectedAmount ?? 0)
+      : total;
+
+  if (expectedPaid <= 0) {
+    return "Kısmi ödeme için tahsil edilen tutar sıfırdan büyük olmalıdır.";
+  }
+
+  const paidTotal = sumPosPaymentAmounts(input.payments);
+
+  if (paidTotal !== expectedPaid) {
+    return `Ödeme satırlarının toplamı (${paidTotal}) beklenen tahsilat tutarına (${expectedPaid}) eşit olmalıdır.`;
+  }
+
+  return null;
 }
 
 export function getPosPaymentMethodLabel(method: PosPaymentMethod) {
@@ -96,11 +157,19 @@ export function buildPosSaleItemTotal(item: PosCartItemInput) {
 }
 
 export function buildPosSaleNote(input: {
-  paymentMethod: PosPaymentMethod;
+  payments: PosPaymentLineInput[];
   paymentStatus: PosPaymentStatus;
   note?: string;
 }) {
-  const paymentText = getPosPaymentMethodLabel(input.paymentMethod);
+  const methodLabels = [
+    ...new Set(
+      input.payments.map((payment) =>
+        getPosPaymentMethodLabel(payment.paymentMethod)
+      )
+    ),
+  ];
+  const paymentText =
+    methodLabels.length > 0 ? methodLabels.join(" + ") : "Ödeme yok";
   const statusText = getPosPaymentStatusLabel(input.paymentStatus);
   const base = `POS hızlı satış - ${paymentText} (${statusText})`;
 

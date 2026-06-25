@@ -3,8 +3,15 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Loader2, Plus } from "lucide-react";
+import { FinanceAccountSelect } from "@/components/cash-bank/finance-account-select";
 import { TEAM_CARD_CLASS } from "@/components/team/team-ui-tokens";
 import { buildEmployeePaymentTransactionHref } from "@/lib/employee-payment-finance-utils";
+import {
+  EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_LINK_LABEL,
+  EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_MESSAGE,
+  type FinanceAccountOption,
+} from "@/lib/finance-account-utils";
+import { useFinanceAccounts } from "@/hooks/use-finance-accounts";
 import {
   formatEmployeeLedgerBalanceLabel,
   getEmployeeLedgerBalanceTone,
@@ -17,6 +24,7 @@ type LedgerActionType =
   | "SALARY_ACCRUAL"
   | "SALARY_PAYMENT"
   | "ADVANCE"
+  | "BONUS"
   | "DEDUCTION"
   | "ADJUSTMENT";
 
@@ -26,12 +34,13 @@ type EmployeeLedgerTabProps = {
   onReloadEmployee: () => Promise<void>;
 };
 
-type AccountOption = { id: string; name: string; type: string };
+type AccountOption = FinanceAccountOption;
 
 const ACTION_LABELS: Record<LedgerActionType, string> = {
   SALARY_ACCRUAL: "Maaş Tahakkuk Et",
   SALARY_PAYMENT: "Ödeme Yap",
   ADVANCE: "Avans Ver",
+  BONUS: "Prim Öde",
   DEDUCTION: "Kesinti Ekle",
   ADJUSTMENT: "Düzeltme Ekle",
 };
@@ -53,6 +62,8 @@ export function EmployeeLedgerTab({
   const [description, setDescription] = useState("");
   const [direction, setDirection] = useState<"DEBIT" | "CREDIT">("DEBIT");
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
+  const { accounts: financeAccounts, loading: financeAccountsLoading } =
+    useFinanceAccounts();
 
   async function loadLedger() {
     setLoading(true);
@@ -68,21 +79,19 @@ export function EmployeeLedgerTab({
     }
   }
 
+  const needsAccount =
+    modalType === "SALARY_PAYMENT" ||
+    modalType === "ADVANCE" ||
+    modalType === "BONUS";
+
   useEffect(() => {
     void loadLedger();
   }, [employeeId]);
 
   useEffect(() => {
-    if (!canProcessPayments || !modalType) return;
-
-    fetch("/api/cash-bank/accounts/options")
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.success && Array.isArray(json.data)) {
-          setAccounts(json.data);
-        }
-      });
-  }, [canProcessPayments, modalType]);
+    if (!canProcessPayments || !modalType || !needsAccount) return;
+    setAccounts(financeAccounts);
+  }, [canProcessPayments, modalType, needsAccount, financeAccounts]);
 
   function openModal(type: LedgerActionType) {
     setModalType(type);
@@ -96,6 +105,11 @@ export function EmployeeLedgerTab({
 
   async function submitMovement() {
     if (!modalType) return;
+    if (needsAccount && !accountId.trim()) {
+      setError("Ödeme hesabı seçilmelidir.");
+      return;
+    }
+
     setSaving(true);
     setError("");
 
@@ -107,7 +121,7 @@ export function EmployeeLedgerTab({
           type: modalType,
           amount: Number(amount),
           date,
-          accountId: accountId || undefined,
+          accountId: needsAccount ? accountId : undefined,
           description: description || undefined,
           direction: modalType === "ADJUSTMENT" ? direction : undefined,
         }),
@@ -134,9 +148,6 @@ export function EmployeeLedgerTab({
       : balanceTone === "credit"
         ? "text-amber-700 bg-amber-50 ring-amber-100"
         : "text-slate-700 bg-slate-50 ring-slate-200";
-
-  const needsAccount =
-    modalType === "SALARY_PAYMENT" || modalType === "ADVANCE";
 
   return (
     <div className="space-y-4">
@@ -273,23 +284,16 @@ export function EmployeeLedgerTab({
               </label>
 
               {needsAccount ? (
-                <label className="block space-y-1">
-                  <span className="text-xs font-bold text-slate-500">
-                    Kasa / Banka Hesabı
-                  </span>
-                  <select
-                    value={accountId}
-                    onChange={(event) => setAccountId(event.target.value)}
-                    className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold"
-                  >
-                    <option value="">Hesap seçin</option>
-                    {accounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <FinanceAccountSelect
+                  accounts={accounts}
+                  value={accountId}
+                  onChange={setAccountId}
+                  disabled={financeAccountsLoading}
+                  required
+                  emptyMessage={EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_MESSAGE}
+                  emptyLinkLabel={EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_LINK_LABEL}
+                  className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold"
+                />
               ) : null}
 
               {modalType === "ADJUSTMENT" ? (

@@ -67,7 +67,7 @@ export function DashboardAiAssistantPanel({
     setAssistantReply(null);
 
     try {
-      const response = await fetch("/api/assistant/chat", {
+      const response = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

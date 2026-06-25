@@ -56,6 +56,10 @@ import {
   salaryAmountChanged,
 } from "@/lib/employee-salary-utils";
 import { getEmployeePerformanceDetail } from "@/lib/employee-performance-service";
+import {
+  getFinanceAccountTypeLabel,
+  validateFinanceAccount,
+} from "@/lib/finance-account-utils";
 
 export class EmployeeServiceError extends Error {
   status: number;
@@ -68,6 +72,28 @@ export class EmployeeServiceError extends Error {
 }
 
 type DbClient = Prisma.TransactionClient | typeof db;
+
+async function assertFinancePaymentAccount(
+  client: DbClient,
+  companyId: string,
+  accountId: string,
+  paymentCurrency: string
+) {
+  const account = await client.account.findFirst({
+    where: { id: accountId, companyId },
+  });
+
+  const validation = validateFinanceAccount(account, companyId, {
+    purpose: "disbursement",
+    paymentCurrency,
+  });
+
+  if (!validation.ok) {
+    throw new EmployeeServiceError(validation.message);
+  }
+
+  return validation.account;
+}
 
 const employeeInclude = {
   companyUser: {
@@ -85,6 +111,16 @@ const employeeInclude = {
   },
   payments: {
     orderBy: { createdAt: "desc" as const },
+    include: {
+      relatedAccount: {
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          currency: true,
+        },
+      },
+    },
   },
   leaveRequests: {
     orderBy: { startAt: "desc" as const },
@@ -206,8 +242,18 @@ function serializePayment(
     relatedAccountId: string | null;
     relatedTransactionId: string | null;
     createdAt: Date;
-  }
+    createdByUserId?: string | null;
+    relatedAccount?: {
+      id: string;
+      name: string;
+      type: string;
+      currency: string;
+    } | null;
+  },
+  options?: { createdByName?: string | null }
 ) {
+  const account = payment.relatedAccount;
+
   return {
     id: payment.id,
     type: payment.type,
@@ -222,6 +268,19 @@ function serializePayment(
     relatedExpenseId: payment.relatedExpenseId,
     relatedAccountId: payment.relatedAccountId,
     relatedTransactionId: payment.relatedTransactionId,
+    paymentAccount: account
+      ? {
+          id: account.id,
+          name: account.name,
+          type: account.type,
+          typeLabel: getFinanceAccountTypeLabel(account.type),
+          currency: account.currency,
+        }
+      : null,
+    paymentMethodLabel: account
+      ? getFinanceAccountTypeLabel(account.type)
+      : null,
+    createdByName: options?.createdByName ?? null,
     createdAt: payment.createdAt.toISOString(),
   };
 }
@@ -283,7 +342,11 @@ export function serializeEmployee(
     payments?: Array<Parameters<typeof serializePayment>[0]>;
     leaveRequests?: Array<Parameters<typeof serializeLeave>[0]>;
   },
-  options?: { includeSensitive?: boolean; companyId?: string }
+  options?: {
+    includeSensitive?: boolean;
+    companyId?: string;
+    paymentCreatorNames?: Map<string, string>;
+  }
 ) {
   const activeSalary = employee.salaryRecords?.find((s) => s.isActive);
   const balance = calculateEmployeeBalance(employee.payments ?? []);
@@ -385,7 +448,13 @@ export function serializeEmployee(
     createdAt: employee.createdAt.toISOString(),
     updatedAt: employee.updatedAt.toISOString(),
     salaryRecords: employee.salaryRecords?.map(serializeSalary),
-    payments: employee.payments?.map(serializePayment),
+    payments: employee.payments?.map((payment) =>
+      serializePayment(payment, {
+        createdByName: payment.createdByUserId
+          ? (options?.paymentCreatorNames?.get(payment.createdByUserId) ?? null)
+          : null,
+      })
+    ),
     leaveRequests: employee.leaveRequests?.map(serializeLeave),
   };
 }
@@ -1088,6 +1157,17 @@ export async function createEmployeeLedgerMovement(input: {
     };
   }
 
+  if (!input.accountId?.trim()) {
+    throw new EmployeeServiceError("Ödeme hesabı seçilmelidir.");
+  }
+
+  const account = await assertFinancePaymentAccount(
+    db,
+    input.companyId,
+    input.accountId.trim(),
+    "TRY"
+  );
+
   const paymentType: EmployeePaymentType =
     input.type === "ADVANCE"
       ? "ADVANCE"
@@ -1095,63 +1175,78 @@ export async function createEmployeeLedgerMovement(input: {
         ? "BONUS"
         : "SALARY";
 
-  if (!input.accountId?.trim()) {
-    throw new EmployeeServiceError("Ödeme için kasa/banka hesabı seçilmelidir.");
-  }
+  const paymentDescription =
+    input.description ??
+    (paymentType === "ADVANCE"
+      ? "Personel avansı"
+      : paymentType === "BONUS"
+        ? "Prim / ek ödeme"
+        : "Çalışan ödemesi");
 
-  const account = await db.account.findFirst({
-    where: {
-      id: input.accountId,
+  const paid = await db.$transaction(async (tx) => {
+    const created = await tx.employeePayment.create({
+      data: {
+        companyId: input.companyId,
+        employeeId: input.employeeId,
+        type: paymentType,
+        direction: "PAYABLE",
+        amount: input.amount,
+        currency: "TRY",
+        dueDate: movementDate,
+        status: "PENDING",
+        description: paymentDescription,
+        relatedAccountId: account.id,
+        createdByUserId: input.actorUserId,
+      },
+    });
+
+    await logEmployeeActivity(tx, {
       companyId: input.companyId,
-      status: "ACTIVE",
-    },
-  });
+      userId: input.actorUserId,
+      action: "PAYMENT",
+      message: `${displayName} için ${paymentType} kaydı oluşturuldu.`,
+    });
 
-  if (!account) {
-    throw new EmployeeServiceError("Seçilen hesap bulunamadı veya pasif.");
-  }
-
-  const payment = await createEmployeePayment({
-    companyId: input.companyId,
-    actorUserId: input.actorUserId,
-    employeeId: input.employeeId,
-    type: paymentType,
-    amount: input.amount,
-    dueDate: movementDate,
-    description:
-      description ??
-      (paymentType === "ADVANCE" ? "Personel avansı" : "Çalışan ödemesi"),
-    relatedAccountId: account.id,
-  });
-
-  const paid = await markEmployeePaymentPaid({
-    companyId: input.companyId,
-    actorUserId: input.actorUserId,
-    employeeId: input.employeeId,
-    paymentId: payment.id,
-    paidAt: movementDate,
-    relatedAccountId: account.id,
-    createTransaction: true,
+    return markEmployeePaymentPaidInTx(tx, {
+      companyId: input.companyId,
+      actorUserId: input.actorUserId,
+      employeeId: input.employeeId,
+      payment: created,
+      paidAt: movementDate,
+      relatedAccountId: account.id,
+    });
   });
 
   const actionMessage =
     paymentType === "ADVANCE"
       ? `Çalışan avansı verildi: ${displayName} - ${formatMoney(input.amount)}`
-      : `Çalışan ödemesi yapıldı: ${displayName} - ${formatMoney(input.amount)}`;
+      : paymentType === "BONUS"
+        ? `Prim ödemesi yapıldı: ${displayName} - ${formatMoney(input.amount)}`
+        : `Çalışan ödemesi yapıldı: ${displayName} - ${formatMoney(input.amount)}`;
 
   await db.activityLog.create({
     data: {
       companyId: input.companyId,
       userId: input.actorUserId,
-      action: paymentType === "ADVANCE" ? "ADVANCE" : "PAYMENT_PAID",
+      action:
+        paymentType === "ADVANCE"
+          ? "ADVANCE"
+          : paymentType === "BONUS"
+            ? "BONUS"
+            : "PAYMENT_PAID",
       module: "employees",
       message: actionMessage,
     },
   });
 
   return {
-    payment: paid.payment,
-    finance: paid.finance,
+    payment: serializePayment(paid.payment),
+    finance: buildMarkPaymentPaidFinanceResult({
+      expenseCreated: paid.expenseCreated,
+      transactionCreated: paid.transactionCreated,
+      relatedExpenseId: paid.relatedExpenseId,
+      relatedTransactionId: paid.relatedTransactionId,
+    }),
     ledger: await getEmployeeLedger(input),
   };
 }
@@ -1209,6 +1304,210 @@ export async function createEmployeePayment(input: {
   return serializePayment(payment);
 }
 
+export async function markEmployeePaymentPaidInTx(
+  tx: Prisma.TransactionClient,
+  input: {
+    companyId: string;
+    actorUserId: string;
+    employeeId: string;
+    payment: {
+      id: string;
+      type: EmployeePaymentType;
+      direction: EmployeePaymentDirection;
+      amount: Prisma.Decimal;
+      currency: string;
+      status: EmployeePaymentStatus;
+      description: string | null;
+      relatedExpenseId: string | null;
+      relatedAccountId: string | null;
+      relatedTransactionId: string | null;
+    };
+    paidAt: Date;
+    relatedAccountId: string;
+    notes?: string;
+  }
+) {
+  const plan = resolveEmployeePaymentFinancePlan({
+    status: input.payment.status,
+    relatedExpenseId: input.payment.relatedExpenseId,
+    relatedTransactionId: input.payment.relatedTransactionId,
+    relatedAccountId: input.relatedAccountId,
+  });
+
+  if (plan.isAlreadyPaid) {
+    const existing = await tx.employeePayment.findFirstOrThrow({
+      where: { id: input.payment.id },
+      include: {
+        relatedAccount: {
+          select: { id: true, name: true, type: true, currency: true },
+        },
+      },
+    });
+
+    return {
+      payment: existing,
+      expenseCreated: false,
+      transactionCreated: false,
+      relatedExpenseId: existing.relatedExpenseId,
+      relatedTransactionId: existing.relatedTransactionId,
+      displayName: "",
+      amountLabel: "",
+      skipNotification: true as const,
+    };
+  }
+
+  if (!plan.accountId) {
+    throw new EmployeeServiceError("Ödeme hesabı seçilmelidir.");
+  }
+
+  await assertFinancePaymentAccount(
+    tx,
+    input.companyId,
+    plan.accountId,
+    input.payment.currency
+  );
+
+  const amount = roundCashMoney(Number(input.payment.amount));
+  let relatedExpenseId = input.payment.relatedExpenseId;
+  let relatedTransactionId = input.payment.relatedTransactionId;
+  let expenseCreated = false;
+  let transactionCreated = false;
+
+  if (plan.createExpense) {
+    await ensureExpenseCategoryExists(input.companyId, EMPLOYEE_EXPENSE_CATEGORY);
+  }
+
+  const employee = await tx.employee.findUniqueOrThrow({
+    where: { id: input.employeeId },
+  });
+  const displayName = formatEmployeeDisplayName(employee);
+  const expenseTitle = buildEmployeePaymentExpenseTitle(displayName);
+  const note = input.notes?.trim() || input.payment.description || null;
+
+  if (plan.createExpense) {
+    const expense = await tx.expense.create({
+      data: {
+        companyId: input.companyId,
+        userId: input.actorUserId,
+        title: expenseTitle,
+        category: EMPLOYEE_EXPENSE_CATEGORY,
+        amount,
+        status: "APPROVED",
+        paymentStatus: "PAID",
+        accountId: plan.accountId,
+        date: input.paidAt,
+        note,
+      },
+    });
+
+    relatedExpenseId = expense.id;
+    expenseCreated = true;
+
+    await tx.activityLog.create({
+      data: {
+        companyId: input.companyId,
+        userId: input.actorUserId,
+        action: "CREATE",
+        module: "expenses",
+        message: `${expense.title} gideri oluşturuldu (ödendi).`,
+      },
+    });
+  }
+
+  if (plan.createTransaction && plan.accountId && !relatedTransactionId) {
+    const account = await tx.account.findFirstOrThrow({
+      where: {
+        id: plan.accountId,
+        companyId: input.companyId,
+        status: "ACTIVE",
+      },
+    });
+    const newBalance = roundCashMoney(Number(account.balance) - amount);
+
+    const transaction = await tx.accountTransaction.create({
+      data: {
+        accountId: account.id,
+        type: "EXPENSE",
+        title:
+          input.payment.type === "ADVANCE"
+            ? buildEmployeeAdvanceTransactionTitle(displayName)
+            : plan.createExpense
+              ? buildExpenseTransactionTitle(expenseTitle)
+              : buildEmployeePaymentTransactionTitle(displayName),
+        amount,
+        date: input.paidAt,
+        note,
+        ...(relatedExpenseId ? { expenseId: relatedExpenseId } : {}),
+      },
+    });
+
+    await tx.account.update({
+      where: { id: account.id },
+      data: { balance: newBalance },
+    });
+
+    if (relatedExpenseId && !expenseCreated) {
+      await tx.expense.updateMany({
+        where: {
+          id: relatedExpenseId,
+          companyId: input.companyId,
+        },
+        data: {
+          paymentStatus: "PAID",
+          accountId: account.id,
+        },
+      });
+    }
+
+    relatedTransactionId = transaction.id;
+    transactionCreated = true;
+  }
+
+  const result = await tx.employeePayment.update({
+    where: { id: input.payment.id },
+    data: {
+      status: "PAID",
+      direction: input.payment.type === "DEDUCTION" ? "DEDUCTED" : "PAID",
+      paidAt: input.paidAt,
+      relatedExpenseId,
+      relatedTransactionId,
+      relatedAccountId: plan.accountId,
+      ...(input.notes
+        ? {
+            description: input.payment.description
+              ? `${input.payment.description} — ${input.notes}`
+              : input.notes,
+          }
+        : {}),
+    },
+    include: {
+      relatedAccount: {
+        select: { id: true, name: true, type: true, currency: true },
+      },
+    },
+  });
+
+  const amountLabel = formatMoney(Number(input.payment.amount));
+
+  await logEmployeeActivity(tx, {
+    companyId: input.companyId,
+    userId: input.actorUserId,
+    action: "PAYMENT_PAID",
+    message: `${displayName} için ${amountLabel} çalışan ödemesi ödendi olarak işaretlendi.`,
+  });
+
+  return {
+    payment: result,
+    expenseCreated,
+    transactionCreated,
+    relatedExpenseId,
+    relatedTransactionId,
+    displayName,
+    amountLabel,
+    skipNotification: false as const,
+  };
+}
+
 export async function markEmployeePaymentPaid(input: {
   companyId: string;
   actorUserId: string;
@@ -1216,8 +1515,6 @@ export async function markEmployeePaymentPaid(input: {
   paymentId: string;
   paidAt?: Date;
   relatedAccountId?: string | null;
-  createExpense?: boolean;
-  createTransaction?: boolean;
   notes?: string;
 }): Promise<{
   payment: ReturnType<typeof serializePayment>;
@@ -1239,236 +1536,51 @@ export async function markEmployeePaymentPaid(input: {
     throw new EmployeeServiceError("İptal edilmiş ödeme işaretlenemez.");
   }
 
-  const plan = resolveEmployeePaymentFinancePlan({
-    status: payment.status,
-    relatedExpenseId: payment.relatedExpenseId,
-    relatedTransactionId: payment.relatedTransactionId,
-    createExpense: input.createExpense,
-    createTransaction: input.createTransaction,
-    relatedAccountId: input.relatedAccountId ?? payment.relatedAccountId,
-  });
+  const accountId = (
+    input.relatedAccountId?.trim() ||
+    payment.relatedAccountId?.trim() ||
+    ""
+  );
 
-  if (plan.isAlreadyPaid) {
-    return {
-      payment: serializePayment(payment),
-      finance: buildMarkPaymentPaidFinanceResult({
-        expenseCreated: false,
-        transactionCreated: false,
-        relatedExpenseId: payment.relatedExpenseId,
-        relatedTransactionId: payment.relatedTransactionId,
-      }),
-    };
-  }
-
-  if (input.createTransaction === true && !plan.accountId) {
-    throw new EmployeeServiceError(
-      "Kasa/banka hareketi için hesap seçilmelidir."
-    );
-  }
-
-  if (plan.accountId) {
-    const account = await db.account.findFirst({
-      where: {
-        id: plan.accountId,
-        companyId: input.companyId,
-        status: "ACTIVE",
-      },
-    });
-
-    if (!account) {
-      throw new EmployeeServiceError("Ödeme hesabı bulunamadı.", 404);
-    }
+  if (payment.status !== "PAID" && !accountId) {
+    throw new EmployeeServiceError("Ödeme hesabı seçilmelidir.");
   }
 
   const paidAt = input.paidAt ?? new Date();
-  const amount = roundCashMoney(Number(payment.amount));
-  let relatedExpenseId = payment.relatedExpenseId;
-  let relatedTransactionId = payment.relatedTransactionId;
-  const relatedAccountId =
-    input.relatedAccountId !== undefined
-      ? input.relatedAccountId
-      : payment.relatedAccountId;
-  let expenseCreated = false;
-  let transactionCreated = false;
 
-  if (plan.createExpense) {
-    await ensureExpenseCategoryExists(
-      input.companyId,
-      EMPLOYEE_EXPENSE_CATEGORY
-    );
+  const updated = await db.$transaction(async (tx) =>
+    markEmployeePaymentPaidInTx(tx, {
+      companyId: input.companyId,
+      actorUserId: input.actorUserId,
+      employeeId: input.employeeId,
+      payment,
+      paidAt,
+      relatedAccountId: accountId,
+      notes: input.notes,
+    })
+  );
+
+  if (!updated.skipNotification) {
+    await createNotification({
+      companyId: input.companyId,
+      category: "FINANCE",
+      module: "employees",
+      entityType: "EMPLOYEE_PAYMENT",
+      entityId: payment.id,
+      actionUrl: buildEmployeePaymentsActionUrl(input.employeeId),
+      priority: "NORMAL",
+      title: "Çalışan ödemesi tamamlandı",
+      message: `${updated.displayName} için ${updated.amountLabel} ödeme ödendi olarak işaretlendi.`,
+    });
   }
 
-  const updated = await db.$transaction(async (tx) => {
-    const employee = await tx.employee.findUniqueOrThrow({
-      where: { id: input.employeeId },
-    });
-    const displayName = formatEmployeeDisplayName(employee);
-    const expenseTitle = buildEmployeePaymentExpenseTitle(displayName);
-    const note = input.notes?.trim() || payment.description || null;
-
-    if (plan.createExpense) {
-      const expenseAccountId =
-        plan.createTransaction && plan.accountId ? plan.accountId : null;
-
-      const expense = await tx.expense.create({
-        data: {
-          companyId: input.companyId,
-          userId: input.actorUserId,
-          title: expenseTitle,
-          category: EMPLOYEE_EXPENSE_CATEGORY,
-          amount,
-          status: "APPROVED",
-          paymentStatus: "PAID",
-          accountId: expenseAccountId,
-          date: paidAt,
-          note,
-        },
-      });
-
-      relatedExpenseId = expense.id;
-      expenseCreated = true;
-
-      await tx.activityLog.create({
-        data: {
-          companyId: input.companyId,
-          userId: input.actorUserId,
-          action: "CREATE",
-          module: "expenses",
-          message: `${expense.title} gideri oluşturuldu (ödendi).`,
-        },
-      });
-
-      if (expenseAccountId) {
-        const account = await tx.account.findFirstOrThrow({
-          where: {
-            id: expenseAccountId,
-            companyId: input.companyId,
-            status: "ACTIVE",
-          },
-        });
-        const newBalance = roundCashMoney(Number(account.balance) - amount);
-
-        const transaction = await tx.accountTransaction.create({
-          data: {
-            accountId: account.id,
-            type: "EXPENSE",
-            title: buildExpenseTransactionTitle(expense.title),
-            amount,
-            date: paidAt,
-            note: expense.note,
-            expenseId: expense.id,
-          },
-        });
-
-        await tx.account.update({
-          where: { id: account.id },
-          data: { balance: newBalance },
-        });
-
-        relatedTransactionId = transaction.id;
-        transactionCreated = true;
-      }
-    }
-
-    if (plan.createTransaction && plan.accountId && !relatedTransactionId) {
-      const account = await tx.account.findFirstOrThrow({
-        where: {
-          id: plan.accountId,
-          companyId: input.companyId,
-          status: "ACTIVE",
-        },
-      });
-      const newBalance = roundCashMoney(Number(account.balance) - amount);
-
-      const transaction = await tx.accountTransaction.create({
-        data: {
-          accountId: account.id,
-          type: "EXPENSE",
-          title:
-            payment.type === "ADVANCE"
-              ? buildEmployeeAdvanceTransactionTitle(displayName)
-              : buildEmployeePaymentTransactionTitle(displayName),
-          amount,
-          date: paidAt,
-          note,
-          ...(relatedExpenseId ? { expenseId: relatedExpenseId } : {}),
-        },
-      });
-
-      await tx.account.update({
-        where: { id: account.id },
-        data: { balance: newBalance },
-      });
-
-      if (relatedExpenseId && !expenseCreated) {
-        await tx.expense.updateMany({
-          where: {
-            id: relatedExpenseId,
-            companyId: input.companyId,
-          },
-          data: {
-            paymentStatus: "PAID",
-            accountId: account.id,
-          },
-        });
-      }
-
-      relatedTransactionId = transaction.id;
-      transactionCreated = true;
-    }
-
-    const result = await tx.employeePayment.update({
-      where: { id: payment.id },
-      data: {
-        status: "PAID",
-        direction: payment.type === "DEDUCTION" ? "DEDUCTED" : "PAID",
-        paidAt,
-        relatedExpenseId,
-        relatedTransactionId,
-        ...(input.relatedAccountId !== undefined
-          ? { relatedAccountId: input.relatedAccountId }
-          : {}),
-        ...(input.notes
-          ? {
-              description: payment.description
-                ? `${payment.description} — ${input.notes}`
-                : input.notes,
-            }
-          : {}),
-      },
-    });
-
-    const amountLabel = formatMoney(Number(payment.amount));
-
-    await logEmployeeActivity(tx, {
-      companyId: input.companyId,
-      userId: input.actorUserId,
-      action: "PAYMENT_PAID",
-      message: `${displayName} için ${amountLabel} çalışan ödemesi ödendi olarak işaretlendi.`,
-    });
-
-    return { result, displayName, amountLabel };
-  });
-
-  await createNotification({
-    companyId: input.companyId,
-    category: "FINANCE",
-    module: "employees",
-    entityType: "EMPLOYEE_PAYMENT",
-    entityId: payment.id,
-    actionUrl: buildEmployeePaymentsActionUrl(input.employeeId),
-    priority: "NORMAL",
-    title: "Çalışan ödemesi tamamlandı",
-    message: `${updated.displayName} için ${updated.amountLabel} ödeme ödendi olarak işaretlendi.`,
-  });
-
   return {
-    payment: serializePayment(updated.result),
+    payment: serializePayment(updated.payment),
     finance: buildMarkPaymentPaidFinanceResult({
-      expenseCreated,
-      transactionCreated,
-      relatedExpenseId,
-      relatedTransactionId,
+      expenseCreated: updated.expenseCreated,
+      transactionCreated: updated.transactionCreated,
+      relatedExpenseId: updated.relatedExpenseId,
+      relatedTransactionId: updated.relatedTransactionId,
     }),
   };
 }
@@ -1481,8 +1593,6 @@ export async function updateEmployeePaymentStatus(input: {
   status: EmployeePaymentStatus;
   paidAt?: Date;
   relatedAccountId?: string | null;
-  createExpense?: boolean;
-  createTransaction?: boolean;
   notes?: string;
 }) {
   if (input.status === "PAID") {
@@ -1493,8 +1603,6 @@ export async function updateEmployeePaymentStatus(input: {
       paymentId: input.paymentId,
       paidAt: input.paidAt,
       relatedAccountId: input.relatedAccountId,
-      createExpense: input.createExpense,
-      createTransaction: input.createTransaction,
       notes: input.notes,
     });
   }
@@ -2002,10 +2110,31 @@ export async function getEmployeeById(input: {
     employeeId: input.employeeId,
   });
 
+  const creatorIds = [
+    ...new Set(
+      (employee.payments ?? [])
+        .map((payment) => payment.createdByUserId)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+
+  const creators =
+    creatorIds.length > 0
+      ? await db.user.findMany({
+          where: { id: { in: creatorIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+
+  const paymentCreatorNames = new Map(
+    creators.map((creator) => [creator.id, creator.name])
+  );
+
   return {
     employee: serializeEmployee(employee, {
       includeSensitive: input.includeSensitive,
       companyId: input.companyId,
+      paymentCreatorNames,
     }),
     performance,
     activities: filteredActivities.map((a) => ({

@@ -18,6 +18,7 @@ import {
   type SalesStatCard,
   type SalesTabKey,
 } from "@/lib/sales-page-utils";
+import { validateSaleCancelEligibility } from "@/lib/sale-mutation-policy";
 import {
   activeInvoiceStatusFilter,
   activeSaleStatusFilter,
@@ -65,7 +66,14 @@ async function fetchDocuments(companyId: string) {
   const [sales, invoices, collections] = await Promise.all([
     db.sale.findMany({
       where: { companyId },
-      include: { customer: true, invoice: true },
+      include: {
+        customer: true,
+        invoice: {
+          include: {
+            documentSubmission: true,
+          },
+        },
+      },
       orderBy: { createdAt: "desc" },
     }),
     db.invoice.findMany({
@@ -230,8 +238,7 @@ async function fetchDocuments(companyId: string) {
         sourceId: sale.id,
         saleId: sale.id,
         invoiceId: sale.invoice?.id ?? null,
-        canCancel:
-          sale.status === "COMPLETED" && sale.invoice?.status !== "APPROVED",
+        canCancel: validateSaleCancelEligibility(sale).ok,
         canCreateInvoice: !sale.invoice && sale.status === "COMPLETED",
         canCollect: remainingAmount > 0,
         canConvert: false,

@@ -10,7 +10,6 @@ import { generateSaleNo } from "@/lib/sale-number-utils";
 import {
   recordSaleCollection,
   resolveSalePayment,
-  type SalePaymentMethod,
 } from "@/lib/sale-payment-utils";
 import {
   applySaleStockDecrement,
@@ -30,7 +29,7 @@ const convertSchema = z.object({
   warehouseId: z.string().optional(),
   paymentStatus: z.enum(["PAID", "UNPAID", "PARTIAL"]).default("UNPAID"),
   collectedAmount: z.number().min(0).optional(),
-  paymentMethod: z.enum(["CASH", "BANK"]).default("CASH"),
+  accountId: z.string().trim().min(1).optional(),
 });
 
 export async function POST(req: Request, { params }: Props) {
@@ -51,7 +50,7 @@ export async function POST(req: Request, { params }: Props) {
       );
     }
 
-    const { paymentStatus, paymentMethod } = parsed.data;
+    const { paymentStatus, accountId } = parsed.data;
 
     const sale = await db.sale.findFirst({
       where: {
@@ -99,6 +98,13 @@ export async function POST(req: Request, { params }: Props) {
               ? error.message
               : "Ödeme bilgileri geçersiz.",
         },
+        { status: 400 }
+      );
+    }
+
+    if (payment.paidAmount > 0 && !accountId) {
+      return NextResponse.json(
+        { success: false, message: "Tahsilat hesabı seçilmelidir." },
         { status: 400 }
       );
     }
@@ -164,7 +170,7 @@ export async function POST(req: Request, { params }: Props) {
           companyId: companyId!,
           saleNo: newSaleNo,
           amount: payment.paidAmount,
-          paymentMethod: paymentMethod as SalePaymentMethod,
+          accountId: accountId!,
           note:
             payment.paymentStatus === "PARTIAL"
               ? `${newSaleNo} numaralı satış için kısmi tahsilat.`

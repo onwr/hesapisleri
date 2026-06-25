@@ -14,6 +14,9 @@ function statusBadge(integration: EDocumentIntegrationSummary) {
   if (integration.status === "CONNECTED" && integration.providerConnectionReady) {
     return "bg-emerald-50 text-emerald-700 border-emerald-200";
   }
+  if (integration.status === "PARTIALLY_CONNECTED") {
+    return "bg-amber-50 text-amber-800 border-amber-200";
+  }
   if (integration.status === "ERROR") {
     return "bg-red-50 text-red-700 border-red-200";
   }
@@ -26,6 +29,9 @@ function statusBadge(integration: EDocumentIntegrationSummary) {
 function statusLabel(integration: EDocumentIntegrationSummary) {
   if (integration.status === "CONNECTED" && integration.providerConnectionReady) {
     return "Bağlı";
+  }
+  if (integration.status === "PARTIALLY_CONNECTED") {
+    return "Kısmen bağlı";
   }
   if (integration.status === "ERROR") return "Hata";
   if (integration.hasCredentials && !integration.providerConnectionReady) {
@@ -79,7 +85,9 @@ export function EDocumentIntegrationCard({ integration, onRefetch }: Props) {
   const canTest =
     integration.provider === "TRENDYOL_EFATURAM"
       ? integration.status === "CONNECTED"
-      : integration.hasCredentials;
+      : integration.provider === "SOVOS"
+        ? integration.hasCredentials
+        : integration.hasCredentials;
 
   return (
     <>
@@ -161,8 +169,57 @@ export function EDocumentIntegrationCard({ integration, onRefetch }: Props) {
             </p>
           ) : null}
 
+          {integration.provider === "SOVOS" ? (
+            <>
+              <p>
+                Ortam:{" "}
+                <span className="font-medium text-slate-800">
+                  {integration.environment === "LIVE" ? "Canlı" : "Test"}
+                </span>
+              </p>
+              {integration.taxId ? (
+                <p>
+                  VKN/TCKN:{" "}
+                  <span className="font-medium text-slate-800">{integration.taxId}</span>
+                </p>
+              ) : null}
+              {integration.externalCompanyCode ? (
+                <p>
+                  Firma kodu:{" "}
+                  <span className="font-medium text-slate-800">
+                    {integration.externalCompanyCode}
+                  </span>
+                </p>
+              ) : null}
+              {integration.senderIdentifier ? (
+                <p>
+                  GB:{" "}
+                  <span className="font-medium text-slate-800">
+                    {integration.senderIdentifier}
+                  </span>
+                </p>
+              ) : null}
+              {integration.savedUsername ? (
+                <p>
+                  E-Fatura WS:{" "}
+                  <span className="font-medium text-slate-800">
+                    {integration.savedUsername}
+                  </span>
+                </p>
+              ) : null}
+            </>
+          ) : null}
+
           {integration.lastError ? (
-            <p className="rounded-xl bg-red-50 px-3 py-2 text-red-700">
+            <p
+              className={`rounded-xl px-3 py-2 ${
+                integration.lastErrorCode === "SOVOS_SETTINGS_SAVED" ||
+                integration.lastErrorCode === "SOVOS_REAL_TEST_DISABLED" ||
+                integration.lastErrorCode === "ENDPOINT_NOT_CONFIGURED"
+                  ? "bg-amber-50 text-amber-900"
+                  : "bg-red-50 text-red-700"
+              }`}
+            >
               {integration.lastError}
             </p>
           ) : null}

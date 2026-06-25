@@ -38,15 +38,16 @@ describe("employee team simplify", () => {
     assert.equal(parsePosUsernameFromEmail(email, companyId), "ayse.pos");
   });
 
-  it("POS_STAFF yalnızca pos modülüne erişir", () => {
+  it("POS_STAFF pos ve ortaklık modüllerine erişir", () => {
     assert.equal(canAccessModule("POS_STAFF", "pos"), true);
+    assert.equal(canAccessModule("POS_STAFF", "partnership"), true);
     assert.equal(canAccessModule("POS_STAFF", "dashboard"), false);
     assert.equal(canAccessModule("POS_STAFF", "employees"), false);
     assert.equal(canAccessModule("POS_STAFF", "settings"), false);
     assert.equal(canAccessModule("POS_STAFF", "sales"), false);
 
     const modules = getAccessibleModules("POS_STAFF");
-    assert.deepEqual(modules, ["pos"]);
+    assert.deepEqual(modules.sort(), ["partnership", "pos"].sort());
   });
 
   it("POS_STAFF giriş sonrası /pos yönlendirmesi", () => {

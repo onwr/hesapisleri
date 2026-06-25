@@ -63,6 +63,7 @@ export type AiChatMessage = {
   id: string;
   role: "assistant" | "user";
   content: string;
+  structured?: unknown;
 };
 
 export type AiAssistantContext = {

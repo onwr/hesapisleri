@@ -1,34 +1,31 @@
 "use client";
 
 import { Loader2, X } from "lucide-react";
+import { FinanceAccountSelect } from "@/components/cash-bank/finance-account-select";
 import { TEAM_CARD_CLASS } from "@/components/team/team-ui-tokens";
-import { validateEmployeePaymentMarkPaidForm } from "@/lib/employee-payment-finance-utils";
+import {
+  validateEmployeePaymentMarkPaidForm,
+} from "@/lib/employee-payment-finance-utils";
+import {
+  EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_LINK_LABEL,
+  EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_MESSAGE,
+  type FinanceAccountOption,
+} from "@/lib/finance-account-utils";
 import { formatMoney } from "@/lib/format-utils";
-
-type CashBankAccount = {
-  id: string;
-  name: string;
-  type: string;
-  balance: number;
-};
 
 type EmployeePaymentMarkPaidModalProps = {
   open: boolean;
   saving: boolean;
   paymentLabel: string;
   paymentAmount: number;
-  accounts: CashBankAccount[];
+  accounts: FinanceAccountOption[];
   accountsLoading: boolean;
   paidAt: string;
   relatedAccountId: string;
-  createExpense: boolean;
-  createTransaction: boolean;
   notes: string;
   formError: string;
   onPaidAtChange: (value: string) => void;
   onRelatedAccountIdChange: (value: string) => void;
-  onCreateExpenseChange: (value: boolean) => void;
-  onCreateTransactionChange: (value: boolean) => void;
   onNotesChange: (value: string) => void;
   onClose: () => void;
   onSubmit: () => void;
@@ -43,14 +40,10 @@ export function EmployeePaymentMarkPaidModal({
   accountsLoading,
   paidAt,
   relatedAccountId,
-  createExpense,
-  createTransaction,
   notes,
   formError,
   onPaidAtChange,
   onRelatedAccountIdChange,
-  onCreateExpenseChange,
-  onCreateTransactionChange,
   onNotesChange,
   onClose,
   onSubmit,
@@ -58,9 +51,11 @@ export function EmployeePaymentMarkPaidModal({
   if (!open) return null;
 
   const validationError = validateEmployeePaymentMarkPaidForm({
-    createTransaction,
     relatedAccountId,
   });
+
+  const canSubmit =
+    accounts.length > 0 && !validationError && !accountsLoading;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
@@ -90,8 +85,8 @@ export function EmployeePaymentMarkPaidModal({
         </div>
 
         <p className="text-xs font-semibold text-slate-500">
-          Seçili hesap ve onay kutularına göre gider ve/veya kasa/banka hareketi
-          oluşturulur; ödeme kaydı ödendi yapılır.
+          Seçilen hesaptan personel gideri ve kasa/banka hareketi oluşturulur;
+          ödeme kaydı ödendi yapılır.
         </p>
 
         <div className="space-y-4">
@@ -107,46 +102,16 @@ export function EmployeePaymentMarkPaidModal({
             />
           </label>
 
-          <label className="block space-y-1">
-            <span className="text-xs font-bold text-slate-500">
-              Kasa / Banka hesabı
-            </span>
-            <select
-              value={relatedAccountId}
-              onChange={(e) => onRelatedAccountIdChange(e.target.value)}
-              disabled={accountsLoading}
-              className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm disabled:opacity-50"
-            >
-              <option value="">
-                {accountsLoading ? "Hesaplar yükleniyor..." : "Hesap seçin"}
-              </option>
-              {accounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.name} ({formatMoney(account.balance)})
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-            <input
-              type="checkbox"
-              checked={createExpense}
-              onChange={(e) => onCreateExpenseChange(e.target.checked)}
-              className="rounded border-slate-300"
-            />
-            Personel gideri oluştur
-          </label>
-
-          <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-            <input
-              type="checkbox"
-              checked={createTransaction}
-              onChange={(e) => onCreateTransactionChange(e.target.checked)}
-              className="rounded border-slate-300"
-            />
-            Kasa/Banka hareketi oluştur
-          </label>
+          <FinanceAccountSelect
+            accounts={accounts}
+            value={relatedAccountId}
+            onChange={onRelatedAccountIdChange}
+            disabled={accountsLoading}
+            required
+            emptyMessage={EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_MESSAGE}
+            emptyLinkLabel={EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_LINK_LABEL}
+            className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm disabled:opacity-50"
+          />
 
           <label className="block space-y-1">
             <span className="text-xs font-bold text-slate-500">Not</span>
@@ -178,7 +143,7 @@ export function EmployeePaymentMarkPaidModal({
           <button
             type="button"
             onClick={onSubmit}
-            disabled={saving || Boolean(validationError)}
+            disabled={saving || !canSubmit}
             className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-xs font-black text-white disabled:opacity-50"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}

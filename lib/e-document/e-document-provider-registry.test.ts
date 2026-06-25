@@ -16,6 +16,11 @@ describe("e-document providers", () => {
     assert.match(getEDocumentProviderMeta("EFINANS").label, /eFinans/i);
   });
 
+  it("sovos sağlayıcısı bağlantı testine hazır", () => {
+    assert.equal(isEDocumentProviderConnectionReady("SOVOS"), true);
+    assert.match(getEDocumentProviderMeta("SOVOS").label, /Sovos/i);
+  });
+
   it("kullanıcı adını maskeler", () => {
     assert.equal(maskSecretUsername("demo@firma.com"), "d***@firma.com");
   });

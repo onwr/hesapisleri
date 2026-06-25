@@ -22,7 +22,9 @@ import {
   authFlatFormClassName,
 } from "@/components/auth/auth-styles";
 import { AppLoadingScreen } from "@/components/layout/app-loading-screen";
+import { ReferralSignupNotice } from "@/components/register/referral-signup-notice";
 import { KvkkAydinlatmaModal } from "@/components/legal/kvkk-aydinlatma-modal";
+import type { PublicReferralSignupInfo } from "@/lib/partner-service";
 import type { LoadingPreset } from "@/lib/loading-presets";
 import {
   KVKK_AYDINLATMA_PATH,
@@ -43,7 +45,11 @@ type FormState = {
   companyName: string;
 };
 
-export function RegisterForm() {
+type RegisterFormProps = {
+  referral?: PublicReferralSignupInfo | null;
+};
+
+export function RegisterForm({ referral = null }: RegisterFormProps) {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -183,6 +189,8 @@ export function RegisterForm() {
             Satış, stok, fatura, kasa ve müşteri takibini tek panelden yönetin.
           </p>
         </div>
+
+        {referral ? <ReferralSignupNotice referral={referral} /> : null}
 
         <form onSubmit={handleRegister} className="space-y-5">
           <div className="space-y-2">

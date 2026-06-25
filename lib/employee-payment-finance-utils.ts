@@ -58,8 +58,6 @@ export function resolveEmployeePaymentFinancePlan(input: {
   status: EmployeePaymentStatus;
   relatedExpenseId?: string | null;
   relatedTransactionId?: string | null;
-  createExpense?: boolean;
-  createTransaction?: boolean;
   relatedAccountId?: string | null;
 }): EmployeePaymentFinancePlan {
   const accountId = input.relatedAccountId?.trim() || null;
@@ -73,15 +71,10 @@ export function resolveEmployeePaymentFinancePlan(input: {
     };
   }
 
-  const wantsExpense = input.createExpense === true && !input.relatedExpenseId;
-  const wantsTransaction =
-    !input.relatedTransactionId &&
-    (input.createTransaction === true || Boolean(accountId));
-
   return {
     isAlreadyPaid: false,
-    createExpense: wantsExpense,
-    createTransaction: wantsTransaction,
+    createExpense: !input.relatedExpenseId,
+    createTransaction: !input.relatedTransactionId && Boolean(accountId),
     accountId,
   };
 }
@@ -102,15 +95,18 @@ export function buildMarkPaymentPaidFinanceResult(input: {
 
 export function validateMarkEmployeePaymentPaidInput(input: {
   status?: string;
-  createTransaction?: boolean;
   relatedAccountId?: string | null;
+  requireAccount?: boolean;
 }):
   | { ok: true }
   | { ok: false; message: string; status: number } {
-  if (input.createTransaction === true && !input.relatedAccountId?.trim()) {
+  const needsAccount =
+    input.requireAccount === true || input.status === "PAID";
+
+  if (needsAccount && !input.relatedAccountId?.trim()) {
     return {
       ok: false,
-      message: "Kasa/banka hareketi için hesap seçilmelidir.",
+      message: "Ödeme hesabı seçilmelidir.",
       status: 400,
     };
   }
@@ -119,11 +115,10 @@ export function validateMarkEmployeePaymentPaidInput(input: {
 }
 
 export function validateEmployeePaymentMarkPaidForm(input: {
-  createTransaction: boolean;
   relatedAccountId: string;
 }): string | null {
-  if (input.createTransaction && !input.relatedAccountId.trim()) {
-    return "Kasa/banka hareketi oluşturmak için hesap seçin.";
+  if (!input.relatedAccountId.trim()) {
+    return "Ödeme hesabı seçilmelidir.";
   }
 
   return null;

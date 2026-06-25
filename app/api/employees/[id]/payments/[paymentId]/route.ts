@@ -23,7 +23,6 @@ export async function PATCH(req: Request, context: RouteContext) {
 
     const validation = validateMarkEmployeePaymentPaidInput({
       status: body.status,
-      createTransaction: body.createTransaction,
       relatedAccountId: body.relatedAccountId,
     });
 
@@ -42,8 +41,6 @@ export async function PATCH(req: Request, context: RouteContext) {
       status: body.status,
       paidAt: body.paidAt ? new Date(body.paidAt) : undefined,
       relatedAccountId: body.relatedAccountId,
-      createExpense: body.createExpense,
-      createTransaction: body.createTransaction,
       notes: body.notes,
     });
 

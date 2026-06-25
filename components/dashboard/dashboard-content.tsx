@@ -21,7 +21,6 @@ import { ActionCard } from "@/components/cards/action-card";
 import { StatCard } from "@/components/cards/stat-card";
 import { DashboardIncomeChart } from "@/components/dashboard/dashboard-income-chart";
 import { DashboardExchangeRates } from "@/components/dashboard/dashboard-exchange-rates";
-import { DashboardAiAssistantPanel } from "@/components/dashboard/dashboard-ai-assistant-panel";
 import { DashboardShortcutsPanel } from "@/components/dashboard/dashboard-shortcuts-panel";
 import {
   DashboardNotificationsPanel,
@@ -36,6 +35,7 @@ import {
   gridStagger,
   listStagger,
 } from "@/components/dashboard/dashboard-motion";
+import { AiPageTriggerButton } from "@/components/ai-assistant/ai-page-trigger-button";
 import { formatMoney } from "@/lib/dashboard-metrics";
 import type { ExchangeRateDisplay } from "@/lib/exchange-rate-utils";
 import {
@@ -98,7 +98,6 @@ export type DashboardContentProps = {
     href: string;
   }>;
   statLinks?: DashboardStatLinks;
-  aiInsights: string[];
   actionNotifications: DashboardNotificationItem[];
   notificationSummary: {
     unread: number;
@@ -146,7 +145,6 @@ export function DashboardContent({
   accounts,
   upcomingPayments,
   statLinks,
-  aiInsights,
   actionNotifications,
   notificationSummary,
   exchangeRates,
@@ -193,6 +191,10 @@ export function DashboardContent({
       ) : null}
 
       {showOnboardingAlert ? <DashboardOnboardingAlert /> : null}
+
+      <motion.div variants={dashboardFadeUp} className="flex justify-end">
+        <AiPageTriggerButton moduleKey="dashboard" />
+      </motion.div>
 
       <motion.section
         className="grid gap-4 md:grid-cols-2 xl:grid-cols-5"
@@ -662,9 +664,6 @@ export function DashboardContent({
             </motion.div>
           </motion.div>
 
-          <motion.div variants={dashboardFadeUp}>
-            <DashboardAiAssistantPanel insights={aiInsights} />
-          </motion.div>
 
           {/* Kısayollarım */}
           <motion.div variants={dashboardFadeUp}>

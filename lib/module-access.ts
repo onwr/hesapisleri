@@ -15,6 +15,10 @@ import {
   hasEmployeeApiPermission,
   type EmployeeApiPermission,
 } from "@/lib/employee-permission-utils";
+import {
+  canCancelSales,
+  canUpdateSales,
+} from "@/lib/sale-permission-utils";
 import { db } from "@/lib/prisma";
 import type { UserRole } from "@prisma/client";
 import { resolveEffectiveRole } from "@/lib/permission-utils";
@@ -221,6 +225,39 @@ export async function requireApiModuleAccess(module: AppModule) {
 
     throw error;
   }
+}
+
+export async function requireApiSalesAction(action: "update" | "cancel") {
+  const auth = await requireApiModuleAccess("sales");
+  if ("error" in auth) return auth;
+
+  const allowed =
+    action === "update"
+      ? canUpdateSales(
+          auth.session.effectiveRole,
+          auth.session.companyUser.isOwner
+        )
+      : canCancelSales(
+          auth.session.effectiveRole,
+          auth.session.companyUser.isOwner
+        );
+
+  if (!allowed) {
+    return {
+      error: NextResponse.json(
+        {
+          success: false,
+          message:
+            action === "update"
+              ? "Satış düzenleme yetkiniz yok."
+              : "Satış iptal yetkiniz yok.",
+        },
+        { status: 403 }
+      ),
+    };
+  }
+
+  return auth;
 }
 
 export async function requireApiEmployeesPermission(

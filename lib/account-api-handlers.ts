@@ -11,6 +11,8 @@ import {
 } from "@/lib/account-admin-service";
 import {
   getActiveAccountOptions,
+  getCollectionAccountOptions,
+  getFinanceAccountOptions,
   getCompanyAccount,
   listCompanyAccounts,
 } from "@/lib/account-read-service";
@@ -49,6 +51,40 @@ export async function accountListHandler() {
     console.error("ACCOUNTS_GET_ERROR", error);
     return NextResponse.json(
       { success: false, message: "Hesaplar yüklenemedi." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function collectionAccountOptionsHandler() {
+  try {
+    const auth = await requireApiCashBankRead();
+    if ("error" in auth) return auth.error;
+
+    const data = await getCollectionAccountOptions(auth.companyId);
+
+    return NextResponse.json({ success: true, data });
+  } catch (error) {
+    console.error("COLLECTION_ACCOUNTS_OPTIONS_ERROR", error);
+    return NextResponse.json(
+      { success: false, message: "Tahsilat hesapları yüklenemedi." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function financeAccountOptionsHandler() {
+  try {
+    const auth = await requireApiCashBankRead();
+    if ("error" in auth) return auth.error;
+
+    const data = await getFinanceAccountOptions(auth.companyId);
+
+    return NextResponse.json({ success: true, data });
+  } catch (error) {
+    console.error("FINANCE_ACCOUNTS_OPTIONS_ERROR", error);
+    return NextResponse.json(
+      { success: false, message: "Ödeme hesapları yüklenemedi." },
       { status: 500 }
     );
   }

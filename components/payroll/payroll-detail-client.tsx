@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ArrowLeft, Download, Loader2, Pencil, Printer } from "lucide-react";
 import { TEAM_CARD_CLASS } from "@/components/team/team-ui-tokens";
 import { PayrollItemEditModal } from "@/components/payroll/payroll-item-edit-modal";
+import { FinanceAccountSelect } from "@/components/cash-bank/finance-account-select";
+import { useFinanceAccounts } from "@/hooks/use-finance-accounts";
+import { EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_LINK_LABEL, EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_MESSAGE } from "@/lib/finance-account-utils";
 import { formatMoney } from "@/lib/format-utils";
 import type {
   SerializedPayrollPeriodPayment,
@@ -46,12 +49,8 @@ export function PayrollDetailClient({
   const [editError, setEditError] = useState("");
   const [paidAt, setPaidAt] = useState(new Date().toISOString().slice(0, 10));
   const [accountId, setAccountId] = useState("");
-  const [createExpense, setCreateExpense] = useState(false);
-  const [createTransaction, setCreateTransaction] = useState(false);
   const [notes, setNotes] = useState("");
-  const [accounts, setAccounts] = useState<
-    Array<{ id: string; name: string; balance: number }>
-  >([]);
+  const { accounts, loading: accountsLoading } = useFinanceAccounts();
 
   const actions = getPayrollRunActions(run.status);
 
@@ -60,15 +59,6 @@ export function PayrollDetailClient({
     const json = await res.json();
     if (json.success) setRun(json.payrollRun);
   }
-
-  useEffect(() => {
-    if (!markPaidOpen) return;
-    fetch("/api/cash-bank/accounts/list")
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.success) setAccounts(json.data ?? []);
-      });
-  }, [markPaidOpen]);
 
   async function callAction(path: string, body?: Record<string, unknown>) {
     setSaving(true);
@@ -90,6 +80,24 @@ export function PayrollDetailClient({
       return true;
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleMarkPaid() {
+    if (!accountId.trim()) {
+      setError("Ödeme hesabı seçilmelidir.");
+      return;
+    }
+
+    const ok = await callAction("mark-paid", {
+      paidAt,
+      relatedAccountId: accountId,
+      notes: notes || undefined,
+    });
+
+    if (ok) {
+      setSuccess("Bordro toplu ödendi olarak işaretlendi.");
+      setMarkPaidOpen(false);
     }
   }
 
@@ -127,26 +135,6 @@ export function PayrollDetailClient({
       setEditItem(null);
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function handleMarkPaid() {
-    if (createTransaction && !accountId) {
-      setError("Kasa/banka hareketi için hesap seçin.");
-      return;
-    }
-
-    const ok = await callAction("mark-paid", {
-      paidAt,
-      relatedAccountId: accountId || undefined,
-      createExpense,
-      createTransaction,
-      notes: notes || undefined,
-    });
-
-    if (ok) {
-      setSuccess("Bordro toplu ödendi olarak işaretlendi.");
-      setMarkPaidOpen(false);
     }
   }
 
@@ -520,37 +508,20 @@ export function PayrollDetailClient({
                 className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
               />
             </label>
-            <label className="block space-y-1">
-              <span className="text-xs font-bold text-slate-500">Kasa / Banka</span>
-              <select
-                value={accountId}
-                onChange={(e) => setAccountId(e.target.value)}
-                className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
-              >
-                <option value="">Hesap seçin</option>
-                {accounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.name} ({formatMoney(account.balance)})
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex items-center gap-2 text-sm font-semibold">
-              <input
-                type="checkbox"
-                checked={createExpense}
-                onChange={(e) => setCreateExpense(e.target.checked)}
-              />
-              Personel gideri oluştur
-            </label>
-            <label className="flex items-center gap-2 text-sm font-semibold">
-              <input
-                type="checkbox"
-                checked={createTransaction}
-                onChange={(e) => setCreateTransaction(e.target.checked)}
-              />
-              Kasa/Banka hareketi oluştur
-            </label>
+            <FinanceAccountSelect
+              accounts={accounts}
+              value={accountId}
+              onChange={setAccountId}
+              disabled={accountsLoading}
+              required
+              emptyMessage={EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_MESSAGE}
+              emptyLinkLabel={EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_LINK_LABEL}
+              className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm"
+            />
+            <p className="text-xs font-semibold text-slate-500">
+              Tüm çalışan ödemeleri seçilen hesaptan tek transaction içinde
+              işlenir.
+            </p>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -568,7 +539,12 @@ export function PayrollDetailClient({
               </button>
               <button
                 type="button"
-                disabled={saving}
+                disabled={
+                  saving ||
+                  accountsLoading ||
+                  accounts.length === 0 ||
+                  !accountId.trim()
+                }
                 onClick={handleMarkPaid}
                 className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-xs font-black text-white"
               >

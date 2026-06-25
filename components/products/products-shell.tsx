@@ -4,6 +4,7 @@ import { ProductsQuickActions } from "@/components/products/products-quick-actio
 import { ProductsStockSyncButton } from "@/components/products/products-stock-sync-button";
 import { ProductsSubNav } from "@/components/products/products-sub-nav";
 import { ProductsSummaryCards } from "@/components/products/products-summary-cards";
+import { AiPageTriggerButton } from "@/components/ai-assistant/ai-page-trigger-button";
 import type { ProductPageStats } from "@/lib/products-page-data";
 import {
   buildProductQuickActionCards,
@@ -49,11 +50,10 @@ export function ProductsShell({
           </p>
         </div>
 
-        {canSyncStock ? (
-          <div className="flex shrink-0 items-center">
-            <ProductsStockSyncButton canSync={canSyncStock} compact />
-          </div>
-        ) : null}
+        <div className="flex shrink-0 items-center gap-2">
+          <AiPageTriggerButton moduleKey="products" />
+          {canSyncStock ? <ProductsStockSyncButton canSync={canSyncStock} compact /> : null}
+        </div>
       </div>
 
       <ProductsQuickActions cards={quickActions} />

@@ -26,6 +26,17 @@ function clearProviderFields(setters: {
   setXsltCode: (value: string) => void;
   setConnectionMode: (value: "DIRECT_ACCOUNT" | "MARKETPLACE_PARTNER") => void;
   setEnvironment: (value: "STAGE" | "LIVE") => void;
+  setTaxId: (value: string) => void;
+  setInvoiceUsername: (value: string) => void;
+  setInvoicePassword: (value: string) => void;
+  setUseSameArchiveCredentials: (value: boolean) => void;
+  setArchiveUsername: (value: string) => void;
+  setArchivePassword: (value: string) => void;
+  setSenderIdentifier: (value: string) => void;
+  setReceiverIdentifier: (value: string) => void;
+  setBranchCode: (value: string) => void;
+  setInvoiceSeries: (value: string) => void;
+  setArchiveSeries: (value: string) => void;
 }) {
   setters.setEmail("");
   setters.setPassword("");
@@ -36,6 +47,17 @@ function clearProviderFields(setters: {
   setters.setXsltCode("");
   setters.setConnectionMode("DIRECT_ACCOUNT");
   setters.setEnvironment("STAGE");
+  setters.setTaxId("");
+  setters.setInvoiceUsername("");
+  setters.setInvoicePassword("");
+  setters.setUseSameArchiveCredentials(true);
+  setters.setArchiveUsername("");
+  setters.setArchivePassword("");
+  setters.setSenderIdentifier("");
+  setters.setReceiverIdentifier("");
+  setters.setBranchCode("");
+  setters.setInvoiceSeries("");
+  setters.setArchiveSeries("");
 }
 
 export function EDocumentConfigModal({
@@ -57,6 +79,17 @@ export function EDocumentConfigModal({
   const [username, setUsername] = useState("");
   const [efinansPassword, setEfinansPassword] = useState("");
   const [companyCode, setCompanyCode] = useState("");
+  const [taxId, setTaxId] = useState("");
+  const [invoiceUsername, setInvoiceUsername] = useState("");
+  const [invoicePassword, setInvoicePassword] = useState("");
+  const [useSameArchiveCredentials, setUseSameArchiveCredentials] = useState(true);
+  const [archiveUsername, setArchiveUsername] = useState("");
+  const [archivePassword, setArchivePassword] = useState("");
+  const [senderIdentifier, setSenderIdentifier] = useState("");
+  const [receiverIdentifier, setReceiverIdentifier] = useState("");
+  const [branchCode, setBranchCode] = useState("");
+  const [invoiceSeries, setInvoiceSeries] = useState("");
+  const [archiveSeries, setArchiveSeries] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -70,6 +103,17 @@ export function EDocumentConfigModal({
     setXsltCode,
     setConnectionMode,
     setEnvironment,
+    setTaxId,
+    setInvoiceUsername,
+    setInvoicePassword,
+    setUseSameArchiveCredentials,
+    setArchiveUsername,
+    setArchivePassword,
+    setSenderIdentifier,
+    setReceiverIdentifier,
+    setBranchCode,
+    setInvoiceSeries,
+    setArchiveSeries,
   };
 
   useEffect(() => {
@@ -87,10 +131,21 @@ export function EDocumentConfigModal({
     setPrefix(integration.prefix ?? "");
     setXsltCode(integration.xsltCode ?? "");
     setCompanyCode(integration.externalCompanyCode ?? "");
+    setTaxId(integration.taxId ?? "");
+    setSenderIdentifier(integration.senderIdentifier ?? "");
+    setReceiverIdentifier(integration.receiverIdentifier ?? "");
+    setBranchCode(integration.branchCode ?? "");
+    setInvoiceSeries(integration.invoiceSeries ?? "");
+    setArchiveSeries(integration.archiveSeries ?? "");
+    setUseSameArchiveCredentials(integration.useSameArchiveCredentials);
     setEmail("");
     setPassword("");
     setUsername("");
     setEfinansPassword("");
+    setInvoiceUsername("");
+    setInvoicePassword("");
+    setArchiveUsername("");
+    setArchivePassword("");
     setError("");
   }, [open, integration]);
 
@@ -123,6 +178,18 @@ export function EDocumentConfigModal({
     if (next === "EFINANS" && savedProvider === "EFINANS") {
       setEnvironment(integration.environment ?? "STAGE");
       setCompanyCode(integration.externalCompanyCode ?? "");
+    }
+
+    if (next === "SOVOS" && savedProvider === "SOVOS") {
+      setEnvironment(integration.environment ?? "STAGE");
+      setCompanyCode(integration.externalCompanyCode ?? "");
+      setTaxId(integration.taxId ?? "");
+      setSenderIdentifier(integration.senderIdentifier ?? "");
+      setReceiverIdentifier(integration.receiverIdentifier ?? "");
+      setBranchCode(integration.branchCode ?? "");
+      setInvoiceSeries(integration.invoiceSeries ?? "");
+      setArchiveSeries(integration.archiveSeries ?? "");
+      setUseSameArchiveCredentials(integration.useSameArchiveCredentials);
     }
 
     setProvider(next);
@@ -162,7 +229,30 @@ export function EDocumentConfigModal({
                 companyCode,
                 environment,
               }
-            : { provider };
+            : provider === "SOVOS"
+              ? {
+                  provider,
+                  environment,
+                  externalCompanyCode: companyCode.trim() || null,
+                  taxId,
+                  invoiceUsername: invoiceUsername.trim() || undefined,
+                  invoicePassword: invoicePassword.trim() ? invoicePassword : undefined,
+                  useSameArchiveCredentials,
+                  archiveUsername:
+                    useSameArchiveCredentials || !archiveUsername.trim()
+                      ? undefined
+                      : archiveUsername,
+                  archivePassword:
+                    useSameArchiveCredentials || !archivePassword.trim()
+                      ? undefined
+                      : archivePassword,
+                  senderIdentifier: senderIdentifier.trim() || null,
+                  receiverIdentifier: receiverIdentifier.trim() || null,
+                  branchCode: branchCode.trim() || null,
+                  invoiceSeries: invoiceSeries.trim() || null,
+                  archiveSeries: archiveSeries.trim() || null,
+                }
+              : { provider };
 
       const res = await fetch("/api/integrations/e-document", {
         method: "PATCH",
@@ -183,7 +273,7 @@ export function EDocumentConfigModal({
   }
 
   const submitLabel =
-    provider === "EFINANS"
+    provider === "EFINANS" || provider === "SOVOS"
       ? "Ayarları Kaydet"
       : provider === "TRENDYOL_EFATURAM"
         ? "Kaydet ve bağlan"
@@ -408,6 +498,184 @@ export function EDocumentConfigModal({
                   <input
                     value={xsltCode}
                     onChange={(event) => setXsltCode(event.target.value)}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+            </>
+          ) : null}
+
+          {provider === "SOVOS" ? (
+            <>
+              <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                Bu bilgiler Sovos/Digital Planet web servis hesabınıza aittir. Portal
+                giriş bilgileri ile web servis bilgileri farklı olabilir. Bağlantı testi
+                endpoint doğrulandıktan sonra açılacaktır.
+              </p>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  Ortam
+                </label>
+                <select
+                  value={environment}
+                  onChange={(event) =>
+                    setEnvironment(event.target.value as "STAGE" | "LIVE")
+                  }
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                >
+                  <option value="STAGE">Test</option>
+                  <option value="LIVE">Canlı</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  Firma kodu
+                </label>
+                <input
+                  value={companyCode}
+                  onChange={(event) => setCompanyCode(event.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  VKN/TCKN
+                </label>
+                <input
+                  value={taxId}
+                  onChange={(event) => setTaxId(event.target.value.replace(/\D/g, ""))}
+                  maxLength={11}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                  required
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  E-Fatura WS kullanıcı adı
+                </label>
+                <input
+                  value={invoiceUsername}
+                  onChange={(event) => setInvoiceUsername(event.target.value)}
+                  placeholder={integration.savedUsername ?? ""}
+                  autoComplete="username"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                  required={
+                    !(integration.savedUsername && savedProvider === "SOVOS")
+                  }
+                />
+                {integration.savedUsername && savedProvider === "SOVOS" ? (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Kayıtlı: {integration.savedUsername}
+                  </p>
+                ) : null}
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  E-Fatura WS şifre
+                </label>
+                <IntegrationSecretInput
+                  value={invoicePassword}
+                  onChange={setInvoicePassword}
+                  savedBadge={
+                    integration.hasSavedInvoicePassword && savedProvider === "SOVOS"
+                      ? "kayıtlı"
+                      : null
+                  }
+                />
+              </div>
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={useSameArchiveCredentials}
+                  onChange={(event) => setUseSameArchiveCredentials(event.target.checked)}
+                />
+                E-Arşiv için aynı bilgileri kullan
+              </label>
+              {!useSameArchiveCredentials ? (
+                <>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">
+                      E-Arşiv WS kullanıcı adı
+                    </label>
+                    <input
+                      value={archiveUsername}
+                      onChange={(event) => setArchiveUsername(event.target.value)}
+                      placeholder={integration.savedArchiveUsername ?? ""}
+                      autoComplete="username"
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                      required={
+                        !(
+                          integration.savedArchiveUsername &&
+                          savedProvider === "SOVOS"
+                        )
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">
+                      E-Arşiv WS şifre
+                    </label>
+                    <IntegrationSecretInput
+                      value={archivePassword}
+                      onChange={setArchivePassword}
+                      savedBadge={
+                        integration.hasSavedArchivePassword &&
+                        savedProvider === "SOVOS"
+                          ? "kayıtlı"
+                          : null
+                      }
+                    />
+                  </div>
+                </>
+              ) : null}
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  Gönderici Birim etiketi (GB)
+                </label>
+                <input
+                  value={senderIdentifier}
+                  onChange={(event) => setSenderIdentifier(event.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  Posta Kutusu etiketi (PK)
+                </label>
+                <input
+                  value={receiverIdentifier}
+                  onChange={(event) => setReceiverIdentifier(event.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  Şube kodu
+                </label>
+                <input
+                  value={branchCode}
+                  onChange={(event) => setBranchCode(event.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">
+                    Fatura seri kodu
+                  </label>
+                  <input
+                    value={invoiceSeries}
+                    onChange={(event) => setInvoiceSeries(event.target.value)}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">
+                    E-Arşiv seri kodu
+                  </label>
+                  <input
+                    value={archiveSeries}
+                    onChange={(event) => setArchiveSeries(event.target.value)}
                     className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                   />
                 </div>

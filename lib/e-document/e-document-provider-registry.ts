@@ -10,6 +10,13 @@ export type EDocumentProviderMeta = {
 
 export const E_DOCUMENT_PROVIDERS: EDocumentProviderMeta[] = [
   {
+    code: "SOVOS",
+    label: "Sovos",
+    description: "Sovos Bulut e-Fatura / e-Arşiv web servisleri",
+    connectionReady: true,
+    selectable: true,
+  },
+  {
     code: "EFINANS",
     label: "eFinans",
     description: "Kullanıcı adı, şifre ve firma kodu ile bağlantı",
@@ -35,7 +42,7 @@ export const E_DOCUMENT_PROVIDERS: EDocumentProviderMeta[] = [
 export function getEDocumentProviderMeta(provider: EDocumentProvider) {
   return (
     E_DOCUMENT_PROVIDERS.find((item) => item.code === provider) ??
-    E_DOCUMENT_PROVIDERS[2]
+    E_DOCUMENT_PROVIDERS.find((item) => item.code === "OTHER")!
   );
 }
 

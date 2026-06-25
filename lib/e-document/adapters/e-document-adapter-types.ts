@@ -23,9 +23,27 @@ export type EfinansUpsertInput = {
   environment: EfaturamEnvironment;
 };
 
+export type SovosUpsertInput = {
+  companyId: string;
+  environment: EfaturamEnvironment;
+  externalCompanyCode?: string | null;
+  taxId: string;
+  invoiceUsername?: string;
+  invoicePassword?: string;
+  useSameArchiveCredentials: boolean;
+  archiveUsername?: string;
+  archivePassword?: string;
+  senderIdentifier?: string | null;
+  receiverIdentifier?: string | null;
+  branchCode?: string | null;
+  invoiceSeries?: string | null;
+  archiveSeries?: string | null;
+};
+
 export type EDocumentUpsertInput =
   | ({ provider: "TRENDYOL_EFATURAM" } & TrendyolUpsertInput)
   | ({ provider: "EFINANS" } & EfinansUpsertInput)
+  | ({ provider: "SOVOS" } & SovosUpsertInput)
   | { provider: "OTHER"; companyId: string };
 
 export type EDocumentTestResult = {

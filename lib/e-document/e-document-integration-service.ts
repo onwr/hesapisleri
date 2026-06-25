@@ -8,7 +8,9 @@ import type {
 } from "@prisma/client";
 import { getEfaturamPartnerConfig } from "@/lib/efaturam/efaturam-config";
 import { efinansAdapter, readEfinansCredentialHints } from "@/lib/e-document/adapters/efinans-adapter";
+import { sovosAdapter, readSovosCredentialHints, readSovosCapabilitiesFromIntegration } from "@/lib/e-document/adapters/sovos-adapter";
 import { trendyolEfaturamAdapter } from "@/lib/e-document/adapters/trendyol-efaturam-adapter";
+import type { SovosCapabilities } from "@/lib/e-document/sovos-capabilities";
 import type { EDocumentUpsertInput } from "@/lib/e-document/adapters/e-document-adapter-types";
 import {
   getEDocumentProviderMeta,
@@ -29,15 +31,30 @@ export type EDocumentIntegrationSummary = {
   prefix: string | null;
   xsltCode: string | null;
   externalCompanyCode: string | null;
+  taxId: string | null;
+  senderIdentifier: string | null;
+  receiverIdentifier: string | null;
+  branchCode: string | null;
+  invoiceSeries: string | null;
+  archiveSeries: string | null;
+  capabilities: SovosCapabilities | null;
   providerCompanyId: string | null;
   providerUserId: string | null;
   partnerCustomerId: string | null;
   hasCredentials: boolean;
   hasSavedPassword: boolean;
   savedUsername: string | null;
+  savedArchiveUsername: string | null;
+  hasSavedInvoicePassword: boolean;
+  hasSavedArchivePassword: boolean;
+  useSameArchiveCredentials: boolean;
   tokenExpiresAt: string | null;
   lastConnectedAt: string | null;
+  lastTestedAt: string | null;
+  lastSuccessfulAt: string | null;
   lastError: string | null;
+  lastErrorCode: string | null;
+  lastErrorMessage: string | null;
   updatedAt: string | null;
   partnerModeAvailable: boolean;
 };
@@ -45,6 +62,7 @@ export type EDocumentIntegrationSummary = {
 const adapters = {
   TRENDYOL_EFATURAM: trendyolEfaturamAdapter,
   EFINANS: efinansAdapter,
+  SOVOS: sovosAdapter,
 } as const;
 
 function getEDocumentModel() {
@@ -77,15 +95,30 @@ function toSummary(
       prefix: null,
       xsltCode: null,
       externalCompanyCode: null,
+      taxId: null,
+      senderIdentifier: null,
+      receiverIdentifier: null,
+      branchCode: null,
+      invoiceSeries: null,
+      archiveSeries: null,
+      capabilities: null,
       providerCompanyId: null,
       providerUserId: null,
       partnerCustomerId: null,
       hasCredentials: false,
       hasSavedPassword: false,
       savedUsername: null,
+      savedArchiveUsername: null,
+      hasSavedInvoicePassword: false,
+      hasSavedArchivePassword: false,
+      useSameArchiveCredentials: true,
       tokenExpiresAt: null,
       lastConnectedAt: null,
+      lastTestedAt: null,
+      lastSuccessfulAt: null,
       lastError: null,
+      lastErrorCode: null,
+      lastErrorMessage: null,
       updatedAt: null,
       partnerModeAvailable: partner.enabled,
     };
@@ -95,6 +128,10 @@ function toSummary(
   const efinansHints =
     integration.provider === "EFINANS"
       ? readEfinansCredentialHints(integration.credentialsEncrypted)
+      : null;
+  const sovosHints =
+    integration.provider === "SOVOS"
+      ? readSovosCredentialHints(integration.credentialsEncrypted)
       : null;
 
   return {
@@ -108,6 +145,16 @@ function toSummary(
     prefix: integration.prefix,
     xsltCode: integration.xsltCode,
     externalCompanyCode: integration.externalCompanyCode,
+    taxId: integration.taxId,
+    senderIdentifier: integration.senderIdentifier,
+    receiverIdentifier: integration.receiverIdentifier,
+    branchCode: integration.branchCode,
+    invoiceSeries: integration.invoiceSeries,
+    archiveSeries: integration.archiveSeries,
+    capabilities:
+      integration.provider === "SOVOS"
+        ? readSovosCapabilitiesFromIntegration(integration.capabilities)
+        : null,
     providerCompanyId: integration.providerCompanyId,
     providerUserId: integration.providerUserId,
     partnerCustomerId: integration.partnerCustomerId,
@@ -115,14 +162,29 @@ function toSummary(
     hasSavedPassword:
       integration.provider === "EFINANS"
         ? (efinansHints?.hasSavedPassword ?? false)
-        : Boolean(integration.credentialsEncrypted),
+        : integration.provider === "SOVOS"
+          ? (sovosHints?.hasSavedInvoicePassword ?? false)
+          : Boolean(integration.credentialsEncrypted),
     savedUsername:
       integration.provider === "EFINANS"
         ? maskSecretUsername(efinansHints?.username)
+        : integration.provider === "SOVOS"
+          ? maskSecretUsername(sovosHints?.invoiceUsername)
+          : null,
+    savedArchiveUsername:
+      integration.provider === "SOVOS"
+        ? maskSecretUsername(sovosHints?.archiveUsername)
         : null,
+    hasSavedInvoicePassword: sovosHints?.hasSavedInvoicePassword ?? false,
+    hasSavedArchivePassword: sovosHints?.hasSavedArchivePassword ?? false,
+    useSameArchiveCredentials: sovosHints?.useSameArchiveCredentials ?? true,
     tokenExpiresAt: integration.tokenExpiresAt?.toISOString() ?? null,
     lastConnectedAt: integration.lastConnectedAt?.toISOString() ?? null,
+    lastTestedAt: integration.lastTestedAt?.toISOString() ?? null,
+    lastSuccessfulAt: integration.lastSuccessfulAt?.toISOString() ?? null,
     lastError: integration.lastError,
+    lastErrorCode: integration.lastErrorCode,
+    lastErrorMessage: integration.lastErrorMessage,
     updatedAt: integration.updatedAt.toISOString(),
     partnerModeAvailable: partner.enabled,
   };

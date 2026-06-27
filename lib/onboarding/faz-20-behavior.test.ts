@@ -101,12 +101,11 @@ describe("Faz 20 milestone checklist", () => {
       stockMovementCount: 0,
       customerCount: 0,
       saleCount: 0,
-      integrationCount: 0,
       teamMemberCount: 1,
     });
 
-    assert.equal(items.length, 7);
-    assert.equal(calculateChecklistProgressPercent(items), 29);
+    assert.equal(items.length, 6);
+    assert.equal(calculateChecklistProgressPercent(items), 33);
     assert.equal(items.find((i) => i.id === "first_product")?.completed, true);
     assert.equal(items.find((i) => i.id === "first_sale")?.completed, false);
   });

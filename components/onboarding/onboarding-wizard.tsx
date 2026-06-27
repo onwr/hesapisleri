@@ -65,7 +65,6 @@ type OnboardingBundle = {
     customerCount: number;
     saleCount: number;
     stockMovementCount: number;
-    integrationCount: number;
     teamMemberCount: number;
     hasDefaultWarehouse: boolean;
     hasDefaultCashAccount: boolean;
@@ -533,7 +532,6 @@ export function OnboardingWizard() {
                 ["Müşteri", milestones?.customerCount ?? 0],
                 ["Satış", milestones?.saleCount ?? 0],
                 ["Stok hareketi", milestones?.stockMovementCount ?? 0],
-                ["Entegrasyon", milestones?.integrationCount ?? 0],
                 ["Ekip üyesi", milestones?.teamMemberCount ?? 0],
               ].map(([label, count]) => (
                 <div

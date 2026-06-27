@@ -77,9 +77,6 @@ function mockMilestonesReady() {
   const originalStockCount = db.stockMovement.count.bind(db.stockMovement);
   const originalCustomerCount = db.customer.count.bind(db.customer);
   const originalSaleCount = db.sale.count.bind(db.sale);
-  const originalIntegrationCount = db.marketplaceIntegration.count.bind(
-    db.marketplaceIntegration
-  );
   const originalTeamCount = db.companyUser.count.bind(db.companyUser);
   const originalWarehouseFindFirst = db.warehouse.findFirst.bind(db.warehouse);
   const originalAccountFindFirst = db.account.findFirst.bind(db.account);
@@ -96,9 +93,6 @@ function mockMilestonesReady() {
   db.stockMovement.count = dbMock<typeof db.stockMovement.count>(async () => 0);
   db.customer.count = dbMock<typeof db.customer.count>(async () => 0);
   db.sale.count = dbMock<typeof db.sale.count>(async () => 0);
-  db.marketplaceIntegration.count = dbMock<typeof db.marketplaceIntegration.count>(
-    async () => 0
-  );
   db.companyUser.count = dbMock<typeof db.companyUser.count>(async () => 1);
   db.warehouse.findFirst = dbMock<typeof db.warehouse.findFirst>(
     async () => ({ id: "wh-1" })
@@ -113,7 +107,6 @@ function mockMilestonesReady() {
     db.stockMovement.count = originalStockCount;
     db.customer.count = originalCustomerCount;
     db.sale.count = originalSaleCount;
-    db.marketplaceIntegration.count = originalIntegrationCount;
     db.companyUser.count = originalTeamCount;
     db.warehouse.findFirst = originalWarehouseFindFirst;
     db.account.findFirst = originalAccountFindFirst;

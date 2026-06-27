@@ -9,7 +9,6 @@ export type OnboardingMilestones = {
   stockMovementCount: number;
   customerCount: number;
   saleCount: number;
-  integrationCount: number;
   teamMemberCount: number;
 };
 
@@ -30,7 +29,6 @@ export async function getOnboardingMilestonesUncached(
     stockMovementCount,
     customerCount,
     saleCount,
-    integrationCount,
     teamMemberCount,
     defaultWarehouse,
     defaultCash,
@@ -43,9 +41,6 @@ export async function getOnboardingMilestonesUncached(
     db.stockMovement.count({ where: { companyId } }),
     db.customer.count({ where: { companyId } }),
     db.sale.count({ where: { companyId } }),
-    db.marketplaceIntegration.count({
-      where: { companyId, status: "CONNECTED" },
-    }),
     db.companyUser.count({
       where: { companyId, status: "ACTIVE" },
     }),
@@ -72,7 +67,6 @@ export async function getOnboardingMilestonesUncached(
     stockMovementCount,
     customerCount,
     saleCount,
-    integrationCount,
     teamMemberCount,
   };
 }
@@ -115,13 +109,6 @@ export function buildOnboardingChecklist(
       description: "POS veya satış ekranından ilk işleminizi yapın.",
       href: "/pos",
       completed: milestones.saleCount > 0,
-    },
-    {
-      id: "integration",
-      label: "Pazaryeri entegrasyonu kur",
-      description: "Trendyol veya Hepsiburada bağlantısını yapılandırın.",
-      href: "/settings/integrations",
-      completed: milestones.integrationCount > 0,
     },
     {
       id: "team_member",

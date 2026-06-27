@@ -148,7 +148,7 @@ export async function initializePaytrMembershipPayment(input: {
 
   const [plan, company, subscription] = await Promise.all([
     input.planId
-      ? db.membershipPlan.findFirst({ where: { id: input.planId, isActive: true } })
+      ? db.membershipPlan.findFirst({ where: { id: input.planId, planStatus: "ACTIVE" } })
       : getDefaultMembershipPlan(),
     db.company.findUnique({
       where: { id: input.companyId },

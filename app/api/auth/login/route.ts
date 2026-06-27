@@ -123,6 +123,16 @@ export async function POST(req: Request) {
       hasActiveCompany: Boolean(activeCompany),
     });
 
+    // lastLoginAt ve loginTrackingStatus güncellenir; sessionVersion okunur.
+    const updatedUser = await db.user.update({
+      where: { id: user.id },
+      data: {
+        lastLoginAt: new Date(),
+        loginTrackingStatus: "LOGGED_IN",
+      },
+      select: { sessionVersion: true },
+    });
+
     const response = NextResponse.json({
       success: true,
       message: "Giriş başarılı.",
@@ -146,11 +156,12 @@ export async function POST(req: Request) {
       },
     });
 
-    attachAuthCookie(response, {
+    await attachAuthCookie(response, {
       userId: user.id,
       email: user.email,
       role: user.role,
       companyId: activeCompany?.id ?? null,
+      sv: updatedUser.sessionVersion,
     });
 
     return response;

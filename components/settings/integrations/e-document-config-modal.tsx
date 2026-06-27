@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Loader2, X } from "lucide-react";
 import type { EDocumentIntegrationSummary } from "@/lib/e-document/e-document-integration-service";
 import { E_DOCUMENT_PROVIDERS } from "@/lib/e-document/e-document-provider-registry";
@@ -15,6 +15,51 @@ type Props = {
   onClose: () => void;
   onSaved: () => Promise<void>;
 };
+
+const inputClassName =
+  "w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-400";
+
+function ModalField({
+  label,
+  children,
+  hint,
+}: {
+  label: string;
+  children: ReactNode;
+  hint?: string;
+}) {
+  return (
+    <div>
+      <label className="mb-1 block text-sm font-medium text-slate-700">{label}</label>
+      {children}
+      {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
+    </div>
+  );
+}
+
+function ModalSection({
+  title,
+  children,
+  columns = 2,
+}: {
+  title: string;
+  children: ReactNode;
+  columns?: 2 | 3;
+}) {
+  const gridClass =
+    columns === 3
+      ? "grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+      : "grid gap-4 sm:grid-cols-2";
+
+  return (
+    <section className="rounded-xl border border-slate-100 bg-slate-50/50 p-4">
+      <h3 className="mb-3 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+        {title}
+      </h3>
+      <div className={gridClass}>{children}</div>
+    </section>
+  );
+}
 
 function clearProviderFields(setters: {
   setEmail: (value: string) => void;
@@ -279,10 +324,18 @@ export function EDocumentConfigModal({
         ? "Kaydet ve bağlan"
         : "Kaydet";
 
+  const isWideLayout =
+    provider === "SOVOS" || provider === "TRENDYOL_EFATURAM";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-      <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-3 sm:p-4">
+      <div
+        className={[
+          "flex max-h-[min(90vh,820px)] w-full flex-col overflow-hidden rounded-2xl bg-white shadow-xl",
+          isWideLayout ? "max-w-4xl" : "max-w-xl",
+        ].join(" ")}
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-4">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">E-Belge Bağlantısı</h2>
             <p className="text-sm text-slate-500">e-Fatura / e-Arşiv sağlayıcı ayarları</p>
@@ -296,33 +349,34 @@ export function EDocumentConfigModal({
           </button>
         </div>
 
-        <form onSubmit={(event) => void handleSubmit(event)} className="space-y-4 p-5">
-          <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
-            Bilgilerinizi kullandığınız e-fatura özel entegratörünün panelinden
-            alabilirsiniz.
-          </p>
+        <form
+          onSubmit={(event) => void handleSubmit(event)}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+            <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              Bilgilerinizi kullandığınız e-fatura özel entegratörünün panelinden
+              alabilirsiniz.
+            </p>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
-              Sağlayıcı
-            </label>
-            <select
-              value={provider}
-              onChange={(event) =>
-                handleProviderChange(event.target.value as ProviderSelection)
-              }
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-              required
-            >
-              <option value="">Sağlayıcı seçin</option>
-              {E_DOCUMENT_PROVIDERS.map((item) => (
-                <option key={item.code} value={item.code} disabled={!item.selectable}>
-                  {item.label}
-                  {!item.connectionReady && item.code !== "OTHER" ? " (yakında)" : ""}
-                </option>
-              ))}
-            </select>
-          </div>
+            <ModalField label="Sağlayıcı">
+              <select
+                value={provider}
+                onChange={(event) =>
+                  handleProviderChange(event.target.value as ProviderSelection)
+                }
+                className={inputClassName}
+                required
+              >
+                <option value="">Sağlayıcı seçin</option>
+                {E_DOCUMENT_PROVIDERS.map((item) => (
+                  <option key={item.code} value={item.code} disabled={!item.selectable}>
+                    {item.label}
+                    {!item.connectionReady && item.code !== "OTHER" ? " (yakında)" : ""}
+                  </option>
+                ))}
+              </select>
+            </ModalField>
 
           {provider === "EFINANS" ? (
             <>
@@ -506,181 +560,170 @@ export function EDocumentConfigModal({
           ) : null}
 
           {provider === "SOVOS" ? (
-            <>
-              <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                Bu bilgiler Sovos/Digital Planet web servis hesabınıza aittir. Portal
-                giriş bilgileri ile web servis bilgileri farklı olabilir. Bağlantı testi
-                endpoint doğrulandıktan sonra açılacaktır.
+            <div className="space-y-4">
+              <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm leading-relaxed text-amber-900">
+                Sovos/Digital Planet web servis bilgilerinizi girin. Portal girişi ile WS
+                bilgileri farklı olabilir. Bağlantı testi endpoint doğrulandıktan sonra
+                açılacaktır.
               </p>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
-                  Ortam
-                </label>
-                <select
-                  value={environment}
-                  onChange={(event) =>
-                    setEnvironment(event.target.value as "STAGE" | "LIVE")
+
+              <ModalSection title="Firma Bilgileri" columns={3}>
+                <ModalField label="Ortam">
+                  <select
+                    value={environment}
+                    onChange={(event) =>
+                      setEnvironment(event.target.value as "STAGE" | "LIVE")
+                    }
+                    className={inputClassName}
+                  >
+                    <option value="STAGE">Test</option>
+                    <option value="LIVE">Canlı</option>
+                  </select>
+                </ModalField>
+                <ModalField label="Firma kodu">
+                  <input
+                    value={companyCode}
+                    onChange={(event) => setCompanyCode(event.target.value)}
+                    className={inputClassName}
+                  />
+                </ModalField>
+                <ModalField label="VKN/TCKN">
+                  <input
+                    value={taxId}
+                    onChange={(event) =>
+                      setTaxId(event.target.value.replace(/\D/g, ""))
+                    }
+                    maxLength={11}
+                    className={inputClassName}
+                    required
+                  />
+                </ModalField>
+              </ModalSection>
+
+              <ModalSection title="E-Fatura Web Servis">
+                <ModalField
+                  label="Kullanıcı adı"
+                  hint={
+                    integration.savedUsername && savedProvider === "SOVOS"
+                      ? `Kayıtlı: ${integration.savedUsername}`
+                      : undefined
                   }
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                 >
-                  <option value="STAGE">Test</option>
-                  <option value="LIVE">Canlı</option>
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
-                  Firma kodu
+                  <input
+                    value={invoiceUsername}
+                    onChange={(event) => setInvoiceUsername(event.target.value)}
+                    placeholder={integration.savedUsername ?? ""}
+                    autoComplete="username"
+                    className={inputClassName}
+                    required={
+                      !(integration.savedUsername && savedProvider === "SOVOS")
+                    }
+                  />
+                </ModalField>
+                <ModalField label="Şifre">
+                  <IntegrationSecretInput
+                    value={invoicePassword}
+                    onChange={setInvoicePassword}
+                    savedBadge={
+                      integration.hasSavedInvoicePassword && savedProvider === "SOVOS"
+                        ? "kayıtlı"
+                        : null
+                    }
+                  />
+                </ModalField>
+              </ModalSection>
+
+              <section className="rounded-xl border border-slate-100 bg-slate-50/50 p-4">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={useSameArchiveCredentials}
+                    onChange={(event) =>
+                      setUseSameArchiveCredentials(event.target.checked)
+                    }
+                    className="rounded border-slate-300"
+                  />
+                  E-Arşiv için aynı web servis bilgilerini kullan
                 </label>
-                <input
-                  value={companyCode}
-                  onChange={(event) => setCompanyCode(event.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
-                  VKN/TCKN
-                </label>
-                <input
-                  value={taxId}
-                  onChange={(event) => setTaxId(event.target.value.replace(/\D/g, ""))}
-                  maxLength={11}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                  required
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
-                  E-Fatura WS kullanıcı adı
-                </label>
-                <input
-                  value={invoiceUsername}
-                  onChange={(event) => setInvoiceUsername(event.target.value)}
-                  placeholder={integration.savedUsername ?? ""}
-                  autoComplete="username"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                  required={
-                    !(integration.savedUsername && savedProvider === "SOVOS")
-                  }
-                />
-                {integration.savedUsername && savedProvider === "SOVOS" ? (
-                  <p className="mt-1 text-xs text-slate-500">
-                    Kayıtlı: {integration.savedUsername}
-                  </p>
-                ) : null}
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
-                  E-Fatura WS şifre
-                </label>
-                <IntegrationSecretInput
-                  value={invoicePassword}
-                  onChange={setInvoicePassword}
-                  savedBadge={
-                    integration.hasSavedInvoicePassword && savedProvider === "SOVOS"
-                      ? "kayıtlı"
-                      : null
-                  }
-                />
-              </div>
-              <label className="flex items-center gap-2 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={useSameArchiveCredentials}
-                  onChange={(event) => setUseSameArchiveCredentials(event.target.checked)}
-                />
-                E-Arşiv için aynı bilgileri kullan
-              </label>
-              {!useSameArchiveCredentials ? (
-                <>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">
-                      E-Arşiv WS kullanıcı adı
-                    </label>
-                    <input
-                      value={archiveUsername}
-                      onChange={(event) => setArchiveUsername(event.target.value)}
-                      placeholder={integration.savedArchiveUsername ?? ""}
-                      autoComplete="username"
-                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                      required={
-                        !(
-                          integration.savedArchiveUsername &&
+
+                {!useSameArchiveCredentials ? (
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <ModalField
+                      label="E-Arşiv kullanıcı adı"
+                      hint={
+                        integration.savedArchiveUsername && savedProvider === "SOVOS"
+                          ? `Kayıtlı: ${integration.savedArchiveUsername}`
+                          : undefined
+                      }
+                    >
+                      <input
+                        value={archiveUsername}
+                        onChange={(event) => setArchiveUsername(event.target.value)}
+                        placeholder={integration.savedArchiveUsername ?? ""}
+                        autoComplete="username"
+                        className={inputClassName}
+                        required={
+                          !(
+                            integration.savedArchiveUsername &&
+                            savedProvider === "SOVOS"
+                          )
+                        }
+                      />
+                    </ModalField>
+                    <ModalField label="E-Arşiv şifre">
+                      <IntegrationSecretInput
+                        value={archivePassword}
+                        onChange={setArchivePassword}
+                        savedBadge={
+                          integration.hasSavedArchivePassword &&
                           savedProvider === "SOVOS"
-                        )
-                      }
-                    />
+                            ? "kayıtlı"
+                            : null
+                        }
+                      />
+                    </ModalField>
                   </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">
-                      E-Arşiv WS şifre
-                    </label>
-                    <IntegrationSecretInput
-                      value={archivePassword}
-                      onChange={setArchivePassword}
-                      savedBadge={
-                        integration.hasSavedArchivePassword &&
-                        savedProvider === "SOVOS"
-                          ? "kayıtlı"
-                          : null
-                      }
-                    />
-                  </div>
-                </>
-              ) : null}
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
-                  Gönderici Birim etiketi (GB)
-                </label>
-                <input
-                  value={senderIdentifier}
-                  onChange={(event) => setSenderIdentifier(event.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
-                  Posta Kutusu etiketi (PK)
-                </label>
-                <input
-                  value={receiverIdentifier}
-                  onChange={(event) => setReceiverIdentifier(event.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
-                  Şube kodu
-                </label>
-                <input
-                  value={branchCode}
-                  onChange={(event) => setBranchCode(event.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                />
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">
-                    Fatura seri kodu
-                  </label>
+                ) : null}
+              </section>
+
+              <ModalSection title="GİB Tanımlayıcıları & Seriler" columns={3}>
+                <ModalField label="Gönderici Birim (GB)">
+                  <input
+                    value={senderIdentifier}
+                    onChange={(event) => setSenderIdentifier(event.target.value)}
+                    className={inputClassName}
+                  />
+                </ModalField>
+                <ModalField label="Posta Kutusu (PK)">
+                  <input
+                    value={receiverIdentifier}
+                    onChange={(event) => setReceiverIdentifier(event.target.value)}
+                    className={inputClassName}
+                  />
+                </ModalField>
+                <ModalField label="Şube kodu">
+                  <input
+                    value={branchCode}
+                    onChange={(event) => setBranchCode(event.target.value)}
+                    className={inputClassName}
+                  />
+                </ModalField>
+                <ModalField label="Fatura seri kodu">
                   <input
                     value={invoiceSeries}
                     onChange={(event) => setInvoiceSeries(event.target.value)}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                    className={inputClassName}
                   />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">
-                    E-Arşiv seri kodu
-                  </label>
+                </ModalField>
+                <ModalField label="E-Arşiv seri kodu">
                   <input
                     value={archiveSeries}
                     onChange={(event) => setArchiveSeries(event.target.value)}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                    className={inputClassName}
                   />
-                </div>
-              </div>
-            </>
+                </ModalField>
+              </ModalSection>
+            </div>
           ) : null}
 
           {provider === "OTHER" ? (
@@ -688,25 +731,28 @@ export function EDocumentConfigModal({
               Diğer sağlayıcılar yakında eklenecek.
             </p>
           ) : null}
+          </div>
 
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          <div className="shrink-0 border-t border-slate-100 bg-white px-5 py-4">
+            {error ? <p className="mb-3 text-sm text-red-600">{error}</p> : null}
 
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
-            >
-              Vazgeç
-            </button>
-            <button
-              type="submit"
-              disabled={saving || !provider || provider === "OTHER"}
-              className="inline-flex items-center gap-2 rounded-xl bg-[#0f1f4d] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-            >
-              {saving ? <Loader2 size={16} className="animate-spin" /> : null}
-              {submitLabel}
-            </button>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700"
+              >
+                Vazgeç
+              </button>
+              <button
+                type="submit"
+                disabled={saving || !provider || provider === "OTHER"}
+                className="inline-flex items-center gap-2 rounded-xl bg-[#0f1f4d] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {saving ? <Loader2 size={16} className="animate-spin" /> : null}
+                {submitLabel}
+              </button>
+            </div>
           </div>
         </form>
       </div>

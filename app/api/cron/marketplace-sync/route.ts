@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { syncMarketplaceIntegration } from "@/lib/marketplace/marketplace-sync-service";
-import { db } from "@/lib/prisma";
+import { buildCronRouteResponse } from "@/lib/admin/jobs/cron-response";
+import { runCronJob } from "@/lib/admin/jobs/job-run-service";
 
 function isAuthorized(request: Request) {
   const expected = process.env.CRON_SECRET;
@@ -21,55 +21,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const integrations = await db.marketplaceIntegration.findMany({
-      where: {
-        status: "CONNECTED",
-        syncEnabled: true,
-        credentialsEncrypted: { not: null },
-      },
-      select: {
-        companyId: true,
-        channel: true,
-      },
-    });
-
-    const summary = {
-      total: integrations.length,
-      success: 0,
-      failed: 0,
-      items: [] as Array<{
-        companyId: string;
-        channel: string;
-        ok: boolean;
-        message?: string;
-      }>,
-    };
-
-    for (const integration of integrations) {
-      try {
-        await syncMarketplaceIntegration({
-          companyId: integration.companyId,
-          channel: integration.channel,
-          type: "AUTO",
-        });
-        summary.success += 1;
-        summary.items.push({
-          companyId: integration.companyId,
-          channel: integration.channel,
-          ok: true,
-        });
-      } catch (error) {
-        summary.failed += 1;
-        summary.items.push({
-          companyId: integration.companyId,
-          channel: integration.channel,
-          ok: false,
-          message: error instanceof Error ? error.message : "Sync başarısız.",
-        });
-      }
-    }
-
-    return NextResponse.json({ success: true, data: summary });
+    const run = await runCronJob("marketplace-sync");
+    return NextResponse.json(buildCronRouteResponse("marketplace-sync", run));
   } catch (error) {
     return NextResponse.json(
       {

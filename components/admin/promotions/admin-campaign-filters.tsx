@@ -44,7 +44,7 @@ export function AdminCampaignFilters({
   const [draft, setDraft] = useState(filters);
 
   function apply(next: CampaignListFilters) {
-    router.push(`/admin/membership-campaigns?${buildParams(next, q)}`);
+    router.push(`/admin/campaigns?${buildParams(next, q)}`);
   }
 
   function applyDraft() {
@@ -55,7 +55,7 @@ export function AdminCampaignFilters({
   function clearAll() {
     setQ("");
     setDraft({});
-    router.push("/admin/membership-campaigns");
+    router.push("/admin/campaigns");
   }
 
   const advancedFields = (

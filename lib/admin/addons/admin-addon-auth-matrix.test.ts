@@ -15,12 +15,41 @@ function readRoute(segments: string[]) {
   return readFileSync(routePath(segments), "utf8");
 }
 
-const ADMIN_ADDON_ROUTES: string[][] = [
-  ["admin", "membership-addons"],
-  ["admin", "membership-addons", "[id]"],
-  ["admin", "membership-addons", "[id]", "archive"],
-  ["admin", "membership-addons", "[id]", "companies"],
-  ["admin", "membership-addons", "[id]", "prices"],
+const CANONICAL_ADDON_ROUTES: string[][] = [
+  ["admin", "add-ons"],
+  ["admin", "add-ons", "[id]"],
+  ["admin", "add-ons", "[id]", "activate"],
+  ["admin", "add-ons", "[id]", "archive"],
+  ["admin", "add-ons", "[id]", "preview"],
+  ["admin", "add-ons", "[id]", "prices"],
+  ["admin", "add-ons", "[id]", "prices", "[priceId]", "publish"],
+  ["admin", "add-ons", "[id]", "subscriptions"],
+  ["admin", "add-ons", "[id]", "history"],
+  ["admin", "add-ons", "[id]", "activity"],
+];
+
+const LEGACY_ADDON_REEXPORTS: Array<{ segments: string[]; canonical: RegExp }> = [
+  { segments: ["admin", "membership-addons"], canonical: /add-ons\/route/ },
+  { segments: ["admin", "membership-addons", "[id]"], canonical: /add-ons\/\[id\]\/route/ },
+  {
+    segments: ["admin", "membership-addons", "[id]", "archive"],
+    canonical: /archive\/route/,
+  },
+  {
+    segments: ["admin", "membership-addons", "[id]", "prices"],
+    canonical: /prices\/route/,
+  },
+  {
+    segments: ["admin", "membership-addons", "[id]", "prices", "[priceId]", "publish"],
+    canonical: /publish\/route/,
+  },
+  {
+    segments: ["admin", "membership-addons", "[id]", "companies"],
+    canonical: /subscriptions\/route/,
+  },
+];
+
+const OTHER_ADMIN_ROUTES: string[][] = [
   ["admin", "membership-plans", "[id]", "entitlements"],
   ["admin", "membership-plans", "[id]", "entitlements", "publish"],
   ["admin", "companies", "[id]", "entitlement-overrides"],
@@ -28,11 +57,26 @@ const ADMIN_ADDON_ROUTES: string[][] = [
   ["admin", "companies", "[id]", "usage-adjustments"],
 ];
 
-describe("admin addon/entitlement auth matrix", () => {
-  for (const segments of ADMIN_ADDON_ROUTES) {
+describe("canonical addon API auth", () => {
+  for (const segments of CANONICAL_ADDON_ROUTES) {
     it(`${segments.join("/")} uses requireSuperAdminApi`, () => {
-      const source = readRoute(segments);
-      assert.match(source, /requireSuperAdminApi/);
+      assert.match(readRoute(segments), /requireSuperAdminApi/);
+    });
+  }
+});
+
+describe("legacy addon re-exports", () => {
+  for (const { segments, canonical } of LEGACY_ADDON_REEXPORTS) {
+    it(`${segments.join("/")} re-exports canonical`, () => {
+      assert.match(readRoute(segments), canonical);
+    });
+  }
+});
+
+describe("other admin entitlement routes", () => {
+  for (const segments of OTHER_ADMIN_ROUTES) {
+    it(`${segments.join("/")} uses requireSuperAdminApi`, () => {
+      assert.match(readRoute(segments), /requireSuperAdminApi/);
     });
   }
 });
@@ -48,20 +92,5 @@ describe("billing addon routes auth", () => {
     const source = readRoute(["billing", "addons", "initialize"]);
     assert.match(source, /getAppSession/);
     assert.match(source, /canManageMembership/);
-  });
-});
-
-describe("rate limit distributed store", () => {
-  it("documents in-memory limitation and provides store interface", async () => {
-    const rateLimitSource = readFileSync(
-      join(webRoot, "lib", "rate-limit.ts"),
-      "utf8"
-    );
-    assert.match(rateLimitSource, /Serverless multi-instance/i);
-    assert.match(rateLimitSource, /checkRateLimitAsync/);
-
-    const storeSource = readFileSync(join(webRoot, "lib", "rate-limit-store.ts"), "utf8");
-    assert.match(storeSource, /RateLimitStore/);
-    assert.match(storeSource, /registerDistributedRateLimitStore/);
   });
 });

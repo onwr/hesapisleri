@@ -3,7 +3,7 @@ import { NewProductForm } from "@/components/products/new-product-form";
 import type { ProductTypeKey } from "@/lib/product-type-utils";
 
 type NewProductPageProps = {
-  searchParams: Promise<{ type?: string }>;
+  searchParams: Promise<{ type?: string; returnTo?: string }>;
 };
 
 function parseInitialProductType(value?: string): ProductTypeKey {
@@ -20,6 +20,7 @@ export default async function NewProductPage({ searchParams }: NewProductPagePro
     <NewProductForm
       companyId={company.id}
       initialProductType={parseInitialProductType(params.type)}
+      returnTo={params.returnTo ?? null}
     />
   );
 }

@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/prisma";
-import { hashPassword, signToken } from "@/lib/auth";
+import { hashPassword } from "@/lib/auth";
 import {
-  TRIAL_DAYS,
-  createCompanyForUser,
-} from "@/lib/create-company-service";
+  assertRegistrationEnabled,
+  getNewCompanyDefaults,
+  RegistrationDisabledError,
+} from "@/lib/admin/platform-settings";
+import { attachAuthCookie } from "@/lib/auth-session-utils";
+import { createCompanyForUser } from "@/lib/create-company-service";
 import {
   createPartnerSignupConversion,
   resolvePartnerFromAttribution,
@@ -38,6 +41,8 @@ const registerSchema = z.object({
 
 export async function POST(req: Request) {
   try {
+    await assertRegistrationEnabled();
+
     const body = await req.json();
     const parsed = registerSchema.safeParse(body);
 
@@ -81,6 +86,8 @@ export async function POST(req: Request) {
     const clientIp = getTrustedClientIp(req);
     const userAgent = req.headers.get("user-agent");
 
+    const platformDefaults = await getNewCompanyDefaults();
+
     const result = await db.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: {
@@ -89,6 +96,7 @@ export async function POST(req: Request) {
           password: hashedPassword,
           role: "OWNER",
           status: "ACTIVE",
+          loginTrackingStatus: "NEVER_LOGGED_IN",
         },
       });
 
@@ -132,6 +140,7 @@ export async function POST(req: Request) {
         registerCompanyNameProvided: Boolean(
           wantsCompanyInfo && companyName?.trim()
         ),
+        platformDefaults,
       });
 
       return { user, company };
@@ -153,13 +162,6 @@ export async function POST(req: Request) {
       });
     }
 
-    const token = signToken({
-      userId: result.user.id,
-      email: result.user.email,
-      role: result.user.role,
-      companyId: result.company.id,
-    });
-
     const response = NextResponse.json({
       success: true,
       message: "Kayıt başarılı.",
@@ -174,20 +176,26 @@ export async function POST(req: Request) {
           id: result.company.id,
           name: result.company.name,
         },
-        trialDays: TRIAL_DAYS,
+        trialDays: platformDefaults.trialDays,
       },
     });
 
-    response.cookies.set("hesapisleri_token", token, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7,
+    await attachAuthCookie(response, {
+      userId: result.user.id,
+      email: result.user.email,
+      role: result.user.role,
+      companyId: result.company.id,
+      sv: result.user.sessionVersion,
     });
 
     return response;
   } catch (error) {
+    if (error instanceof RegistrationDisabledError) {
+      return NextResponse.json(
+        { success: false, message: error.message, code: error.code },
+        { status: error.status }
+      );
+    }
     console.error("REGISTER_ERROR", error);
 
     return NextResponse.json(

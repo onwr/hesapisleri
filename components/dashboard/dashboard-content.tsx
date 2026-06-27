@@ -26,7 +26,7 @@ import {
   DashboardNotificationsPanel,
   type DashboardNotificationItem,
 } from "@/components/dashboard/dashboard-notifications-panel";
-import { DashboardOnboardingAlert } from "@/components/dashboard/dashboard-onboarding-alert";
+import { DashboardStartChecklist } from "@/components/dashboard/dashboard-start-checklist";
 import { DashboardMembershipAlert } from "@/components/dashboard/dashboard-membership-alert";
 import { DashboardSalesChart } from "@/components/dashboard/dashboard-sales-chart";
 import {
@@ -38,15 +38,23 @@ import {
 import { AiPageTriggerButton } from "@/components/ai-assistant/ai-page-trigger-button";
 import { formatMoney } from "@/lib/dashboard-metrics";
 import type { ExchangeRateDisplay } from "@/lib/exchange-rate-utils";
+import type { OnboardingChecklistItem } from "@/lib/onboarding/onboarding-progress";
+
 import {
   resolveDashboardStatLinks,
   type DashboardStatLinks,
 } from "@/lib/dashboard-ui-utils";
 
+type DashboardOnboardingChecklistProps = {
+  items: OnboardingChecklistItem[];
+  progressPercent: number;
+  canManage: boolean;
+};
+
 type ActivityTagColor = "green" | "blue" | "orange" | "purple" | "slate";
 
 export type DashboardContentProps = {
-  showOnboardingAlert: boolean;
+  onboardingChecklist?: DashboardOnboardingChecklistProps | null;
   membershipAlert?: {
     type: "expired" | "expiring";
     message: string;
@@ -127,8 +135,9 @@ const emptyStateClassName =
   "rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-[13px] font-medium text-slate-500";
 
 export function DashboardContent({
-  showOnboardingAlert,
+  onboardingChecklist = null,
   membershipAlert = null,
+  firstName,
   monthLabel,
   todaySales,
   todaySalesChange,
@@ -190,7 +199,13 @@ export function DashboardContent({
         />
       ) : null}
 
-      {showOnboardingAlert ? <DashboardOnboardingAlert /> : null}
+      {onboardingChecklist ? (
+        <DashboardStartChecklist
+          items={onboardingChecklist.items}
+          progressPercent={onboardingChecklist.progressPercent}
+          canManage={onboardingChecklist.canManage}
+        />
+      ) : null}
 
       <motion.div variants={dashboardFadeUp} className="flex justify-end">
         <AiPageTriggerButton moduleKey="dashboard" />

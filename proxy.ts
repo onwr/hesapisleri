@@ -15,6 +15,10 @@ function getTokenFromRequest(request: NextRequest) {
   return request.cookies.get(AUTH_COOKIE_NAME)?.value ?? null;
 }
 
+// NOT: Bu fonksiyon yalnızca JWT imzası ve exp kontrolü yapar.
+// sessionVersion (session revocation) kontrolü Edge runtime'da yapılamaz;
+// bu kontrol lib/auth/auth-dal.ts içindeki resolveAuthState'de DB'ye erişilerek yapılır.
+// Middleware yalnızca anonim kullanıcıları /login'e yönlendirmek içindir.
 function isValidSessionToken(token: string | null) {
   if (!token) {
     return false;

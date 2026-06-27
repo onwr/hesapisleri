@@ -30,6 +30,13 @@ export function parseCampaignListFilters(
     sort: (pickParam(params, "sort") as CampaignListFilters["sort"]) ?? "startsAt",
     order: (pickParam(params, "order") as CampaignListFilters["order"]) ?? "desc",
     page: Math.max(1, Number(pickParam(params, "page") ?? 1) || 1),
+    pageSize: (() => {
+      const raw = Number(pickParam(params, "pageSize") ?? 25);
+      return ([25, 50, 100] as const).includes(raw as 25 | 50 | 100)
+        ? (raw as 25 | 50 | 100)
+        : 25;
+    })(),
+    issue: pickParam(params, "issue"),
   };
 }
 
@@ -52,6 +59,13 @@ export function parseCouponListFilters(
     sort: (pickParam(params, "sort") as CouponListFilters["sort"]) ?? "code",
     order: (pickParam(params, "order") as CouponListFilters["order"]) ?? "asc",
     page: Math.max(1, Number(pickParam(params, "page") ?? 1) || 1),
+    pageSize: (() => {
+      const raw = Number(pickParam(params, "pageSize") ?? 25);
+      return ([25, 50, 100] as const).includes(raw as 25 | 50 | 100)
+        ? (raw as 25 | 50 | 100)
+        : 25;
+    })(),
+    issue: pickParam(params, "issue"),
   };
 }
 
@@ -83,8 +97,26 @@ export function countActiveCouponFilters(filters: CouponListFilters) {
   if (filters.usageStatus) count += 1;
   if (filters.expiresFrom || filters.expiresTo) count += 1;
   if (filters.createdFrom || filters.createdTo) count += 1;
+  if (filters.issue) count += 1;
   return count;
 }
+
+export const COUPON_ISSUE_OPTIONS = [
+  { value: "", label: "Tüm sorunlar" },
+  { value: "INVALID_DATE_RANGE", label: "Geçersiz tarih" },
+  { value: "INVALID_DISCOUNT", label: "Geçersiz indirim" },
+  { value: "CURRENCY_MISMATCH", label: "Para birimi uyumsuz" },
+  { value: "ACTIVE_WITHOUT_TARGET", label: "Hedef eksik" },
+  { value: "ARCHIVED_PLAN_TARGET", label: "Arşiv plan" },
+  { value: "USAGE_LIMIT_REACHED", label: "Limit dolu" },
+  { value: "PER_COMPANY_LIMIT_INVALID", label: "Firma limiti geçersiz" },
+  { value: "START_DATE_PASSED_DRAFT", label: "Geçmiş başlangıç" },
+  { value: "END_DATE_PASSED_ACTIVE", label: "Geçmiş bitiş" },
+  { value: "DUPLICATE_SCOPE", label: "Yinelenen hedef" },
+  { value: "STACKING_CONFLICT", label: "Stacking çakışması" },
+  { value: "FIXED_DISCOUNT_EXCEEDS_PRICE", label: "İndirim fiyatı aşıyor" },
+  { value: "REDEMPTION_COUNT_MISMATCH", label: "Kullanım sayısı tutarsız" },
+] as const;
 
 export const CAMPAIGN_STATUS_OPTIONS = [
   { value: "", label: "Tüm durumlar" },

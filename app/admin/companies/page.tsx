@@ -1,35 +1,31 @@
-import { AdminCompaniesContent } from "@/components/admin/admin-companies-content";
-import { getAdminCompanies, getAdminCompaniesSummary } from "@/lib/admin-service";
+import { AdminCompaniesListContent } from "@/components/admin/companies/admin-companies-list-content";
+import { parseAdminCompanyFilters } from "@/lib/admin/companies/admin-company-filter-utils";
+import {
+  listAdminCompaniesPaginated,
+  listAdminCompanyPlans,
+} from "@/lib/admin/companies/admin-company-list-service";
+import { getAdminCompanyListMetrics } from "@/lib/admin/companies/admin-company-metric-service";
 
 type PageProps = {
-  searchParams: Promise<{
-    q?: string;
-    status?: string;
-    membershipStatus?: string;
-  }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export default async function AdminCompaniesPage({ searchParams }: PageProps) {
   const params = await searchParams;
+  const filters = parseAdminCompanyFilters(params);
 
-  const [companies, summary] = await Promise.all([
-    getAdminCompanies({
-      q: params.q,
-      status: params.status,
-      membershipStatus: params.membershipStatus,
-    }),
-    getAdminCompaniesSummary(),
+  const [list, metrics, plans] = await Promise.all([
+    listAdminCompaniesPaginated(filters),
+    getAdminCompanyListMetrics(),
+    listAdminCompanyPlans(),
   ]);
 
   return (
-    <AdminCompaniesContent
-      companies={companies}
-      summary={summary}
-      filters={{
-        q: params.q,
-        status: params.status,
-        membershipStatus: params.membershipStatus,
-      }}
+    <AdminCompaniesListContent
+      list={list}
+      metrics={metrics}
+      filters={filters}
+      plans={plans}
     />
   );
 }

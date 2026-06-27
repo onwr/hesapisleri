@@ -1,13 +1,20 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdminApi } from "@/lib/admin-auth";
-import { getAdminOverview } from "@/lib/admin-service";
+import { getCachedAdminOverview } from "@/lib/admin/admin-overview-cache";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const auth = await requireSuperAdminApi();
     if ("error" in auth) return auth.error;
 
-    const data = await getAdminOverview();
+    const { searchParams } = new URL(request.url);
+
+    const data = await getCachedAdminOverview({
+      range: searchParams.get("range"),
+      from: searchParams.get("from"),
+      to: searchParams.get("to"),
+      timezone: searchParams.get("timezone"),
+    });
 
     return NextResponse.json({ success: true, data });
   } catch (error) {

@@ -28,15 +28,14 @@ import type { PublicReferralSignupInfo } from "@/lib/partner-service";
 import type { LoadingPreset } from "@/lib/loading-presets";
 import {
   KVKK_AYDINLATMA_PATH,
-  MARKETING_CONSENT_TEXT,
 } from "@/lib/legal/kvkk-consent";
+import type { CompanyLegalInfo } from "@/lib/legal/company-legal-info";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 const TRANSITION_MIN_MS = 1000;
-const TRIAL_DAYS = 14;
 
 type FormState = {
   name: string;
@@ -47,9 +46,19 @@ type FormState = {
 
 type RegisterFormProps = {
   referral?: PublicReferralSignupInfo | null;
+  legalInfo: CompanyLegalInfo;
+  trialDays: number;
+  marketingConsentText: string;
+  registrationEnabled: boolean;
 };
 
-export function RegisterForm({ referral = null }: RegisterFormProps) {
+export function RegisterForm({
+  referral = null,
+  legalInfo,
+  trialDays,
+  marketingConsentText,
+  registrationEnabled,
+}: RegisterFormProps) {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -170,6 +179,7 @@ export function RegisterForm({ referral = null }: RegisterFormProps) {
         open={kvkkModalOpen}
         onOpenChange={setKvkkModalOpen}
         onAcknowledge={() => setKvkkInformed(true)}
+        legalInfo={legalInfo}
       />
 
       <div className={authFlatFormClassName}>
@@ -180,7 +190,7 @@ export function RegisterForm({ referral = null }: RegisterFormProps) {
             className="mb-6 h-11 w-auto"
           />
           <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black text-emerald-700">
-            {TRIAL_DAYS} gün ücretsiz deneme
+            {trialDays} gün ücretsiz deneme
           </span>
           <h2 className="mt-4 text-2xl font-black tracking-tight text-[#0f1f4d]">
             İşletmenizi dijital olarak yönetmeye başlayın
@@ -191,6 +201,16 @@ export function RegisterForm({ referral = null }: RegisterFormProps) {
         </div>
 
         {referral ? <ReferralSignupNotice referral={referral} /> : null}
+
+        {!registrationEnabled ? (
+          <p className="mb-4 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-[13px] font-semibold text-amber-800">
+            Yeni kayıtlar geçici olarak kapalı. Sorularınız için{" "}
+            <a href={`mailto:${legalInfo.kvkkEmail}`} className="underline">
+              {legalInfo.kvkkEmail}
+            </a>
+            .
+          </p>
+        ) : null}
 
         <form onSubmit={handleRegister} className="space-y-5">
           <div className="space-y-2">
@@ -327,7 +347,7 @@ export function RegisterForm({ referral = null }: RegisterFormProps) {
                 htmlFor="marketingConsent"
                 className="min-w-0 flex-1 cursor-pointer text-xs font-normal leading-relaxed text-slate-600 block!"
               >
-                {MARKETING_CONSENT_TEXT}
+                {marketingConsentText}
               </Label>
             </div>
           </div>
@@ -336,7 +356,7 @@ export function RegisterForm({ referral = null }: RegisterFormProps) {
 
           <Button
             type="submit"
-            disabled={loading || transitioning || !kvkkInformed}
+            disabled={loading || transitioning || !kvkkInformed || !registrationEnabled}
             className={authPrimaryButtonClassName}
           >
             {loading ? (

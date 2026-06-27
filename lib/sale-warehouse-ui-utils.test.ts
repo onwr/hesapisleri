@@ -39,6 +39,7 @@ describe("buildProductsListUrl", () => {
 describe("posCheckoutSchema warehouseId", () => {
   it("warehouseId alanını kabul eder", () => {
     const parsed = posCheckoutSchema.safeParse({
+      idempotencyKey: "a".repeat(16),
       warehouseId: "warehouse-1",
       paymentStatus: "UNPAID",
       items: [

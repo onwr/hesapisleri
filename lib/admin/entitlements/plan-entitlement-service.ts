@@ -5,18 +5,15 @@ import { db } from "@/lib/prisma";
 import { isKnownEntitlementCode } from "@/lib/billing/entitlements/entitlement-registry";
 import { invalidateCompanyEntitlementCache } from "@/lib/billing/entitlements/entitlement-cache";
 import { enqueueBillingOutboxEvent } from "@/lib/billing/billing-outbox-service";
+import {
+  assertValidEntitlementSet,
+  normalizeEntitlementRow,
+  type EntitlementInputRow,
+} from "@/lib/admin/entitlements/admin-plan-entitlement-validation";
+import { invalidateAdminPlanEntitlementCaches } from "@/lib/admin/plans/admin-plan-cache";
+import { logAdminPlanAudit } from "@/lib/admin/plans/admin-plan-audit-service";
 
-export type PlanEntitlementUpsertInput = {
-  code: string;
-  valueType: PlanEntitlementValueType;
-  booleanValue?: boolean | null;
-  numberValue?: number | null;
-  stringValue?: string | null;
-  isUnlimited?: boolean;
-  description?: string | null;
-  category?: string | null;
-  sortOrder?: number;
-};
+export type PlanEntitlementUpsertInput = EntitlementInputRow;
 
 export async function getPlanEntitlements(planId: string) {
   const plan = await db.membershipPlan.findUnique({
@@ -32,15 +29,12 @@ export async function upsertPlanEntitlements(input: {
   entitlements: PlanEntitlementUpsertInput[];
   actorUserId: string;
 }) {
-  for (const row of input.entitlements) {
-    if (!isKnownEntitlementCode(row.code)) {
-      throw new Error(`Bilinmeyen entitlement kodu: ${row.code}`);
-    }
-  }
+  const normalized = input.entitlements.map(normalizeEntitlementRow);
+  assertValidEntitlementSet(normalized);
 
   const result = await db.$transaction(async (tx) => {
     const saved = [];
-    for (const row of input.entitlements) {
+    for (const row of normalized) {
       const item = await tx.planEntitlement.upsert({
         where: { planId_code: { planId: input.planId, code: row.code } },
         create: {
@@ -48,7 +42,7 @@ export async function upsertPlanEntitlements(input: {
           code: row.code,
           valueType: row.valueType,
           booleanValue: row.booleanValue,
-          numberValue: row.numberValue,
+          numberValue: row.numberValue != null ? Math.trunc(row.numberValue) : null,
           stringValue: row.stringValue,
           isUnlimited: row.isUnlimited ?? false,
           description: row.description,
@@ -58,7 +52,7 @@ export async function upsertPlanEntitlements(input: {
         update: {
           valueType: row.valueType,
           booleanValue: row.booleanValue,
-          numberValue: row.numberValue,
+          numberValue: row.numberValue != null ? Math.trunc(row.numberValue) : null,
           stringValue: row.stringValue,
           isUnlimited: row.isUnlimited ?? false,
           description: row.description,
@@ -69,18 +63,21 @@ export async function upsertPlanEntitlements(input: {
       saved.push(item);
     }
 
-    await tx.activityLog.create({
-      data: {
-        userId: input.actorUserId,
-        action: "PLAN_ENTITLEMENT_UPDATED",
-        module: "admin-plans",
-        message: JSON.stringify({ planId: input.planId, count: saved.length }),
-      },
+    await logAdminPlanAudit({
+      userId: input.actorUserId,
+      action: "PLAN_ENTITLEMENT_UPDATED",
+      planId: input.planId,
+      entityType: "MembershipPlan",
+      entityId: input.planId,
+      displayMessage: `Plan entitlement güncellendi (${saved.length} kayıt)`,
+      metadata: { count: saved.length },
+      tx,
     });
 
     return saved;
   });
 
+  invalidateAdminPlanEntitlementCaches(input.planId);
   return result;
 }
 
@@ -112,15 +109,17 @@ export async function publishPlanEntitlements(input: {
     },
   });
 
-  await db.activityLog.create({
-    data: {
-      userId: input.actorUserId,
-      action: "PLAN_ENTITLEMENT_PUBLISHED",
-      module: "admin-plans",
-      message: JSON.stringify({ planId: input.planId, version: version.version }),
-    },
+  await logAdminPlanAudit({
+    userId: input.actorUserId,
+    action: "PLAN_ENTITLEMENT_PUBLISHED",
+    planId: input.planId,
+    entityType: "PlanEntitlementVersion",
+    entityId: version.id,
+    displayMessage: `Entitlement v${version.version} yayınlandı`,
+    metadata: { version: version.version, changePolicy: version.changePolicy },
   });
 
+  invalidateAdminPlanEntitlementCaches(input.planId);
   return version;
 }
 

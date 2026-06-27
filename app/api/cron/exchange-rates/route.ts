@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { fetchAndStoreExchangeRatesForWindow } from "@/lib/exchange-rate-service";
-import { getExchangeWindowKey } from "@/lib/exchange-rate-utils";
+import { buildCronRouteResponse } from "@/lib/admin/jobs/cron-response";
+import { runCronJob } from "@/lib/admin/jobs/job-run-service";
 
 function isAuthorized(request: Request) {
   const expected = process.env.CRON_SECRET;
@@ -19,16 +19,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const windowKey = getExchangeWindowKey();
-    const snapshot = await fetchAndStoreExchangeRatesForWindow(windowKey);
-
-    return NextResponse.json({
-      success: true,
-      windowKey,
-      fetchedAt: snapshot.fetchedAt.toISOString(),
-      rates: snapshot.rates,
-      source: snapshot.source,
-    });
+    const run = await runCronJob("exchange-rates");
+    return NextResponse.json(buildCronRouteResponse("exchange-rates", run));
   } catch (error) {
     return NextResponse.json(
       {

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { KvkkAydinlatmaContent } from "@/components/legal/kvkk-aydinlatma-content";
+import { getPlatformLegalInfo } from "@/lib/legal/platform-legal-info";
 
 export const metadata = {
   title: "KVKK Aydınlatma Metni | Hesapisleri",
@@ -7,7 +8,9 @@ export const metadata = {
     "Hesap İşleri kayıt aydınlatma metni — kişisel verilerin işlenmesine ilişkin bilgilendirme",
 };
 
-export default function KvkkAydinlatmaMetniPage() {
+export default async function KvkkAydinlatmaMetniPage() {
+  const legalInfo = await getPlatformLegalInfo();
+
   return (
     <div className="min-h-dvh bg-slate-50 px-4 py-10">
       <div className="mx-auto max-w-3xl rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
@@ -19,7 +22,7 @@ export default function KvkkAydinlatmaMetniPage() {
         </Link>
 
         <div className="mt-6">
-          <KvkkAydinlatmaContent />
+          <KvkkAydinlatmaContent legalInfo={legalInfo} />
         </div>
       </div>
     </div>

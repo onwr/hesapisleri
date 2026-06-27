@@ -73,7 +73,7 @@ export function AdminMembershipCampaignsContent({
         title="Kampanyalar"
         description="Üyelik planları için dönemsel indirim ve promosyonları yönetin."
         primaryAction={
-          <Link href="/admin/membership-campaigns/new" className={appPrimaryButtonClass}>
+          <Link href="/admin/campaigns/new" className={appPrimaryButtonClass}>
             Yeni Kampanya
           </Link>
         }
@@ -85,17 +85,19 @@ export function AdminMembershipCampaignsContent({
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        <AdminStatCard title="Toplam Kampanya" value={String(summary.total)} icon={Megaphone} tone="blue" />
+        <AdminStatCard title="Toplam" value={String(summary.total)} icon={Megaphone} tone="blue" />
+        <AdminStatCard title="Taslak" value={String(summary.draft)} icon={Megaphone} tone="purple" />
         <AdminStatCard title="Aktif" value={String(summary.active)} icon={PlayCircle} tone="green" />
         <AdminStatCard title="Zamanlanmış" value={String(summary.scheduled)} icon={PauseCircle} tone="amber" />
-        <AdminStatCard title="Bu Ay Kullanım" value={String(summary.monthlyUsage)} icon={Megaphone} tone="purple" />
-        <AdminStatCard
-          title="Toplam İndirim"
-          value={formatMinorToMoney(summary.totalDiscountMinor)}
-          icon={Megaphone}
-          tone="blue"
-        />
         <AdminStatCard title="Yakında Bitecek" value={String(summary.endingSoon)} icon={Archive} tone="amber" />
+        <AdminStatCard title="Limit Dolu" value={String(summary.usageLimitReached)} icon={Archive} tone="blue" />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <AdminStatCard title="Sona Ermiş" value={String(summary.expired)} icon={Archive} tone="purple" />
+        <AdminStatCard title="Arşiv" value={String(summary.archived)} icon={Archive} tone="blue" />
+        <AdminStatCard title="Yakında Başlayacak" value={String(summary.startingSoon)} icon={PlayCircle} tone="green" />
+        <AdminStatCard title="Hedefsiz" value={String(summary.noTarget)} icon={Megaphone} tone="amber" />
+        <AdminStatCard title="Fiyat Sorunu" value={String(summary.priceResolutionIssues)} icon={Megaphone} tone="amber" />
       </div>
 
       <AdminCampaignFilters
@@ -130,8 +132,9 @@ export function AdminMembershipCampaignsContent({
                   <th className="px-3 py-2">Dönemler</th>
                   <th className="px-3 py-2">Başlangıç</th>
                   <th className="px-3 py-2">Bitiş</th>
-                  <th className="px-3 py-2">Kullanım</th>
-                  <th className="px-3 py-2">Öncelik</th>
+                  <th className="px-3 py-2">Kullanım / Limit</th>
+                  <th className="px-3 py-2">Para Birimi</th>
+                  <th className="px-3 py-2">Sorunlar</th>
                   <th className="px-3 py-2">Durum</th>
                   <th className="px-3 py-2">İşlemler</th>
                 </tr>
@@ -141,7 +144,7 @@ export function AdminMembershipCampaignsContent({
                   <tr key={item.id} className={`${appTableRowClass} align-top`}>
                     <td className="px-3 py-3">
                       <Link
-                        href={`/admin/membership-campaigns/${item.id}`}
+                        href={`/admin/campaigns/${item.id}`}
                         className="font-bold text-[#0f1f4d] hover:underline"
                       >
                         {item.name}
@@ -164,8 +167,28 @@ export function AdminMembershipCampaignsContent({
                     <td className="px-3 py-3 text-slate-700">{intervalSummary(item.scopes)}</td>
                     <td className="px-3 py-3">{formatAdminDate(item.startsAt)}</td>
                     <td className="px-3 py-3">{formatAdminDate(item.endsAt)}</td>
-                    <td className="px-3 py-3">{item.usageCount}</td>
-                    <td className="px-3 py-3">{item.priority}</td>
+                    <td className="px-3 py-3">
+                      {item.usageCount}
+                      {item.maxRedemptions != null ? ` / ${item.maxRedemptions}` : ""}
+                    </td>
+                    <td className="px-3 py-3 text-[12px]">{item.currencies.join(", ")}</td>
+                    <td className="px-3 py-3">
+                      {item.issues.length ? (
+                        <div className="flex flex-wrap gap-1">
+                          {item.issues.slice(0, 3).map((issue) => (
+                            <span
+                              key={issue.code}
+                              title={issue.message}
+                              className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-800"
+                            >
+                              {issue.code}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-slate-400">—</span>
+                      )}
+                    </td>
                     <td className="px-3 py-3">
                       <span
                         className={`inline-block rounded-md px-2 py-0.5 text-[10px] font-bold ${getCampaignStatusBadgeClass(item.status)}`}
@@ -188,7 +211,7 @@ export function AdminMembershipCampaignsContent({
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <Link
-                      href={`/admin/membership-campaigns/${item.id}`}
+                      href={`/admin/campaigns/${item.id}`}
                       className="text-[15px] font-extrabold text-[#0f1f4d]"
                     >
                       {item.name}
@@ -244,7 +267,7 @@ export function AdminMembershipCampaignsContent({
                 return (
                   <Link
                     key={page}
-                    href={`/admin/membership-campaigns?${params.toString()}`}
+                    href={`/admin/campaigns?${params.toString()}`}
                     className={`rounded-xl px-3 py-1.5 text-[13px] font-bold ${
                       page === pagination.page
                         ? "bg-blue-600 text-white"

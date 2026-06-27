@@ -1,42 +1,29 @@
-import { notFound } from "next/navigation";
-import { AdminPageContainer } from "@/components/admin/layout/admin-page-container";
-import { AdminCampaignDetailTabs } from "@/components/admin/admin-campaign-detail-tabs";
-import {
-  getCampaignAnalytics,
-  getCampaignDetail,
-  listCampaignActivityHistory,
-  listCampaignAffectedSubscriptions,
-} from "@/lib/admin/promotions";
-import { db } from "@/lib/prisma";
+import { redirect } from "next/navigation";
 
-type PageProps = { params: Promise<{ id: string }> };
+type PageProps = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
 
-export default async function AdminMembershipCampaignDetailPage({ params }: PageProps) {
+function buildQuery(params: Record<string, string | string[] | undefined>) {
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value == null) continue;
+    if (Array.isArray(value)) value.forEach((v) => qs.append(key, v));
+    else qs.set(key, value);
+  }
+  const tab = qs.get("tab");
+  if (tab === "scope") qs.set("tab", "targeting");
+  if (tab === "preview") qs.set("tab", "pricing");
+  const s = qs.toString();
+  return s ? `?${s}` : "";
+}
+
+export default async function LegacyMembershipCampaignDetailRedirect({
+  params,
+  searchParams,
+}: PageProps) {
   const { id } = await params;
-  const data = await getCampaignDetail(id);
-  if (!data) notFound();
-
-  const [analytics, affected, history, companies] = await Promise.all([
-    getCampaignAnalytics(id),
-    listCampaignAffectedSubscriptions(id),
-    listCampaignActivityHistory(id),
-    db.company.findMany({
-      where: { status: "ACTIVE" },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-      take: 50,
-    }),
-  ]);
-
-  return (
-    <AdminPageContainer size="full">
-      <AdminCampaignDetailTabs
-        detail={data}
-        analytics={analytics}
-        affected={affected}
-        history={history}
-        companies={companies}
-      />
-    </AdminPageContainer>
-  );
+  const sp = await searchParams;
+  redirect(`/admin/campaigns/${id}${buildQuery(sp)}`);
 }

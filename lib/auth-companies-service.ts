@@ -70,6 +70,7 @@ export async function switchUserCompany(input: {
       id: membership.user.id,
       email: membership.user.email,
       role: membership.user.role,
+      sessionVersion: membership.user.sessionVersion,
     },
   };
 }

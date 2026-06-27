@@ -8,6 +8,7 @@ import {
   resolveEffectiveRole,
 } from "@/lib/permission-utils";
 import { isPlatformSuperAdminUser } from "@/lib/admin-auth";
+import { redirectIfMaintenanceActive } from "@/lib/platform-runtime/platform-availability";
 import { AUTH_COOKIE_NAME } from "./auth-cookie";
 import {
   buildClearSessionUrl,
@@ -70,6 +71,12 @@ function buildPlatformCompany(user: User): Company {
     referralCode: null,
     referredAt: null,
     status: "ACTIVE",
+    suspendedAt: null,
+    suspendedReason: null,
+    suspendedUntil: null,
+    suspendedByUserId: null,
+    archivedAt: null,
+    archivedByUserId: null,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
@@ -105,6 +112,13 @@ export const resolveAuthState = cache(async (): Promise<AuthState> => {
 
   if (user.status !== "ACTIVE") {
     return { status: "INVALID_SESSION", reason: "user-inactive" };
+  }
+
+  // sv (sessionVersion) kontrolü: eksik veya eşleşmiyorsa token geçersiz.
+  // Eski sv içermeyen tokenlar da reddedilir (sessiz uyumluluk yok).
+  // proxy.ts yalnızca imza + exp kontrolü yapar; revocation bu katmanda yapılır.
+  if (payload.sv === undefined || payload.sv !== user.sessionVersion) {
+    return { status: "INVALID_SESSION", reason: "session-revoked" };
   }
 
   if (user.role === "SUPER_ADMIN" || isPlatformSuperAdminUser(user)) {
@@ -266,7 +280,9 @@ export async function requireCompanySelectionAccess() {
   const state = await requireAuthenticatedUser();
 
   if (state.status === "AUTHENTICATED") {
-    return state;
+    await redirectIfMaintenanceActive(state.isSuperAdmin);
+  } else if (state.status === "COMPANY_REQUIRED") {
+    await redirectIfMaintenanceActive(isPlatformSuperAdminUser(state.user));
   }
 
   return state;
@@ -284,7 +300,12 @@ export async function requireCompanyUser() {
   }
 
   if (state.status === "COMPANY_REQUIRED") {
+    await redirectIfMaintenanceActive(isPlatformSuperAdminUser(state.user));
     redirect("/companies/select");
+  }
+
+  if (state.status === "AUTHENTICATED") {
+    await redirectIfMaintenanceActive(state.isSuperAdmin);
   }
 
   return state;

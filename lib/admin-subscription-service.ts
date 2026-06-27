@@ -1535,7 +1535,7 @@ export async function manuallyExtendSubscription(
 
 export async function listAdminSubscriptionPlans() {
   return db.membershipPlan.findMany({
-    where: { isActive: true },
+    where: { planStatus: "ACTIVE" },
     orderBy: { name: "asc" },
     select: { id: true, name: true, code: true },
   });

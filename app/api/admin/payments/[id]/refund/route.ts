@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireSuperAdminApi } from "@/lib/admin-auth";
-import { refundMembershipPayment } from "@/lib/payments/payment-refund-service";
+import {
+  refundMembershipPayment,
+  PaymentRefundValidationError,
+} from "@/lib/payments/payment-refund-service";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 const schema = z.object({
   amountMinor: z.number().int().positive(),
   reason: z.string().min(3).max(500),
+  idempotencyKey: z.string().min(8).max(64).optional(),
   accessAction: z
     .enum(["KEEP_UNTIL_PERIOD_END", "END_NOW", "MANUAL_REVIEW"])
     .default("MANUAL_REVIEW"),
@@ -36,15 +40,21 @@ export async function POST(request: Request, { params }: RouteParams) {
       amountMinor: parsed.data.amountMinor,
       reason: `${parsed.data.reason} (${parsed.data.accessAction})`,
       requestedByUserId: auth.user.id,
+      idempotencyKey: parsed.data.idempotencyKey,
     });
 
     return NextResponse.json({ success: true, data: result });
   } catch (error) {
+    if (error instanceof PaymentRefundValidationError) {
+      return NextResponse.json(
+        { success: false, message: error.message, code: error.code },
+        { status: error.status }
+      );
+    }
     return NextResponse.json(
       {
         success: false,
-        message:
-          error instanceof Error ? error.message : "İade başlatılamadı.",
+        message: error instanceof Error ? error.message : "İade başlatılamadı.",
       },
       { status: 500 }
     );

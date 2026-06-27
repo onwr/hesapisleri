@@ -1,23 +1,26 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdminApi } from "@/lib/admin-auth";
 import {
-  PartnerServiceError,
-  getPartnerSettings,
-  updatePartnerSettings,
-} from "@/lib/partner-service";
-import { updatePartnerSettingsSchema } from "@/lib/partner-utils";
+  AdminPartnerSettingsServiceError,
+  getAdminPartnerSettings,
+  updateAdminPartnerSettings,
+} from "@/lib/admin/partner-settings";
 
 export async function GET() {
   try {
     const auth = await requireSuperAdminApi();
     if ("error" in auth) return auth.error;
 
-    const settings = await getPartnerSettings();
+    const data = await getAdminPartnerSettings();
 
-    return NextResponse.json({ success: true, data: { settings } });
+    return NextResponse.json({ success: true, data });
   } catch (error) {
-    console.error("ADMIN_PARTNER_SETTINGS_GET_ERROR", error);
-
+    if (error instanceof AdminPartnerSettingsServiceError) {
+      return NextResponse.json(
+        { success: false, message: error.message, code: error.code },
+        { status: error.status }
+      );
+    }
     return NextResponse.json(
       { success: false, message: "Ayarlar yüklenemedi." },
       { status: 500 }
@@ -25,41 +28,36 @@ export async function GET() {
   }
 }
 
-export async function PATCH(req: Request) {
+export async function PUT(req: Request) {
   try {
     const auth = await requireSuperAdminApi();
     if ("error" in auth) return auth.error;
 
     const body = await req.json();
-    const parsed = updatePartnerSettingsSchema.safeParse(body);
-
-    if (!parsed.success) {
-      return NextResponse.json(
-        { success: false, message: "Ayar bilgilerini kontrol edin." },
-        { status: 400 }
-      );
-    }
-
-    const settings = await updatePartnerSettings(parsed.data);
+    const data = await updateAdminPartnerSettings(auth.user.id, body);
 
     return NextResponse.json({
       success: true,
       message: "Ayarlar güncellendi.",
-      data: { settings },
+      data,
     });
   } catch (error) {
-    if (error instanceof PartnerServiceError) {
+    if (error instanceof AdminPartnerSettingsServiceError) {
       return NextResponse.json(
-        { success: false, message: error.message },
+        { success: false, message: error.message, code: error.code },
         { status: error.status }
       );
     }
-
-    console.error("ADMIN_PARTNER_SETTINGS_PATCH_ERROR", error);
-
     return NextResponse.json(
       { success: false, message: "Ayarlar güncellenemedi." },
       { status: 500 }
     );
   }
+}
+
+export async function PATCH() {
+  return NextResponse.json(
+    { success: false, message: "Ayar güncellemesi için PUT kullanın." },
+    { status: 405 }
+  );
 }

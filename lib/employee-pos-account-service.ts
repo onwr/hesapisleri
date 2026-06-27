@@ -143,6 +143,7 @@ export async function createEmployeePosAccount(input: {
         password: hashedPassword,
         role: "STAFF",
         status: "ACTIVE",
+        loginTrackingStatus: "NEVER_LOGGED_IN",
       },
     });
 

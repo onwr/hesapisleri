@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { runPaymentReconciliation } from "@/lib/payments/payment-reconciliation-service";
+import { buildCronRouteResponse } from "@/lib/admin/jobs/cron-response";
+import { runCronJob } from "@/lib/admin/jobs/job-run-service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,10 +20,8 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      data: await runPaymentReconciliation(),
-    });
+    const run = await runCronJob("payment-reconciliation");
+    return NextResponse.json(buildCronRouteResponse("payment-reconciliation", run));
   } catch (error) {
     return NextResponse.json(
       {

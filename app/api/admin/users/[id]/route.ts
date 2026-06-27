@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdminApi } from "@/lib/admin-auth";
-import {
-  AdminServiceError,
-  getAdminUserDetail,
-  updateAdminUser,
-} from "@/lib/admin-service";
+import { getAdminUserDetail } from "@/lib/admin-service";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -36,33 +32,16 @@ export async function GET(_req: Request, context: RouteContext) {
   }
 }
 
-export async function PATCH(req: Request, context: RouteContext) {
-  try {
-    const auth = await requireSuperAdminApi();
-    if ("error" in auth) return auth.error;
-
-    const { id } = await context.params;
-    const body = await req.json();
-    const data = await updateAdminUser(id, auth.user.id, body);
-
-    return NextResponse.json({
-      success: true,
-      message: "Kullanıcı güncellendi.",
-      data,
-    });
-  } catch (error) {
-    if (error instanceof AdminServiceError) {
-      return NextResponse.json(
-        { success: false, message: error.message },
-        { status: error.status }
-      );
-    }
-
-    console.error("ADMIN_USER_PATCH_ERROR", error);
-
-    return NextResponse.json(
-      { success: false, message: "Kullanıcı güncellenemedi." },
-      { status: 500 }
-    );
-  }
+// PATCH kasıtlı olarak kaldırıldı.
+// Kullanıcı durumu /suspend ve /reactivate endpointlerinden değiştirilir.
+// Platform rol değişikliği ayrı bir güvenlik fazında ele alınacak.
+export async function PATCH() {
+  return NextResponse.json(
+    {
+      success: false,
+      message:
+        "Bu endpoint kullanıcı güncellemesi için kullanılamaz. Durum için /suspend veya /reactivate kullanın.",
+    },
+    { status: 405 }
+  );
 }

@@ -6,6 +6,18 @@ import {
   createCompanyForUser,
 } from "./create-company-service";
 
+const mockPlatformDefaults = {
+  currency: "TRY",
+  defaultVatRate: 20,
+  trialDays: 14,
+  trialAmount: 1499,
+  notifyLowStock: true,
+  notifyDueInvoices: true,
+  notifyLateCollections: true,
+  notifyDailySummary: false,
+  notifyEmployeePayments: true,
+};
+
 type OperationName =
   | "company"
   | "companyUser"
@@ -16,7 +28,8 @@ type OperationName =
   | "account"
   | "companySettings"
   | "notification"
-  | "activityLog";
+  | "activityLog"
+  | "companyOnboarding";
 
 function createMockTx() {
   const operations: OperationName[] = [];
@@ -128,6 +141,11 @@ function createMockTx() {
         assert.equal(args.data.action, "CREATE_COMPANY");
       },
     },
+    companyOnboarding: {
+      create: async () => {
+        operations.push("companyOnboarding");
+      },
+    },
   };
 
   return { tx: tx as unknown as Prisma.TransactionClient, operations };
@@ -141,6 +159,7 @@ describe("createCompanyForUser", () => {
       userId: "user-1",
       name: "Test Firma",
       source: "NEW_COMPANY",
+      platformDefaults: mockPlatformDefaults,
     });
 
     assert.equal(result.company.id, "company-1");
@@ -156,6 +175,7 @@ describe("createCompanyForUser", () => {
       "companySettings",
       "notification",
       "activityLog",
+      "companyOnboarding",
     ]);
   });
 
@@ -179,6 +199,7 @@ describe("createCompanyForUser", () => {
       name: "İşletmem",
       source: "REGISTER",
       registerCompanyNameProvided: false,
+      platformDefaults: mockPlatformDefaults,
     });
 
     assert.equal(activityAction, "REGISTER");
@@ -201,6 +222,7 @@ describe("createCompanyForUser", () => {
           userId: "user-1",
           name: "Test Firma",
           source: "NEW_COMPANY",
+          platformDefaults: mockPlatformDefaults,
         }),
       /Simulated failure/
     );

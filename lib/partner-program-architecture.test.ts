@@ -70,9 +70,9 @@ describe("partner program architecture", () => {
   });
 
   it("varsayılan ve partner özel komisyon oranı desteklenir", () => {
-    const service = read("lib/partner-service.ts");
-    assert.match(service, /defaultCommissionRate/);
-    assert.match(service, /commissionRate: input\.data\.commissionRate/);
+    const mutation = read("lib/admin/partner-applications/application-mutation-service.ts");
+    assert.match(mutation, /defaultCommissionRate/);
+    assert.match(mutation, /commissionRate: parsed\.commissionRate/);
     const commission = calculatePartnerCommission(1000, 12.5);
     assert.equal(commission, 125);
   });

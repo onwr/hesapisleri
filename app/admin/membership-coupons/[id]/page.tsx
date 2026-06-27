@@ -1,39 +1,36 @@
-import { notFound } from "next/navigation";
-import { AdminPageContainer } from "@/components/admin/layout/admin-page-container";
-import { AdminCouponDetailTabs } from "@/components/admin/admin-coupon-detail-tabs";
-import {
-  getCouponAnalytics,
-  getCouponDetail,
-  listCouponActivityHistory,
-} from "@/lib/admin/promotions";
-import { db } from "@/lib/prisma";
+import { redirect } from "next/navigation";
 
-type PageProps = { params: Promise<{ id: string }> };
+type PageProps = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
 
-export default async function AdminMembershipCouponDetailPage({ params }: PageProps) {
+function buildQuery(params: Record<string, string | string[] | undefined>) {
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value == null) continue;
+    if (Array.isArray(value)) value.forEach((v) => qs.append(key, v));
+    else qs.set(key, value);
+  }
+  const s = qs.toString();
+  return s ? `?${s}` : "";
+}
+
+function mapTab(tab: string | undefined) {
+  if (tab === "scope") return "targeting";
+  if (tab === "preview") return "pricing";
+  return tab;
+}
+
+export default async function LegacyMembershipCouponDetailRedirect({
+  params,
+  searchParams,
+}: PageProps) {
   const { id } = await params;
-  const data = await getCouponDetail(id);
-  if (!data) notFound();
-
-  const [analytics, history, companies] = await Promise.all([
-    getCouponAnalytics(id),
-    listCouponActivityHistory(id),
-    db.company.findMany({
-      where: { status: "ACTIVE" },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-      take: 50,
-    }),
-  ]);
-
-  return (
-    <AdminPageContainer size="full">
-      <AdminCouponDetailTabs
-        detail={data}
-        analytics={analytics}
-        history={history}
-        companies={companies}
-      />
-    </AdminPageContainer>
-  );
+  const sp = await searchParams;
+  const next: Record<string, string | string[] | undefined> = { ...sp };
+  if (typeof sp.tab === "string") {
+    next.tab = mapTab(sp.tab) ?? sp.tab;
+  }
+  redirect(`/admin/coupons/${id}${buildQuery(next)}`);
 }

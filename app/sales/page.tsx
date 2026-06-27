@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { guardPageModule } from "@/lib/module-access";
+import { db } from "@/lib/prisma";
 
 import { SalesRowActions } from "@/components/sales/sales-row-actions";
 import {
@@ -147,6 +148,11 @@ const now = new Date();
       from,
       to,
     });
+
+  const hasNoSalesEver =
+    rows.length === 0
+      ? (await db.sale.count({ where: { companyId: company.id } })) === 0
+      : false;
 
   return (
     <AppShell>
@@ -338,21 +344,31 @@ const now = new Date();
                         </div>
 
                         <p className="mt-4 text-lg font-black text-[#0f1f4d]">
-                          Bu filtrede kayıt bulunamadı
+                          {hasNoSalesEver
+                            ? "Henüz satış yok"
+                            : "Bu filtrede kayıt bulunamadı"}
                         </p>
 
                         <p className="mt-2 text-sm leading-6 text-slate-500">
-                          Seçili sekme veya tarih aralığında gösterilecek kayıt
-                          yok. Filtreyi genişletebilir veya yeni satış
-                          oluşturabilirsiniz.
+                          {hasNoSalesEver
+                            ? "POS veya satış ekranından ilk işleminizi gerçekleştirin."
+                            : "Seçili sekme veya tarih aralığında gösterilecek kayıt yok. Filtreyi genişletebilir veya yeni satış oluşturabilirsiniz."}
                         </p>
 
                         <Link
-                          href="/sales/new"
+                          href={hasNoSalesEver ? "/pos" : "/sales/new"}
                           className="mt-5 inline-flex h-11 items-center justify-center rounded-2xl bg-emerald-600 px-5 text-sm font-black text-white transition hover:bg-emerald-700"
                         >
-                          Yeni Satış Oluştur
+                          {hasNoSalesEver ? "İlk Satışını Yap" : "Yeni Satış Oluştur"}
                         </Link>
+                        {hasNoSalesEver ? (
+                          <Link
+                            href="/onboarding"
+                            className="mt-3 block text-sm font-semibold text-blue-600 hover:underline"
+                          >
+                            Kurulum rehberine dön
+                          </Link>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

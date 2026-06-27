@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdminApi } from "@/lib/admin-auth";
-import {
-  AdminSubscriptionError,
-  listAdminSubscriptions,
-  getAdminSubscriptionsSummary,
-} from "@/lib/admin-subscription-service";
-import { parseAdminSubscriptionFilters } from "@/lib/admin-subscription-utils";
+import { adminSubListQuerySchema } from "@/lib/admin/subscriptions/admin-subscription-schemas";
+import { getAdminSubscriptionList, exportAdminSubscriptionsCsv } from "@/lib/admin/subscriptions/admin-subscription-list-service";
+import { getAdminSubscriptionMetrics } from "@/lib/admin/subscriptions/admin-subscription-metric-service";
 
 export async function GET(req: Request) {
   try {
@@ -13,33 +10,31 @@ export async function GET(req: Request) {
     if ("error" in auth) return auth.error;
 
     const { searchParams } = new URL(req.url);
-    const params: Record<string, string> = {};
-    searchParams.forEach((value, key) => {
-      params[key] = value;
-    });
+    const rawQuery = Object.fromEntries(searchParams.entries());
 
-    const filters = parseAdminSubscriptionFilters(params);
-    const [list, summary] = await Promise.all([
-      listAdminSubscriptions(filters),
-      getAdminSubscriptionsSummary(),
-    ]);
-
-    return NextResponse.json({
-      success: true,
-      data: { ...list, summary },
-    });
-  } catch (error) {
-    if (error instanceof AdminSubscriptionError) {
-      return NextResponse.json(
-        { success: false, message: error.message },
-        { status: error.status }
-      );
+    if (rawQuery.export === "csv") {
+      const parsed = adminSubListQuerySchema.safeParse({ ...rawQuery, pageSize: 1000 });
+      if (!parsed.success) return NextResponse.json({ success: false, message: "Geçersiz sorgu." }, { status: 400 });
+      const csv = await exportAdminSubscriptionsCsv(parsed.data);
+      return new Response(csv, {
+        headers: {
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename="subscriptions-${Date.now()}.csv"`,
+        },
+      });
     }
 
-    console.error("ADMIN_SUBSCRIPTIONS_LIST_ERROR", error);
-    return NextResponse.json(
-      { success: false, message: "Abonelikler yüklenemedi." },
-      { status: 500 }
-    );
+    const parsed = adminSubListQuerySchema.safeParse(rawQuery);
+    if (!parsed.success) return NextResponse.json({ success: false, message: "Geçersiz sorgu parametreleri." }, { status: 400 });
+
+    const [list, metrics] = await Promise.all([
+      getAdminSubscriptionList(parsed.data),
+      getAdminSubscriptionMetrics(),
+    ]);
+
+    return NextResponse.json({ success: true, data: { list, metrics } });
+  } catch (err) {
+    console.error("[GET /api/admin/subscriptions]", err);
+    return NextResponse.json({ success: false, message: "Sunucu hatası" }, { status: 500 });
   }
 }

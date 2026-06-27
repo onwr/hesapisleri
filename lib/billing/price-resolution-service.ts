@@ -43,6 +43,14 @@ export type ResolvedSubscriptionPrice = ResolvedPriceTotals & {
   explanation: string[];
 };
 
+import {
+  assertSingleEffectivePrice,
+  PriceResolutionConflictError,
+} from "@/lib/admin/plans/admin-plan-price-resolution-utils";
+import { getPlanFeaturesForDisplay } from "@/lib/admin/plans/admin-plan-feature-service";
+
+export { PriceResolutionConflictError };
+
 export class PriceResolutionError extends Error {
   status: number;
   constructor(message: string, status = 400) {
@@ -75,20 +83,27 @@ function isPriceEffective(
 export async function getActivePlanPrice(input: {
   planId: string;
   billingInterval: MembershipPeriod;
+  currency?: string;
   at?: Date;
 }) {
   const now = input.at ?? new Date();
+  const plan = await db.membershipPlan.findUnique({
+    where: { id: input.planId },
+    select: { defaultCurrency: true, currency: true },
+  });
+  const currency = input.currency ?? plan?.defaultCurrency ?? plan?.currency ?? "TRY";
+
   const prices = await db.membershipPlanPrice.findMany({
     where: {
       planId: input.planId,
       billingInterval: input.billingInterval,
+      currency,
       status: { in: ["ACTIVE", "SCHEDULED"] },
     },
     orderBy: [{ version: "desc" }],
   });
 
-  const active = prices.find((price) => isPriceEffective(price, now));
-  return active ?? null;
+  return assertSingleEffectivePrice(prices, input.billingInterval, currency, now);
 }
 
 export async function resolveSubscriptionPrice(input: {
@@ -125,9 +140,11 @@ export async function resolveSubscriptionPrice(input: {
     }),
   ]);
 
-  if (!plan || (!plan.isActive && plan.planStatus !== "ACTIVE")) {
+  if (!plan || plan.planStatus !== "ACTIVE") {
     throw new PriceResolutionError("Plan bulunamadı veya aktif değil.", 404);
   }
+
+  const currency = plan.defaultCurrency || plan.currency;
 
   let listPriceMinor: number;
   let salePriceMinor: number;
@@ -138,18 +155,36 @@ export async function resolveSubscriptionPrice(input: {
   let priceSource: ResolvedSubscriptionPrice["priceSource"] = "PLAN_PRICE";
   let priceChangePolicy: SubscriptionPriceChangePolicy = "NEW_SUBSCRIBERS_ONLY";
 
-  if (
+  const useLockedPrice =
     subscription?.lockedPriceMinor != null &&
-    subscription.priceLockType === "GRANDFATHERED" &&
-    (subscription.priceLockedUntil == null || subscription.priceLockedUntil > now)
-  ) {
+    subscription.lockedPlanPriceId != null &&
+    (subscription.priceLockType === "GRANDFATHERED" ||
+      subscription.priceLockType === "NEW_SUBSCRIBERS_ONLY" ||
+      (subscription.nextPriceEffectiveAt != null && now < subscription.nextPriceEffectiveAt));
+
+  const scheduledNextPrice =
+    subscription?.nextPlanPriceId &&
+    subscription.nextPriceEffectiveAt &&
+    now >= subscription.nextPriceEffectiveAt
+      ? await db.membershipPlanPrice.findUnique({
+          where: { id: subscription.nextPlanPriceId },
+        })
+      : null;
+
+  if (useLockedPrice && subscription) {
     listPriceMinor =
-      subscription.lockedListPriceMinor ?? subscription.lockedPriceMinor;
-    salePriceMinor = subscription.lockedPriceMinor;
-    planPriceId = subscription.lockedPlanPriceId ?? "grandfathered";
+      subscription.lockedListPriceMinor ?? subscription.lockedPriceMinor!;
+    salePriceMinor = subscription.lockedPriceMinor!;
+    planPriceId = subscription.lockedPlanPriceId!;
     priceVersion = 0;
-    priceSource = "GRANDFATHERED";
-    explanation.push("Abonelik fiyat koruması (grandfathered) uygulandı.");
+    priceSource =
+      subscription.priceLockType === "GRANDFATHERED" ? "GRANDFATHERED" : "GRANDFATHERED";
+    priceChangePolicy = subscription.priceLockType ?? "NEW_SUBSCRIBERS_ONLY";
+    explanation.push(
+      subscription.priceLockType === "GRANDFATHERED"
+        ? "Abonelik fiyat koruması (grandfathered) uygulandı."
+        : "Mevcut abonelik kilitli fiyatla devam ediyor."
+    );
   } else if (companyOverride) {
     listPriceMinor = companyOverride.priceMinor;
     salePriceMinor = companyOverride.priceMinor;
@@ -164,6 +199,17 @@ export async function resolveSubscriptionPrice(input: {
       label: "Özel firma fiyatı",
       amountMinor: 0,
     });
+  } else if (scheduledNextPrice) {
+    listPriceMinor = scheduledNextPrice.listPriceMinor;
+    salePriceMinor = scheduledNextPrice.salePriceMinor;
+    vatRate = scheduledNextPrice.vatRate;
+    vatIncluded = scheduledNextPrice.vatIncluded;
+    planPriceId = scheduledNextPrice.id;
+    priceVersion = scheduledNextPrice.version;
+    priceChangePolicy = scheduledNextPrice.priceChangePolicy;
+    explanation.push(
+      `Planlanmış fiyat geçişi uygulandı (v${scheduledNextPrice.version}).`
+    );
   } else if (planPrice) {
     listPriceMinor = planPrice.listPriceMinor;
     salePriceMinor = planPrice.salePriceMinor;
@@ -183,7 +229,7 @@ export async function resolveSubscriptionPrice(input: {
       });
     }
   } else {
-    const legacyAmount = legacyPlanAmount(plan, input.billingInterval);
+    const legacyAmount = legacyPlanAmount(plan, input.billingInterval, currency);
     const minor = Math.round(legacyAmount * 100);
     listPriceMinor = minor;
     salePriceMinor = minor;
@@ -267,10 +313,11 @@ export async function resolveSubscriptionPrice(input: {
     orderBy: { sortOrder: "asc" },
   });
 
+  const featureLabels = await getPlanFeaturesForDisplay(input.planId);
   const entitlementsSnapshot =
     entitlements.length > 0
       ? entitlements
-      : plan.features.map((feature) => ({ code: feature, valueType: "BOOLEAN" }));
+      : featureLabels.map((feature) => ({ code: feature, valueType: "BOOLEAN" }));
 
   return {
     ...totals,
@@ -279,7 +326,7 @@ export async function resolveSubscriptionPrice(input: {
     billingInterval: input.billingInterval,
     planPriceId,
     priceVersion,
-    currency: plan.defaultCurrency || plan.currency,
+    currency,
     campaignIds,
     couponId,
     priceSource,
@@ -292,13 +339,23 @@ export async function resolveSubscriptionPrice(input: {
 
 function legacyPlanAmount(
   plan: {
+    defaultCurrency: string;
+    currency: string;
     monthlyPrice: { toString(): string };
     quarterlyPrice: { toString(): string };
     semiAnnualPrice: { toString(): string };
     yearlyPrice: { toString(): string };
   },
-  interval: MembershipPeriod
+  interval: MembershipPeriod,
+  requestedCurrency: string
 ) {
+  const defaultCurrency = plan.defaultCurrency || plan.currency;
+  if (requestedCurrency !== defaultCurrency) {
+    throw new PriceResolutionError(
+      `Legacy fiyat yalnızca ${defaultCurrency} için mevcut.`,
+      404
+    );
+  }
   switch (interval) {
     case "QUARTERLY":
       return Number(plan.quarterlyPrice);

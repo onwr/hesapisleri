@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { runMembershipCampaignLifecycle } from "@/lib/admin/promotions/campaign-lifecycle-service";
+import { buildCronRouteResponse } from "@/lib/admin/jobs/cron-response";
+import { runCronJob } from "@/lib/admin/jobs/job-run-service";
 
 export async function POST(req: Request) {
   const secret = req.headers.get("x-cron-secret");
@@ -7,6 +8,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: false, message: "Yetkisiz." }, { status: 401 });
   }
 
-  const result = await runMembershipCampaignLifecycle();
-  return NextResponse.json({ success: true, data: result });
+  try {
+    const run = await runCronJob("membership-campaign-lifecycle");
+    return NextResponse.json(buildCronRouteResponse("membership-campaign-lifecycle", run));
+  } catch (error) {
+    return NextResponse.json(
+      {
+        success: false,
+        message: error instanceof Error ? error.message : "Cron başarısız.",
+      },
+      { status: 500 }
+    );
+  }
 }

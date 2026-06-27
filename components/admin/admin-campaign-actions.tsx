@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { appOutlineButtonClass } from "@/lib/admin-ui";
 
-type Action = "publish" | "pause" | "activate" | "archive";
+type Action = "activate" | "pause" | "archive";
 
 export function AdminCampaignActions({
   campaignId,
@@ -16,11 +16,13 @@ export function AdminCampaignActions({
   const router = useRouter();
   const [loading, setLoading] = useState<Action | null>(null);
 
-  async function run(action: Action) {
+  async function run(action: Action, body?: Record<string, unknown>) {
     setLoading(action);
     try {
-      const res = await fetch(`/api/admin/membership-campaigns/${campaignId}/${action}`, {
+      const res = await fetch(`/api/admin/campaigns/${campaignId}/${action}`, {
         method: "POST",
+        headers: body ? { "Content-Type": "application/json" } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
       });
       if (!res.ok) {
         const json = await res.json();
@@ -33,16 +35,29 @@ export function AdminCampaignActions({
     }
   }
 
+  function activate() {
+    const reason = prompt("Aktivasyon gerekçesi:");
+    if (!reason?.trim()) return;
+    void run("activate", { confirm: true, reason: reason.trim() });
+  }
+
+  function archive() {
+    const reason = prompt("Arşivleme gerekçesi:");
+    if (!reason?.trim()) return;
+    if (!confirm("Kampanya arşivlensin mi? Yeni kullanım kapanır.")) return;
+    void run("archive", { confirm: true, reason: reason.trim() });
+  }
+
   return (
     <div className="flex flex-wrap gap-2">
-      {status === "DRAFT" || status === "SCHEDULED" ? (
+      {status === "DRAFT" || status === "PAUSED" ? (
         <button
           type="button"
           disabled={loading !== null}
-          onClick={() => run("publish")}
+          onClick={activate}
           className={appOutlineButtonClass}
         >
-          {loading === "publish" ? "…" : "Yayınla"}
+          {loading === "activate" ? "…" : "Aktifleştir"}
         </button>
       ) : null}
       {status === "ACTIVE" || status === "SCHEDULED" ? (
@@ -55,23 +70,11 @@ export function AdminCampaignActions({
           {loading === "pause" ? "…" : "Duraklat"}
         </button>
       ) : null}
-      {status === "PAUSED" ? (
-        <button
-          type="button"
-          disabled={loading !== null}
-          onClick={() => run("activate")}
-          className={appOutlineButtonClass}
-        >
-          {loading === "activate" ? "…" : "Yeniden Aktifleştir"}
-        </button>
-      ) : null}
       {status !== "ARCHIVED" ? (
         <button
           type="button"
           disabled={loading !== null}
-          onClick={() => {
-            if (confirm("Kampanya arşivlensin mi?")) run("archive");
-          }}
+          onClick={archive}
           className={appOutlineButtonClass}
         >
           {loading === "archive" ? "…" : "Arşivle"}

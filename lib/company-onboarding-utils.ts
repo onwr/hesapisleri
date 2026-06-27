@@ -1,13 +1,14 @@
-const DEFAULT_COMPANY_NAME = "İşletmem";
+import { isCompanyProfileComplete } from "@/lib/onboarding/onboarding-company-utils";
 
 type CompanyOnboardingInput = {
   name: string | null | undefined;
 };
 
-/** Vergi no zorunlu değil; yalnızca varsayılan firma adı kaldıysa uyarı gösterilir. */
+/** @deprecated Dashboard checklist ve CompanyOnboarding state kullanın. */
 export function shouldShowOnboardingAlert(
   company: CompanyOnboardingInput
 ): boolean {
-  const name = company.name?.trim() ?? "";
-  return name.length < 2 || name === DEFAULT_COMPANY_NAME;
+  return !isCompanyProfileComplete(company.name);
 }
+
+export { isCompanyProfileComplete };

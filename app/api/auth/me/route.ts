@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuthenticatedApiSession } from "@/lib/module-access";
+import { resolveMeMembership } from "@/lib/auth/me-context";
 import { db } from "@/lib/prisma";
 import { resolveEffectiveRole } from "@/lib/permission-utils";
 
@@ -31,14 +32,23 @@ export async function GET() {
       );
     }
 
-    const activeCompany =
-      user.companyUsers.find((item) => item.companyId === session.companyId)
-        ?.company ?? user.companyUsers[0]?.company ?? null;
+    const membershipResolution = resolveMeMembership(
+      user.companyUsers,
+      session.companyId
+    );
 
-    const activeMembership =
-      user.companyUsers.find((item) => item.companyId === session.companyId) ??
-      user.companyUsers[0] ??
-      null;
+    if (!membershipResolution.ok) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: membershipResolution.message,
+        },
+        { status: membershipResolution.status }
+      );
+    }
+
+    const activeMembership = membershipResolution.membership;
+    const activeCompany = activeMembership?.company ?? null;
 
     const employee = activeMembership
       ? await db.employee.findFirst({

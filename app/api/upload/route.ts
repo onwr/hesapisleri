@@ -7,10 +7,9 @@ import {
   saveTaxCertificateFromWebFile,
 } from "@/lib/storage/cdn";
 import { requireAnyApiModuleAccess } from "@/lib/module-access";
+import { resolveTenantUploadFolder } from "@/lib/storage/upload-path";
 
 export const runtime = "nodejs";
-
-const DEFAULT_FOLDER = "hesapisleri/general";
 
 export async function POST(req: Request) {
   try {
@@ -31,8 +30,7 @@ export async function POST(req: Request) {
 
     const formData = await req.formData();
     const file = formData.get("file");
-    const folder =
-      formData.get("folder")?.toString().trim() || DEFAULT_FOLDER;
+    const folder = formData.get("folder")?.toString();
     const purpose = formData.get("purpose")?.toString().trim();
 
     if (!file || !(file instanceof File)) {
@@ -42,10 +40,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const safeFolder = folder.replace(/[^a-zA-Z0-9/_-]/g, "");
-    const uploadFolder = safeFolder.includes(companyId)
-      ? safeFolder
-      : `${safeFolder}/${companyId}`;
+    const uploadFolder = resolveTenantUploadFolder(companyId, folder);
 
     const url =
       purpose === "tax-certificate"

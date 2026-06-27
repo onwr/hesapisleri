@@ -1,4 +1,5 @@
-import { COMPANY_LEGAL_INFO } from "@/lib/legal/company-legal-info";
+import type { CompanyLegalInfo } from "@/lib/legal/company-legal-info";
+import { getPlatformLegalInfoFallback } from "@/lib/legal/company-legal-info";
 import {
   KVKK_AYDINLATMA_LAST_UPDATED,
   KVKK_AYDINLATMA_VERSION,
@@ -11,13 +12,14 @@ const listClass = "mt-3 list-disc space-y-1.5 pl-5 text-sm leading-7 text-slate-
 
 type KvkkAydinlatmaContentProps = {
   showHeader?: boolean;
+  legalInfo?: CompanyLegalInfo;
 };
 
 export function KvkkAydinlatmaContent({
   showHeader = true,
+  legalInfo = getPlatformLegalInfoFallback(),
 }: KvkkAydinlatmaContentProps) {
-  const { tradeName, address, kvkkEmail, phone, kepAddress, website } =
-    COMPANY_LEGAL_INFO;
+  const { tradeName, address, kvkkEmail, phone, kepAddress, website } = legalInfo;
 
   return (
     <article>

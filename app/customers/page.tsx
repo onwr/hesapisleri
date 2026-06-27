@@ -388,7 +388,7 @@ const activeTab = parseCustomerTab(params.tab);
                           href={
                             searchQuery || activeGroup || activeTab !== "all"
                               ? "/customers"
-                              : "/customers/new"
+                              : "/customers/new?returnTo=/onboarding"
                           }
                           className="mt-5 inline-flex h-11 items-center justify-center rounded-2xl bg-blue-600 px-5 text-sm font-black text-white"
                         >
@@ -396,6 +396,14 @@ const activeTab = parseCustomerTab(params.tab);
                             ? "Filtreyi Temizle"
                             : "İlk Müşteriyi Ekle"}
                         </Link>
+                        {!searchQuery && activeTab === "all" && !activeGroup ? (
+                          <Link
+                            href="/onboarding"
+                            className="mt-3 block text-sm font-semibold text-blue-600 hover:underline"
+                          >
+                            Kurulum rehberine dön
+                          </Link>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

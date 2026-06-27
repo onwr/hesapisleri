@@ -92,14 +92,17 @@ async function main() {
 
     console.log("✅ Yeni grup oluşturma ve duplicate engeli geçti");
 
-    const normalized = normalizeCustomerInput({
-      name: "Grup Test Müşteri",
-      phone: "",
-      email: "",
-      taxNo: "",
-      address: "",
-      group: "Bayi",
-    });
+    const normalized = normalizeCustomerInput(
+      {
+        name: "Grup Test Müşteri",
+        phone: "",
+        email: "",
+        taxNo: "",
+        address: "",
+        group: "Bayi",
+      },
+      { maxTaxCertificateBytes: 5 * 1024 * 1024 }
+    );
 
     const customer = await db.customer.create({
       data: {

@@ -3,6 +3,7 @@ import { requireApiModuleAccess } from "@/lib/module-access";
 import { posCheckoutSchema } from "@/lib/pos-checkout-utils";
 import {
   executePosCheckout,
+  PosCheckoutIdempotencyError,
   SaleStockValidationError,
 } from "@/lib/pos-checkout-service";
 
@@ -41,7 +42,10 @@ export async function POST(req: Request) {
 
       return NextResponse.json({
         success: true,
-        message: "POS satışı başarıyla tamamlandı.",
+        message: result.replayed
+          ? "POS satışı daha önce tamamlanmıştı."
+          : "POS satışı başarıyla tamamlandı.",
+        replayed: result.replayed,
         ...(warning ? { warning } : {}),
         ...(result.stockWarnings.length > 0
           ? { negativeStockItems: result.stockWarnings }
@@ -49,6 +53,17 @@ export async function POST(req: Request) {
         data: result.sale,
       });
     } catch (error) {
+      if (error instanceof PosCheckoutIdempotencyError) {
+        return NextResponse.json(
+          {
+            success: false,
+            code: error.code,
+            message: error.message,
+          },
+          { status: 409 }
+        );
+      }
+
       if (error instanceof SaleStockValidationError) {
         return NextResponse.json(
           { success: false, message: error.message },

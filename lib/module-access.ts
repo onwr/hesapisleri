@@ -120,6 +120,29 @@ type AuthPayload = {
   companyId: string | null;
 };
 
+async function rejectIfMaintenanceMode(isSuperAdmin: boolean) {
+  const { assertPlatformAvailable } = await import(
+    "@/lib/platform-runtime/platform-availability"
+  );
+  const { MaintenanceModeActiveError } = await import(
+    "@/lib/admin/platform-settings/platform-settings-errors"
+  );
+
+  try {
+    await assertPlatformAvailable({ isSuperAdmin });
+  } catch (error) {
+    if (error instanceof MaintenanceModeActiveError) {
+      return NextResponse.json(
+        { success: false, message: error.message, code: error.code },
+        { status: error.status }
+      );
+    }
+    throw error;
+  }
+
+  return null;
+}
+
 export async function requireAnyApiModuleAccess(modules: AppModule[]) {
   const token = await getAuthToken();
 
@@ -152,6 +175,11 @@ export async function requireAnyApiModuleAccess(modules: AppModule[]) {
         companyId: payload.companyId,
         module,
       });
+
+      const maintenanceError = await rejectIfMaintenanceMode(session.isSuperAdmin);
+      if (maintenanceError) {
+        return { error: maintenanceError };
+      }
 
       return {
         session,
@@ -207,6 +235,11 @@ export async function requireApiModuleAccess(module: AppModule) {
       companyId: payload.companyId,
       module,
     });
+
+    const maintenanceError = await rejectIfMaintenanceMode(session.isSuperAdmin);
+    if (maintenanceError) {
+      return { error: maintenanceError };
+    }
 
     return {
       session,

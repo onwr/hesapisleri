@@ -1,6 +1,7 @@
 "use client";
 
 import { KvkkAydinlatmaContent } from "@/components/legal/kvkk-aydinlatma-content";
+import type { CompanyLegalInfo } from "@/lib/legal/company-legal-info";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,12 +16,14 @@ type KvkkAydinlatmaModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAcknowledge: () => void;
+  legalInfo: CompanyLegalInfo;
 };
 
 export function KvkkAydinlatmaModal({
   open,
   onOpenChange,
   onAcknowledge,
+  legalInfo,
 }: KvkkAydinlatmaModalProps) {
   function handleAcknowledge() {
     onAcknowledge();
@@ -44,7 +47,7 @@ export function KvkkAydinlatmaModal({
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-          <KvkkAydinlatmaContent showHeader={false} />
+          <KvkkAydinlatmaContent showHeader={false} legalInfo={legalInfo} />
         </div>
 
         <DialogFooter className="border-t border-slate-100 px-6 py-4 sm:justify-between">

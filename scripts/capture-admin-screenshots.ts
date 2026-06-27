@@ -55,7 +55,17 @@ const shots: Shot[] = [
   },
   {
     name: "dashboard-1440",
-    path: "/admin",
+    path: "/admin?range=30d",
+    viewport: { width: 1440, height: 900 },
+  },
+  {
+    name: "dashboard-390",
+    path: "/admin?range=30d",
+    viewport: { width: 390, height: 844 },
+  },
+  {
+    name: "dashboard-7d-1440",
+    path: "/admin?range=7d",
     viewport: { width: 1440, height: 900 },
   },
   {

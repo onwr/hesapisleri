@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/select";
 import { validateCreateCompanyWizardStep } from "@/lib/create-company-api-utils";
 import { uploadImageToCdn } from "@/lib/storage/upload-client";
+import { usePlatformUploadLimits } from "@/components/platform-runtime/platform-runtime-provider";
 
 const STEPS = [
   { id: 1, label: "Firma bilgileri" },
@@ -59,6 +60,7 @@ type FormState = {
 };
 
 export function CreateCompanyWizard() {
+  const { maxImageBytes } = usePlatformUploadLimits();
   const router = useRouter();
 
   const [step, setStep] = useState(1);
@@ -95,7 +97,7 @@ export function CreateCompanyWizard() {
     setError("");
 
     try {
-      const url = await uploadImageToCdn(file, "hesapisleri/companies");
+      const url = await uploadImageToCdn(file, "hesapisleri/companies", maxImageBytes);
       setLogoPreview(url);
       updateForm("logoUrl", url);
     } catch (err) {

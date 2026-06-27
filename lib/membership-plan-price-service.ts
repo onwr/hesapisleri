@@ -7,6 +7,8 @@ import {
   parseMoneyToMinor,
   salePriceFromPercent,
 } from "@/lib/billing/pricing-utils";
+import { validatePriceOverlap, syncLegacyPlanColumnIfApplicable } from "@/lib/admin/plans/admin-plan-price-publish-service";
+import { publishPlanPriceSecure } from "@/lib/admin/plans/admin-plan-price-publish-service";
 
 export class MembershipPlanPriceError extends Error {
   status: number;
@@ -31,6 +33,7 @@ export type PlanPriceInput = {
   isPublic?: boolean;
   priceChangePolicy?: import("@prisma/client").SubscriptionPriceChangePolicy;
   adminNote?: string | null;
+  currency?: string;
 };
 
 function resolveMinor(
@@ -120,6 +123,7 @@ export async function createPlanPriceVersion(input: {
 
   const vatRate = input.data.vatRate ?? plan.vatRate;
   const vatIncluded = input.data.vatIncluded ?? plan.vatIncluded;
+  const currency = input.data.currency ?? (plan.defaultCurrency || plan.currency);
   const totals = buildPriceTotals({
     listPriceMinor,
     salePriceMinor,
@@ -138,138 +142,67 @@ export async function createPlanPriceVersion(input: {
   const effectiveFrom = input.data.effectiveFrom
     ? new Date(input.data.effectiveFrom)
     : new Date();
-  const status: PlanPriceStatus = input.publish
-    ? effectiveFrom > new Date()
-      ? "SCHEDULED"
-      : "ACTIVE"
-    : "DRAFT";
+  const effectiveUntil = input.data.effectiveUntil
+    ? new Date(input.data.effectiveUntil)
+    : null;
 
-  return db.$transaction(async (tx) => {
-    if (status === "ACTIVE") {
-      await tx.membershipPlanPrice.updateMany({
-        where: {
-          planId: input.planId,
-          billingInterval: input.billingInterval,
-          status: "ACTIVE",
-        },
-        data: {
-          status: "EXPIRED",
-          effectiveUntil: effectiveFrom,
-        },
-      });
-    }
+  await validatePriceOverlap({
+    planId: input.planId,
+    billingInterval: input.billingInterval,
+    currency,
+    effectiveFrom,
+    effectiveUntil,
+  });
 
+  const created = await db.$transaction(async (tx) => {
     const price = await tx.membershipPlanPrice.create({
       data: {
         planId: input.planId,
         billingInterval: input.billingInterval,
         version,
-        status,
+        status: "DRAFT",
         listPriceMinor: totals.listPriceMinor,
         salePriceMinor: totals.salePriceMinor,
-        currency: plan.defaultCurrency || plan.currency,
+        currency,
         vatRate,
         vatIncluded,
         monthlyEquivalentMinor: totals.monthlyEquivalentMinor,
         effectiveFrom,
-        effectiveUntil: input.data.effectiveUntil
-          ? new Date(input.data.effectiveUntil)
-          : null,
+        effectiveUntil,
         isAutoRenewEnabled: input.data.isAutoRenewEnabled ?? true,
         isPublic: input.data.isPublic ?? true,
         priceChangePolicy: input.data.priceChangePolicy ?? "NEW_SUBSCRIBERS_ONLY",
         adminNote: input.data.adminNote ?? null,
         createdByUserId: input.userId,
-        publishedByUserId: input.publish ? input.userId : null,
-        publishedAt: input.publish ? new Date() : null,
+        publishedByUserId: null,
+        publishedAt: null,
       },
     });
-
-    await syncLegacyPlanColumn(tx, input.planId, input.billingInterval, totals.salePriceMinor);
 
     await tx.activityLog.create({
       data: {
         userId: input.userId,
-        action: input.publish ? "PRICE_VERSION_PUBLISHED" : "PRICE_VERSION_CREATED",
-        module: "membership-plans",
-        message: `${plan.name} ${input.billingInterval} fiyat v${version} ${status}`,
+        action: "PRICE_VERSION_CREATED",
+        module: "admin-plans",
+        message: `${plan.name} ${input.billingInterval} fiyat v${version} oluşturuldu.`,
       },
     });
 
     return price;
   });
-}
 
-async function syncLegacyPlanColumn(
-  tx: Parameters<Parameters<typeof db.$transaction>[0]>[0],
-  planId: string,
-  interval: MembershipPeriod,
-  salePriceMinor: number
-) {
-  const decimal = salePriceMinor / 100;
-  const data =
-    interval === "MONTHLY"
-      ? { monthlyPrice: decimal }
-      : interval === "QUARTERLY"
-        ? { quarterlyPrice: decimal }
-        : interval === "SEMI_ANNUAL"
-          ? { semiAnnualPrice: decimal }
-          : { yearlyPrice: decimal };
+  if (input.publish) {
+    return publishPlanPriceSecure({ priceId: created.id, userId: input.userId });
+  }
 
-  await tx.membershipPlan.update({ where: { id: planId }, data });
+  return created;
 }
 
 export async function publishPlanPrice(input: {
   priceId: string;
   userId: string;
 }) {
-  const price = await db.membershipPlanPrice.findUnique({
-    where: { id: input.priceId },
-    include: { plan: true },
-  });
-
-  if (!price) {
-    throw new MembershipPlanPriceError("Fiyat kaydı bulunamadı.", 404);
-  }
-  if (price.status !== "DRAFT" && price.status !== "SCHEDULED") {
-    throw new MembershipPlanPriceError("Yalnızca taslak veya zamanlanmış fiyat yayınlanabilir.");
-  }
-
-  const effectiveFrom = price.effectiveFrom;
-  const status: PlanPriceStatus =
-    effectiveFrom > new Date() ? "SCHEDULED" : "ACTIVE";
-
-  return db.$transaction(async (tx) => {
-    if (status === "ACTIVE") {
-      await tx.membershipPlanPrice.updateMany({
-        where: {
-          planId: price.planId,
-          billingInterval: price.billingInterval,
-          status: "ACTIVE",
-          id: { not: price.id },
-        },
-        data: { status: "EXPIRED", effectiveUntil: effectiveFrom },
-      });
-    }
-
-    const updated = await tx.membershipPlanPrice.update({
-      where: { id: price.id },
-      data: {
-        status,
-        publishedByUserId: input.userId,
-        publishedAt: new Date(),
-      },
-    });
-
-    await syncLegacyPlanColumn(
-      tx,
-      price.planId,
-      price.billingInterval,
-      price.salePriceMinor
-    );
-
-    return updated;
-  });
+  return publishPlanPriceSecure(input);
 }
 
 export function serializePlanPriceForAdmin(price: {
@@ -288,6 +221,7 @@ export function serializePlanPriceForAdmin(price: {
   isPublic: boolean;
   priceChangePolicy: import("@prisma/client").SubscriptionPriceChangePolicy;
   adminNote: string | null;
+  currency?: string;
 }) {
   const totals = buildPriceTotals({
     listPriceMinor: price.listPriceMinor,
@@ -302,6 +236,7 @@ export function serializePlanPriceForAdmin(price: {
     billingInterval: price.billingInterval,
     version: price.version,
     status: price.status,
+    currency: price.currency ?? "TRY",
     listPriceMinor: price.listPriceMinor,
     salePriceMinor: price.salePriceMinor,
     listPrice: price.listPriceMinor / 100,
@@ -323,3 +258,6 @@ export function serializePlanPriceForAdmin(price: {
     adminNote: price.adminNote,
   };
 }
+
+// Re-export for tests
+export { syncLegacyPlanColumnIfApplicable };

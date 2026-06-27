@@ -35,11 +35,17 @@ export function ProductEmptyState({ hasFilters = false }: ProductEmptyStateProps
         İlk ürününüzü ekleyerek stok ve satış takibine başlayın.
       </p>
       <Link
-        href="/products/new"
+        href="/products/new?returnTo=/onboarding"
         className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#0f1f4d] px-5 text-sm font-black text-white shadow-[0_10px_24px_rgba(15,31,77,0.18)] transition hover:bg-[#162a5c]"
       >
         <Plus size={16} />
         Ürün Ekle
+      </Link>
+      <Link
+        href="/onboarding"
+        className="mt-3 block text-sm font-semibold text-blue-600 hover:underline"
+      >
+        Kurulum rehberine dön
       </Link>
     </div>
   );

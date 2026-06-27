@@ -8,14 +8,11 @@ import { db } from "@/lib/prisma";
 import { buildReferralUrl } from "@/lib/partner-cookie";
 import {
   ensurePartnerSettings,
-  linkPartnerUserByEmail,
   resolvePartnerFromAttribution,
 } from "@/lib/partner-conversion-service";
 import {
-  approvePartnerApplicationSchema,
   calculateConversionRate,
   generateReferralCode,
-  getAudienceTypeLabel,
   getBadgeTypeLabel,
   getConversionTypeLabel,
   getEarningStatusLabel,
@@ -23,7 +20,6 @@ import {
   normalizePartnerEmail,
   PARTNER_MONTHLY_SIGNUP_GOAL,
   partnerApplicationSchema,
-  rejectPartnerApplicationSchema,
   sanitizeReferralCode,
 } from "@/lib/partner-utils";
 
@@ -150,152 +146,6 @@ export async function submitPartnerApplication(
       message: input.message?.trim() || null,
     },
   });
-}
-
-export async function listPartnerApplications() {
-  const applications = await db.partnerApplication.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 200,
-  });
-
-  return applications.map((app) => ({
-    id: app.id,
-    fullName: app.fullName,
-    email: app.email,
-    phone: app.phone,
-    socialUrl: app.socialUrl,
-    audienceType: app.audienceType,
-    audienceTypeLabel: getAudienceTypeLabel(app.audienceType),
-    expectedReach: app.expectedReach,
-    message: app.message,
-    status: app.status,
-    rejectionReason: app.rejectionReason,
-    createdAt: app.createdAt.toISOString(),
-    reviewedAt: app.reviewedAt?.toISOString() ?? null,
-  }));
-}
-
-export async function approvePartnerApplication(input: {
-  applicationId: string;
-  actorUserId: string;
-  data: z.infer<typeof approvePartnerApplicationSchema>;
-}) {
-  const application = await db.partnerApplication.findUnique({
-    where: { id: input.applicationId },
-  });
-
-  if (!application) {
-    throw new PartnerServiceError("Başvuru bulunamadı.", 404);
-  }
-
-  if (application.status !== "PENDING") {
-    throw new PartnerServiceError("Bu başvuru zaten işlenmiş.", 400);
-  }
-
-  const settings = await ensurePartnerSettings();
-  let referralCode = input.data.referralCode
-    ? sanitizeReferralCode(input.data.referralCode)
-    : generateReferralCode(application.fullName);
-
-  if (!referralCode) {
-    referralCode = generateReferralCode("PARTNER");
-  }
-
-  const existingCode = await db.partnerProfile.findUnique({
-    where: { referralCode },
-  });
-
-  if (existingCode) {
-    referralCode = generateReferralCode(referralCode);
-  }
-
-  const now = new Date();
-
-  const profile = await db.$transaction(async (tx) => {
-    const created = await tx.partnerProfile.create({
-      data: {
-        applicationId: application.id,
-        fullName: application.fullName,
-        email: application.email,
-        phone: application.phone,
-        referralCode,
-        commissionRate: input.data.commissionRate ?? Number(settings.defaultCommissionRate),
-        status: "ACTIVE",
-        badgeType: input.data.badgeType,
-        badgeLabel: input.data.badgeLabel ?? null,
-        notes: input.data.notes ?? null,
-      },
-    });
-
-    await tx.partnerApplication.update({
-      where: { id: application.id },
-      data: {
-        status: "APPROVED",
-        reviewedByUserId: input.actorUserId,
-        reviewedAt: now,
-      },
-    });
-
-    await linkPartnerUserByEmail(tx, created.id, application.email);
-
-    await tx.activityLog.create({
-      data: {
-        companyId: null,
-        userId: input.actorUserId,
-        action: "UPDATE",
-        module: "admin",
-        message: `Partner başvurusu onaylandı: ${application.fullName}`,
-      },
-    });
-
-    return created;
-  });
-
-  return serializePartner(profile);
-}
-
-export async function rejectPartnerApplication(input: {
-  applicationId: string;
-  actorUserId: string;
-  rejectionReason: string;
-}) {
-  const application = await db.partnerApplication.findUnique({
-    where: { id: input.applicationId },
-  });
-
-  if (!application) {
-    throw new PartnerServiceError("Başvuru bulunamadı.", 404);
-  }
-
-  if (application.status !== "PENDING") {
-    throw new PartnerServiceError("Bu başvuru zaten işlenmiş.", 400);
-  }
-
-  const updated = await db.$transaction(async (tx) => {
-    const saved = await tx.partnerApplication.update({
-      where: { id: application.id },
-      data: {
-        status: "REJECTED",
-        rejectionReason: input.rejectionReason,
-        reviewedByUserId: input.actorUserId,
-        reviewedAt: new Date(),
-      },
-    });
-
-    await tx.activityLog.create({
-      data: {
-        companyId: null,
-        userId: input.actorUserId,
-        action: "UPDATE",
-        module: "admin",
-        message: `Partner başvurusu reddedildi: ${application.fullName}`,
-      },
-    });
-
-    return saved;
-  });
-
-  return updated;
 }
 
 export async function recordReferralClick(input: {
@@ -643,109 +493,6 @@ export async function updatePartnerProfileAdmin(
   return serializePartner(partner);
 }
 
-export async function createPartnerPayoutAdmin(input: {
-  partnerId: string;
-  earningIds: string[];
-  paymentMethod: "IBAN" | "CASH" | "MANUAL";
-  note?: string;
-  markPaid: boolean;
-  actorUserId: string;
-}) {
-  const earnings = await db.partnerEarning.findMany({
-    where: {
-      id: { in: input.earningIds },
-      partnerId: input.partnerId,
-      status: { in: ["APPROVED", "PAYABLE"] },
-    },
-  });
-
-  if (!earnings.length) {
-    throw new PartnerServiceError("Ödenecek hak ediş bulunamadı.", 400);
-  }
-
-  const amount = earnings.reduce((sum, e) => sum + Number(e.amount), 0);
-  const now = new Date();
-
-  const payout = await db.$transaction(async (tx) => {
-    const created = await tx.partnerPayout.create({
-      data: {
-        partnerId: input.partnerId,
-        amount,
-        status: input.markPaid ? "PAID" : "PENDING",
-        paymentMethod: input.paymentMethod,
-        paidAt: input.markPaid ? now : null,
-        note: input.note ?? null,
-        createdByUserId: input.actorUserId,
-      },
-    });
-
-    await tx.partnerEarning.updateMany({
-      where: { id: { in: earnings.map((e) => e.id) } },
-      data: {
-        status: input.markPaid ? "PAID" : "PAYABLE",
-        payoutId: created.id,
-        paidAt: input.markPaid ? now : null,
-      },
-    });
-
-    const partner = await tx.partnerProfile.findUnique({
-      where: { id: input.partnerId },
-      select: { fullName: true },
-    });
-
-    await tx.activityLog.create({
-      data: {
-        companyId: null,
-        userId: input.actorUserId,
-        action: "CREATE",
-        module: "admin",
-        message: `Partner ödemesi oluşturuldu: ${partner?.fullName ?? input.partnerId} · ₺${amount}`,
-      },
-    });
-
-    return created;
-  });
-
-  return {
-    id: payout.id,
-    amount: Number(payout.amount),
-    status: payout.status,
-    paidAt: payout.paidAt?.toISOString() ?? null,
-  };
-}
-
-export async function getPartnerSettings() {
-  const settings = await ensurePartnerSettings();
-  return {
-    defaultCommissionRate: Number(settings.defaultCommissionRate),
-    cookieDurationDays: settings.cookieDurationDays,
-    minimumPayoutAmount: Number(settings.minimumPayoutAmount),
-    autoApproveConversions: settings.autoApproveConversions,
-    commissionOnRenewals: settings.commissionOnRenewals,
-    isApplicationOpen: settings.isApplicationOpen,
-    termsText: settings.termsText,
-  };
-}
-
-export async function updatePartnerSettings(
-  input: Partial<{
-    defaultCommissionRate: number;
-    cookieDurationDays: number;
-    minimumPayoutAmount: number;
-    autoApproveConversions: boolean;
-    commissionOnRenewals: boolean;
-    isApplicationOpen: boolean;
-    termsText: string | null;
-  }>
-) {
-  const settings = await db.partnerSettings.update({
-    where: { id: "default" },
-    data: input,
-  });
-
-  return getPartnerSettings();
-}
-
 export async function getAdminPartnerDetail(partnerId: string) {
   const partner = await db.partnerProfile.findUnique({
     where: { id: partnerId },
@@ -776,32 +523,6 @@ export async function getAdminPartnerDetail(partnerId: string) {
   };
 }
 
-export async function listAdminPayouts() {
-  const payouts = await db.partnerPayout.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 200,
-    include: {
-      partner: {
-        select: { id: true, fullName: true, email: true, referralCode: true },
-      },
-    },
-  });
-
-  return payouts.map((payout) => ({
-    id: payout.id,
-    partnerId: payout.partnerId,
-    partnerName: payout.partner.fullName,
-    partnerEmail: payout.partner.email,
-    referralCode: payout.partner.referralCode,
-    amount: Number(payout.amount),
-    currency: payout.currency,
-    status: payout.status,
-    paymentMethod: payout.paymentMethod,
-    paidAt: payout.paidAt?.toISOString() ?? null,
-    note: payout.note,
-    createdAt: payout.createdAt.toISOString(),
-  }));
-}
 
 export async function updatePartnerProfileSelf(
   partnerId: string,

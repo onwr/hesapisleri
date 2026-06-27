@@ -6,13 +6,13 @@ export function isAuthCookieSecure() {
   return process.env.NODE_ENV === "production";
 }
 
-export function getAuthCookieOptions() {
+export function getAuthCookieOptions(maxAgeDays = 7) {
   return {
     httpOnly: true,
     sameSite: "lax" as const,
     secure: isAuthCookieSecure(),
     path: "/",
-    maxAge: ONE_WEEK_SECONDS,
+    maxAge: maxAgeDays * 24 * 60 * 60,
   };
 }
 

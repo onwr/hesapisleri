@@ -1,48 +1,43 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { validateClientImageFile } from "./upload-client";
+import { formatMaxBytesMessage } from "./upload-limit-utils";
 
 function createFile(input: { type: string; size: number }) {
   const buffer = new Uint8Array(input.size);
-  return new File([buffer], "test-image", { type: input.type });
+  return new File([buffer], "test.jpg", { type: input.type });
 }
 
 describe("validateClientImageFile", () => {
-  it("JPEG dosyasını kabul eder", () => {
+  const limit = 6 * 1024 * 1024;
+
+  it("jpeg png webp kabul eder", () => {
     assert.doesNotThrow(() =>
-      validateClientImageFile(createFile({ type: "image/jpeg", size: 1024 }))
+      validateClientImageFile(createFile({ type: "image/jpeg", size: 1024 }), limit)
+    );
+    assert.doesNotThrow(() =>
+      validateClientImageFile(createFile({ type: "image/png", size: 1024 }), limit)
+    );
+    assert.doesNotThrow(() =>
+      validateClientImageFile(createFile({ type: "image/webp", size: 1024 }), limit)
     );
   });
 
-  it("PNG dosyasını kabul eder", () => {
-    assert.doesNotThrow(() =>
-      validateClientImageFile(createFile({ type: "image/png", size: 1024 }))
+  it("desteklenmeyen tipi reddeder", () => {
+    assert.throws(
+      () => validateClientImageFile(createFile({ type: "application/pdf", size: 1024 }), limit),
+      /yükleyebilirsiniz/
     );
   });
 
-  it("WebP dosyasını kabul eder", () => {
-    assert.doesNotThrow(() =>
-      validateClientImageFile(createFile({ type: "image/webp", size: 1024 }))
-    );
-  });
-
-  it("desteklenmeyen türü reddeder", () => {
+  it("limit üzeri dosyayı gerçek MB ile reddeder", () => {
     assert.throws(
       () =>
         validateClientImageFile(
-          createFile({ type: "image/gif", size: 1024 })
+          createFile({ type: "image/jpeg", size: limit + 1 }),
+          limit
         ),
-      /JPEG, PNG veya WebP/
-    );
-  });
-
-  it("5MB üzeri dosyayı reddeder", () => {
-    assert.throws(
-      () =>
-        validateClientImageFile(
-          createFile({ type: "image/jpeg", size: 5 * 1024 * 1024 + 1 })
-        ),
-      /5MB/
+      new RegExp(formatMaxBytesMessage(limit).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
     );
   });
 });

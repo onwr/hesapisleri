@@ -188,7 +188,13 @@ export async function deleteProduct(
   }
 
   await db.$transaction(async (tx) => {
-    await tx.product.delete({ where: { id: productId } });
+    const deleted = await tx.product.deleteMany({
+      where: { id: productId, companyId },
+    });
+
+    if (deleted.count === 0) {
+      throw new Error("Ürün silinemedi.");
+    }
 
     await tx.activityLog.create({
       data: {
@@ -227,9 +233,21 @@ export async function toggleProductStatus(
 
   const nextStatus = product.status === "ACTIVE" ? "PASSIVE" : "ACTIVE";
 
-  const updated = await db.product.update({
-    where: { id: productId },
+  const updatedResult = await db.product.updateMany({
+    where: { id: productId, companyId },
     data: { status: nextStatus },
+  });
+
+  if (updatedResult.count === 0) {
+    return {
+      ok: false as const,
+      status: 404,
+      message: "Ürün bulunamadı.",
+    };
+  }
+
+  const updated = await db.product.findFirstOrThrow({
+    where: { id: productId, companyId },
   });
 
   await db.activityLog.create({

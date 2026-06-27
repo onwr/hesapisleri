@@ -33,7 +33,12 @@ export type CampaignListFilters = {
   sort?: "name" | "startsAt" | "priority" | "created";
   order?: "asc" | "desc";
   page?: number;
+  pageSize?: 25 | 50 | 100;
+  issue?: string;
 };
+
+export const CAMPAIGN_PAGE_SIZES = [25, 50, 100] as const;
+export const DEFAULT_CAMPAIGN_PAGE_SIZE = 25;
 
 export type CouponListFilters = {
   q?: string;
@@ -51,7 +56,12 @@ export type CouponListFilters = {
   sort?: "code" | "startsAt" | "created" | "expiresAt";
   order?: "asc" | "desc";
   page?: number;
+  pageSize?: 25 | 50 | 100;
+  issue?: string;
 };
+
+export const COUPON_PAGE_SIZES = [25, 50, 100] as const;
+export const DEFAULT_COUPON_PAGE_SIZE = 25;
 
 export const PROMOTION_PAGE_SIZE = 30;
 

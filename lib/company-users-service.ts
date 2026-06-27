@@ -496,6 +496,7 @@ export async function acceptCompanyInvite(input: {
         password: hashedPassword,
         role: "STAFF",
         status: "ACTIVE",
+        loginTrackingStatus: "NEVER_LOGGED_IN",
       },
     });
   }
@@ -568,6 +569,12 @@ export async function acceptCompanyInvite(input: {
     return companyUser;
   });
 
+  // sessionVersion DB'den güncel değerini alıyoruz (yeni kullanıcı: 1, mevcut: değişmemiş).
+  const freshUser = await db.user.findUniqueOrThrow({
+    where: { id: user!.id },
+    select: { sessionVersion: true },
+  });
+
   return {
     companyUser: serializeCompanyUser(result),
     companyId: invite.companyId,
@@ -576,6 +583,7 @@ export async function acceptCompanyInvite(input: {
       id: user!.id,
       email: user!.email,
       role: user!.role,
+      sessionVersion: freshUser.sessionVersion,
     },
     redirectTo: "/dashboard" as const,
   };
@@ -851,6 +859,7 @@ export async function createCompanyUserFromEmployee(input: {
           password: hashedPassword,
           role: "STAFF",
           status: "ACTIVE",
+          loginTrackingStatus: "NEVER_LOGGED_IN",
         },
       });
     } else {

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdminApi } from "@/lib/admin-auth";
-import { getPlanEntitlements, upsertPlanEntitlements } from "@/lib/admin/entitlements/plan-entitlement-service";
+import { getAdminPlanEntitlementsView } from "@/lib/admin/entitlements/admin-plan-entitlement-admin-service";
+import { EntitlementValidationError } from "@/lib/admin/entitlements/admin-plan-entitlement-validation";
+import { upsertPlanEntitlements } from "@/lib/admin/entitlements/plan-entitlement-service";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -10,7 +12,7 @@ export async function GET(_req: Request, context: RouteContext) {
     if ("error" in auth) return auth.error;
 
     const { id } = await context.params;
-    const data = await getPlanEntitlements(id);
+    const data = await getAdminPlanEntitlementsView(id);
     if (!data) {
       return NextResponse.json({ success: false, message: "Plan bulunamadı." }, { status: 404 });
     }
@@ -25,6 +27,7 @@ export async function GET(_req: Request, context: RouteContext) {
   }
 }
 
+/** @deprecated /api/admin/plans/[id]/entitlements/preview + publish kullanın */
 export async function PUT(req: Request, context: RouteContext) {
   try {
     const auth = await requireSuperAdminApi();
@@ -44,6 +47,12 @@ export async function PUT(req: Request, context: RouteContext) {
       data: saved,
     });
   } catch (error) {
+    if (error instanceof EntitlementValidationError) {
+      return NextResponse.json(
+        { success: false, message: error.message, issues: error.issues },
+        { status: 400 }
+      );
+    }
     console.error("PLAN_ENTITLEMENTS_PUT_ERROR", error);
     return NextResponse.json(
       { success: false, message: error instanceof Error ? error.message : "Kaydedilemedi." },

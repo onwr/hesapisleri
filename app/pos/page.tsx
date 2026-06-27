@@ -111,6 +111,7 @@ type PosStats = {
 export default function PosPage() {
   const router = useRouter();
   const barcodeRef = useRef<HTMLInputElement>(null);
+  const checkoutIdempotencyKeyRef = useRef<string | null>(null);
 
   const [companyName, setCompanyName] = useState("İşletme");
   const [userName, setUserName] = useState("");
@@ -489,11 +490,17 @@ export default function PosPage() {
       accountId: line.accountId,
     }));
 
+    if (!checkoutIdempotencyKeyRef.current) {
+      checkoutIdempotencyKeyRef.current = crypto.randomUUID();
+    }
+    const idempotencyKey = checkoutIdempotencyKeyRef.current;
+
     try {
       const res = await fetch("/api/pos/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          idempotencyKey,
           customerId: selectedCustomerId || undefined,
           warehouseId: useWarehouseStock ? selectedWarehouseId : undefined,
           paymentStatus: "PAID",
@@ -556,6 +563,7 @@ export default function PosPage() {
       }
 
       setCart([]);
+      checkoutIdempotencyKeyRef.current = null;
       setDiscount("0");
       setNote("");
       setReceivedAmount("");

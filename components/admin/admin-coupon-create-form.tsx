@@ -47,7 +47,6 @@ export function AdminCouponCreateForm({
     firstPaymentOnly: true,
     renewalAllowed: false,
     stackable: false,
-    activate: true,
     allPlans: true,
     planIds: [] as string[],
     allIntervals: true,
@@ -108,7 +107,7 @@ export function AdminCouponCreateForm({
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch("/api/admin/membership-coupons", {
+      const res = await fetch("/api/admin/coupons", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -117,6 +116,7 @@ export function AdminCouponCreateForm({
           description: form.description || null,
           discountType: form.discountType,
           discountValue: form.discountValue,
+          currency: "TRY",
           startsAt: new Date(form.startsAt).toISOString(),
           expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : null,
           maxUsage: form.maxUsage,
@@ -124,14 +124,13 @@ export function AdminCouponCreateForm({
           firstPaymentOnly: form.firstPaymentOnly,
           renewalAllowed: form.renewalAllowed,
           stackable: form.stackable,
-          activate: form.activate,
           planIds: form.allPlans ? undefined : form.planIds,
           allowedIntervals: form.allIntervals ? undefined : form.allowedIntervals,
         }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.message ?? "Kupon oluşturulamadı.");
-      router.push(`/admin/membership-coupons/${json.data.id}`);
+      router.push(`/admin/coupons/${json.data.id}`);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Hata oluştu.");
@@ -145,7 +144,7 @@ export function AdminCouponCreateForm({
       <AdminPageHeader
         title="Yeni Kupon"
         description="İndirim kodu oluşturun ve canlı fiyat önizlemesi görün."
-        backHref="/admin/membership-coupons"
+        backHref="/admin/coupons"
       />
       <form onSubmit={handleSubmit} className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
         <div className={`${appPanelClass} space-y-4 p-5`}>

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { formatMaxBytesMessage } from "@/lib/storage/upload-limit-utils";
 
 export const ALLOWED_TAX_CERTIFICATE_MIME_TYPES = [
   "application/pdf",
@@ -9,8 +10,6 @@ export const ALLOWED_TAX_CERTIFICATE_MIME_TYPES = [
 
 export type TaxCertificateMimeType =
   (typeof ALLOWED_TAX_CERTIFICATE_MIME_TYPES)[number];
-
-export const MAX_TAX_CERTIFICATE_BYTES = 5 * 1024 * 1024;
 
 export const customerFormSchema = z.object({
   name: z
@@ -64,12 +63,15 @@ export function isAllowedTaxCertificateMimeType(
   );
 }
 
-export function normalizeTaxCertificateInput(input: {
-  taxCertificateUrl?: string | null;
-  taxCertificateFileName?: string | null;
-  taxCertificateMimeType?: string | null;
-  taxCertificateSize?: number | null;
-}): CustomerTaxCertificateInput {
+export function normalizeTaxCertificateInput(
+  input: {
+    taxCertificateUrl?: string | null;
+    taxCertificateFileName?: string | null;
+    taxCertificateMimeType?: string | null;
+    taxCertificateSize?: number | null;
+  },
+  maxTaxCertificateBytes: number
+): CustomerTaxCertificateInput {
   const url = trimOrNull(input.taxCertificateUrl);
 
   if (!url) {
@@ -92,8 +94,8 @@ export function normalizeTaxCertificateInput(input: {
       ? Math.max(0, Math.trunc(input.taxCertificateSize))
       : null;
 
-  if (size !== null && size > MAX_TAX_CERTIFICATE_BYTES) {
-    throw new Error("Vergi levhası dosya boyutu 5MB'dan küçük olmalıdır.");
+  if (size !== null && size > maxTaxCertificateBytes) {
+    throw new Error(formatMaxBytesMessage(maxTaxCertificateBytes));
   }
 
   return {
@@ -104,13 +106,19 @@ export function normalizeTaxCertificateInput(input: {
   };
 }
 
-export function normalizeCustomerInput(data: CustomerFormValues) {
-  const taxCertificate = normalizeTaxCertificateInput({
-    taxCertificateUrl: data.taxCertificateUrl,
-    taxCertificateFileName: data.taxCertificateFileName,
-    taxCertificateMimeType: data.taxCertificateMimeType,
-    taxCertificateSize: data.taxCertificateSize ?? null,
-  });
+export function normalizeCustomerInput(
+  data: CustomerFormValues,
+  options: { maxTaxCertificateBytes: number }
+) {
+  const taxCertificate = normalizeTaxCertificateInput(
+    {
+      taxCertificateUrl: data.taxCertificateUrl,
+      taxCertificateFileName: data.taxCertificateFileName,
+      taxCertificateMimeType: data.taxCertificateMimeType,
+      taxCertificateSize: data.taxCertificateSize ?? null,
+    },
+    options.maxTaxCertificateBytes
+  );
 
   return {
     name: data.name.trim(),

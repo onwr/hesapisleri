@@ -35,6 +35,12 @@ function baseCompany() {
     referringPartnerId: null,
     referralCode: null,
     referredAt: null,
+    suspendedAt: null,
+    suspendedReason: null,
+    suspendedUntil: null,
+    suspendedByUserId: null,
+    archivedAt: null,
+    archivedByUserId: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

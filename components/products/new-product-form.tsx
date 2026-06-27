@@ -30,15 +30,18 @@ import {
   type ProductUnitType,
 } from "@/lib/product-form-utils";
 import type { ProductTypeKey } from "@/lib/product-type-utils";
+import { resolvePostCreateRedirect } from "@/lib/onboarding/onboarding-routes";
 
 type NewProductFormProps = {
   companyId: string;
   initialProductType?: ProductTypeKey;
+  returnTo?: string | null;
 };
 
 export function NewProductForm({
   companyId,
   initialProductType = "STOCK",
+  returnTo = null,
 }: NewProductFormProps) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -117,7 +120,15 @@ export function NewProductForm({
       }
 
       const productId = data.data?.id as string | undefined;
-      router.push(productId ? `/products/${productId}?created=1` : "/products");
+      const defaultDestination = productId
+        ? `/products/${productId}?created=1`
+        : "/products";
+      router.push(
+        resolvePostCreateRedirect({
+          returnTo,
+          defaultDestination,
+        })
+      );
       router.refresh();
     } catch {
       setError("Sunucuya bağlanırken bir hata oluştu.");

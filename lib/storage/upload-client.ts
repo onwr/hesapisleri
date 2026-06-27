@@ -1,23 +1,17 @@
+import { validateImageFileWithLimits } from "@/lib/storage/upload-validation";
+
 export const PRODUCT_IMAGE_UPLOAD_FOLDER = "hesapisleri/products";
 
-export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-const ALLOWED_IMAGE_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-]);
-
-export function validateClientImageFile(file: File) {
-  if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-    throw new Error("Sadece JPEG, PNG veya WebP yükleyebilirsiniz");
-  }
-  if (file.size > MAX_IMAGE_BYTES) {
-    throw new Error("Dosya boyutu 5MB'dan küçük olmalıdır");
-  }
+export function validateClientImageFile(file: File, maxImageBytes: number) {
+  validateImageFileWithLimits(file, maxImageBytes);
 }
 
-export async function uploadImageToCdn(file: File, folder: string) {
-  validateClientImageFile(file);
+export async function uploadImageToCdn(
+  file: File,
+  folder: string,
+  maxImageBytes: number
+) {
+  validateClientImageFile(file, maxImageBytes);
 
   const formData = new FormData();
   formData.append("file", file);
@@ -36,3 +30,5 @@ export async function uploadImageToCdn(file: File, folder: string) {
 
   return data.data.url as string;
 }
+
+export { formatMaxBytesMessage, formatMaxBytesMbLabel } from "@/lib/storage/upload-limit-utils";

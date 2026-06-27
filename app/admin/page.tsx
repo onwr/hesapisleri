@@ -1,8 +1,25 @@
-import { AdminDashboardContent } from "@/components/admin/admin-dashboard-content";
+import { AdminOverviewContent } from "@/components/admin/overview/admin-overview-content";
 import { getAdminOverview } from "@/lib/admin-service";
 
-export default async function AdminDashboardPage() {
-  const data = await getAdminOverview();
+type AdminPageProps = {
+  searchParams: Promise<{
+    range?: string;
+    from?: string;
+    to?: string;
+    timezone?: string;
+  }>;
+};
 
-  return <AdminDashboardContent data={data} />;
+export default async function AdminDashboardPage({
+  searchParams,
+}: AdminPageProps) {
+  const params = await searchParams;
+  const data = await getAdminOverview({
+    range: params.range,
+    from: params.from,
+    to: params.to,
+    timezone: params.timezone,
+  });
+
+  return <AdminOverviewContent data={data} />;
 }

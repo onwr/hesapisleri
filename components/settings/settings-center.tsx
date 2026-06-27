@@ -33,6 +33,7 @@ import type { SerializedSettingsBundle } from "@/lib/settings-service";
 import { formatMoney, formatNumber } from "@/lib/format-utils";
 import { getInvoiceTypeLabel } from "@/lib/settings-utils";
 import { uploadImageToCdn } from "@/lib/storage/upload-client";
+import { usePlatformUploadLimits } from "@/components/platform-runtime/platform-runtime-provider";
 
 type SettingsSection =
   | "company"
@@ -113,6 +114,7 @@ export function SettingsCenter({
   canManageSettings = true,
   canManageMembership = false,
 }: SettingsCenterProps) {
+  const { maxImageBytes } = usePlatformUploadLimits();
   const visibleMenuItems = useMemo(() => {
     return MENU_ITEMS.filter((item) => {
       if (item.id === "users") return canManageUsers;
@@ -217,7 +219,8 @@ export function SettingsCenter({
     try {
       const url = await uploadImageToCdn(
         file,
-        `hesapisleri/companies/${bundle.company.id}`
+        `hesapisleri/companies/${bundle.company.id}`,
+        maxImageBytes
       );
       setCompanyForm((prev) => ({ ...prev, logoUrl: url }));
     } catch (err) {

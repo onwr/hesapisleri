@@ -63,11 +63,13 @@ export function AdminCouponRowActions({
   const [loading, setLoading] = useState<Action | "copy" | null>(null);
   const [copied, setCopied] = useState(false);
 
-  async function run(action: Action) {
+  async function run(action: Action, body?: Record<string, unknown>) {
     setLoading(action);
     try {
-      const res = await fetch(`/api/admin/membership-coupons/${couponId}/${action}`, {
+      const res = await fetch(`/api/admin/coupons/${couponId}/${action}`, {
         method: "POST",
+        headers: body ? { "Content-Type": "application/json" } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.message ?? "İşlem başarısız.");
@@ -107,7 +109,7 @@ export function AdminCouponRowActions({
         </button>
       ) : null}
       <Link
-        href={`/admin/membership-coupons/${couponId}`}
+        href={`/admin/coupons/${couponId}`}
         className={`${appPrimaryButtonClass} !px-3 !py-1.5 !text-[12px]`}
       >
         Detay
@@ -127,22 +129,33 @@ export function AdminCouponRowActions({
         <DropdownMenuContent align="end" className="min-w-[180px]">
           <DropdownMenuItem onClick={copyCode}>Kodu Kopyala</DropdownMenuItem>
           <DropdownMenuItem asChild>
-            <Link href={`/admin/membership-coupons/${couponId}?tab=preview`}>
+            <Link href={`/admin/coupons/${couponId}?tab=pricing`}>
               Fiyat Önizleme
             </Link>
           </DropdownMenuItem>
+          {status === "DRAFT" || status === "PAUSED" ? (
+            <DropdownMenuItem
+              onClick={() => {
+                const reason = prompt("Aktivasyon gerekçesi:");
+                if (!reason?.trim()) return;
+                void run("activate", { confirm: true, reason: reason.trim() });
+              }}
+            >
+              Aktifleştir
+            </DropdownMenuItem>
+          ) : null}
           {status === "ACTIVE" && (
             <DropdownMenuItem onClick={() => run("pause")}>Duraklat</DropdownMenuItem>
-          )}
-          {status === "PAUSED" && (
-            <DropdownMenuItem onClick={() => run("activate")}>Aktifleştir</DropdownMenuItem>
           )}
           {status !== "ARCHIVED" && (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => {
-                  if (confirm("Kupon arşivlensin mi?")) run("archive");
+                  const reason = prompt("Arşivleme gerekçesi:");
+                  if (!reason?.trim()) return;
+                  if (!confirm("Kupon arşivlensin mi?")) return;
+                  void run("archive", { confirm: true, reason: reason.trim() });
                 }}
               >
                 Arşivle

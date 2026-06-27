@@ -1,38 +1,21 @@
-import { AdminMembershipCampaignsContent } from "@/components/admin/admin-membership-campaigns-content";
-import {
-  countActiveCampaignFilters,
-  getCampaignSummary,
-  listCampaigns,
-  parseCampaignListFilters,
-} from "@/lib/admin/promotions";
-import { db } from "@/lib/prisma";
+import { redirect } from "next/navigation";
 
 type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-export default async function AdminMembershipCampaignsPage({ searchParams }: PageProps) {
+function buildQuery(params: Record<string, string | string[] | undefined>) {
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value == null) continue;
+    if (Array.isArray(value)) value.forEach((v) => qs.append(key, v));
+    else qs.set(key, value);
+  }
+  const s = qs.toString();
+  return s ? `?${s}` : "";
+}
+
+export default async function LegacyMembershipCampaignsRedirect({ searchParams }: PageProps) {
   const params = await searchParams;
-  const filters = parseCampaignListFilters(params);
-  const activeFilterCount = countActiveCampaignFilters(filters);
-
-  const [list, summary, plans] = await Promise.all([
-    listCampaigns(filters),
-    getCampaignSummary(),
-    db.membershipPlan.findMany({
-      where: { isActive: true },
-      select: { id: true, name: true },
-      orderBy: { sortOrder: "asc" },
-    }),
-  ]);
-
-  return (
-    <AdminMembershipCampaignsContent
-      list={list}
-      summary={summary}
-      filters={filters}
-      plans={plans}
-      activeFilterCount={activeFilterCount}
-    />
-  );
+  redirect(`/admin/campaigns${buildQuery(params)}`);
 }

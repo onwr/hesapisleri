@@ -1,0 +1,44 @@
+# Production compose örneği — gerçek secret ve domain değerlerini dışarıdan verin.
+# Migration container restart başına otomatik çalışmaz; ayrı release job kullanın.
+
+services:
+  app:
+    image: hesapisleri/web:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/api/health/live"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: hesapisleri
+      POSTGRES_USER: hesapisleri
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hesapisleri -d hesapisleri"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

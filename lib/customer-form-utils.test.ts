@@ -18,16 +18,21 @@ function read(relativePath: string) {
   return readFileSync(join(webRoot, relativePath), "utf8");
 }
 
+const MAX_BYTES = 5 * 1024 * 1024;
+
 describe("customer tax fields", () => {
   it("normalizeCustomerInput taxOffice ve vergi levhası alanlarını saklar", () => {
-    const normalized = normalizeCustomerInput({
-      name: "Örnek A.Ş.",
-      taxOffice: " Battalgazi Vergi Dairesi ",
-      taxCertificateUrl: "https://cdn.example/vergi.pdf",
-      taxCertificateFileName: "vergi-levhasi.pdf",
-      taxCertificateMimeType: "application/pdf",
-      taxCertificateSize: 123456,
-    });
+    const normalized = normalizeCustomerInput(
+      {
+        name: "Örnek A.Ş.",
+        taxOffice: " Battalgazi Vergi Dairesi ",
+        taxCertificateUrl: "https://cdn.example/vergi.pdf",
+        taxCertificateFileName: "vergi-levhasi.pdf",
+        taxCertificateMimeType: "application/pdf",
+        taxCertificateSize: 123456,
+      },
+      { maxTaxCertificateBytes: MAX_BYTES }
+    );
 
     assert.equal(normalized.taxOffice, "Battalgazi Vergi Dairesi");
     assert.equal(normalized.taxCertificateUrl, "https://cdn.example/vergi.pdf");
@@ -37,10 +42,13 @@ describe("customer tax fields", () => {
   });
 
   it("eski body ile create çalışır", () => {
-    const normalized = normalizeCustomerInput({
-      name: "Bireysel Müşteri",
-      phone: "0555",
-    });
+    const normalized = normalizeCustomerInput(
+      {
+        name: "Bireysel Müşteri",
+        phone: "0555",
+      },
+      { maxTaxCertificateBytes: MAX_BYTES }
+    );
 
     assert.equal(normalized.name, "Bireysel Müşteri");
     assert.equal(normalized.taxOffice, null);
@@ -51,10 +59,13 @@ describe("customer tax fields", () => {
   it("invalid mime type reddedilir", () => {
     assert.throws(
       () =>
-        normalizeTaxCertificateInput({
-          taxCertificateUrl: "https://cdn.example/file.exe",
-          taxCertificateMimeType: "application/x-msdownload",
-        }),
+        normalizeTaxCertificateInput(
+          {
+            taxCertificateUrl: "https://cdn.example/file.exe",
+            taxCertificateMimeType: "application/x-msdownload",
+          },
+          MAX_BYTES
+        ),
       /desteklenmiyor/
     );
   });
@@ -105,7 +116,7 @@ describe("customer tax fields", () => {
 
 describe("customer tax ui", () => {
   it("yeni müşteri formunda Vergi Bilgileri bölümü görünür", () => {
-    const page = read("app/customers/new/page.tsx");
+    const page = read("components/customers/new-customer-page.tsx");
     assert.match(page, /Vergi Bilgileri/);
     assert.match(page, /Vergi Dairesi/);
     assert.match(page, /CustomerTaxCertificateField/);

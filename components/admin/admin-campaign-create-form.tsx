@@ -61,7 +61,6 @@ type FormState = {
   maxRedemptionsPerCompany: number | null;
   startsAt: string;
   endsAt: string;
-  publish: boolean;
 };
 
 const initialForm: FormState = {
@@ -89,7 +88,6 @@ const initialForm: FormState = {
   maxRedemptionsPerCompany: null,
   startsAt: new Date().toISOString().slice(0, 16),
   endsAt: "",
-  publish: false,
 };
 
 export function AdminCampaignCreateForm({ plans }: { plans: Plan[] }) {
@@ -112,7 +110,7 @@ export function AdminCampaignCreateForm({ plans }: { plans: Plan[] }) {
     async function loadConflicts() {
       setConflictsLoading(true);
       try {
-        const res = await fetch("/api/admin/membership-campaigns/preview-conflicts", {
+        const res = await fetch("/api/admin/campaigns/preview-conflicts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -160,15 +158,11 @@ export function AdminCampaignCreateForm({ plans }: { plans: Plan[] }) {
     setStep((s) => Math.min(s + 1, STEPS.length - 1));
   }
 
-  async function handleSubmit(publish: boolean) {
-    if (hasBlocking && publish) {
-      setError("Engelleyici çakışmalar giderilmeden yayınlanamaz.");
-      return;
-    }
+  async function handleSubmit() {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch("/api/admin/membership-campaigns", {
+      const res = await fetch("/api/admin/campaigns", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -193,12 +187,12 @@ export function AdminCampaignCreateForm({ plans }: { plans: Plan[] }) {
           startsAt: new Date(form.startsAt).toISOString(),
           endsAt: form.endsAt ? new Date(form.endsAt).toISOString() : null,
           scopes,
-          publish,
+          reason: form.internalNote || "Taslak oluşturma",
         }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.message ?? "Kampanya oluşturulamadı.");
-      router.push(`/admin/membership-campaigns/${json.data.id}`);
+      router.push(`/admin/campaigns/${json.data.id}`);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Hata oluştu.");
@@ -211,8 +205,8 @@ export function AdminCampaignCreateForm({ plans }: { plans: Plan[] }) {
     <AdminPageContainer size="default">
       <AdminPageHeader
         title="Yeni Kampanya"
-        description="Adım adım kampanya oluşturun ve yayınlayın."
-        backHref="/admin/membership-campaigns"
+        description="Adım adım kampanya oluşturun (taslak olarak kaydedilir)."
+        backHref="/admin/campaigns"
       />
 
       <div className="mb-4 flex flex-wrap gap-2">
@@ -492,11 +486,6 @@ export function AdminCampaignCreateForm({ plans }: { plans: Plan[] }) {
                 />
               </Field>
             </div>
-            <Toggle
-              label="Oluşturulduktan hemen sonra yayınla"
-              checked={form.publish}
-              onChange={(v) => setForm({ ...form, publish: v })}
-            />
           </>
         )}
 
@@ -540,7 +529,7 @@ export function AdminCampaignCreateForm({ plans }: { plans: Plan[] }) {
                       <p className="font-bold">
                         [{conflict.severity}]{" "}
                         <Link
-                          href={`/admin/membership-campaigns/${conflict.campaignId}`}
+                          href={`/admin/campaigns/${conflict.campaignId}`}
                           className="underline"
                         >
                           {conflict.campaignName}
@@ -572,24 +561,14 @@ export function AdminCampaignCreateForm({ plans }: { plans: Plan[] }) {
               İleri
             </button>
           ) : (
-            <>
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => handleSubmit(false)}
-                className={appOutlineButtonClass}
-              >
-                {saving ? "Kaydediliyor…" : "Taslak Olarak Kaydet"}
-              </button>
-              <button
-                type="button"
-                disabled={saving || hasBlocking}
-                onClick={() => handleSubmit(true)}
-                className={appPrimaryButtonClass}
-              >
-                {saving ? "Yayınlanıyor…" : "Yayınla"}
-              </button>
-            </>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => handleSubmit()}
+              className={appPrimaryButtonClass}
+            >
+              {saving ? "Kaydediliyor…" : "Taslak Olarak Kaydet"}
+            </button>
           )}
         </div>
       </div>

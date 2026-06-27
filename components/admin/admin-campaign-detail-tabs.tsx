@@ -18,15 +18,13 @@ import {
 import { formatAdminDate, formatAdminDateTime } from "@/lib/admin-utils";
 import { formatMinorToMoney } from "@/lib/billing/pricing-utils";
 import {
-  formatCampaignScopeSummary,
   formatDiscountLabel,
-  formatIntervalLabel,
 } from "@/lib/admin/promotions/promotion-scope-utils";
 import {
   getCampaignStatusBadgeClass,
   getCampaignStatusLabel,
 } from "@/lib/admin/promotions/promotion-filter-utils";
-import { formatBillingInterval } from "@/lib/admin-subscription-utils";
+import { AdminCampaignTargetingEditor } from "@/components/admin/admin-campaign-targeting-editor";
 import type { getCampaignAnalytics, getCampaignDetail } from "@/lib/admin/promotions";
 import type { listCampaignAffectedSubscriptions } from "@/lib/admin/promotions/campaign-query-service";
 
@@ -43,31 +41,73 @@ type HistoryItem = {
 
 const TABS = [
   { id: "overview", label: "Genel" },
-  { id: "scope", label: "Kapsam" },
-  { id: "usage", label: "Kullanımlar" },
-  { id: "subscriptions", label: "Etkilenen Abonelikler" },
-  { id: "preview", label: "Fiyat Önizleme" },
+  { id: "targeting", label: "Hedefleme" },
+  { id: "pricing", label: "Fiyat Önizleme" },
+  { id: "usage", label: "Kullanım" },
   { id: "history", label: "Geçmiş" },
+  { id: "activity", label: "Aktivite" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
+
+type UsageItem = {
+  id: string;
+  createdAt: string;
+  companyName: string;
+  amountMinor: number;
+  status: string;
+  planName: string | null;
+  paymentId: string | null;
+  currency: string | null;
+};
+
+type ActivityItem = {
+  id: string;
+  action: string;
+  message: string | null;
+  metadata: unknown;
+  createdAt: string;
+  actor: { name: string | null; email: string } | null;
+};
+
+type Pagination = { page: number; pageSize: number; total: number; totalPages: number };
 
 export function AdminCampaignDetailTabs({
   detail,
   analytics,
   affected,
   history,
+  historyPagination,
+  activity,
+  activityPagination,
+  usage,
+  usagePagination,
+  usageTotals,
   companies,
+  plans,
 }: {
   detail: DetailData;
   analytics: AnalyticsData;
   affected: AffectedData;
   history: HistoryItem[];
+  historyPagination?: Pagination;
+  activity: ActivityItem[];
+  activityPagination?: Pagination;
+  usage: UsageItem[];
+  usagePagination?: Pagination;
+  usageTotals?: { successfulUsage: number };
   companies: Array<{ id: string; name: string }>;
+  plans: Array<{ id: string; name: string }>;
 }) {
   const searchParams = useSearchParams();
-  const tab = (searchParams.get("tab") as TabId) || "overview";
-  const { campaign, stats } = detail;
+  const rawTab = searchParams.get("tab");
+  const tab: TabId =
+    rawTab === "scope"
+      ? "targeting"
+      : rawTab === "preview"
+        ? "pricing"
+        : (rawTab as TabId) || "overview";
+  const { campaign, stats, issues } = detail;
 
   const [previewCompanyId, setPreviewCompanyId] = useState(companies[0]?.id ?? "");
   const [previewPlanId, setPreviewPlanId] = useState(
@@ -88,7 +128,7 @@ export function AdminCampaignDetailTabs({
     setPreviewLoading(true);
     setPreviewError("");
     try {
-      const res = await fetch(`/api/admin/membership-campaigns/${campaign.id}/preview`, {
+      const res = await fetch(`/api/admin/campaigns/${campaign.id}/preview`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -123,7 +163,7 @@ export function AdminCampaignDetailTabs({
             <p className="mt-1 text-[13px] text-slate-500">{campaign.description}</p>
           ) : null}
         </div>
-        <Link href="/admin/membership-campaigns" className={appOutlineButtonClass}>
+        <Link href="/admin/campaigns" className={appOutlineButtonClass}>
           Listeye Dön
         </Link>
       </div>
@@ -139,7 +179,7 @@ export function AdminCampaignDetailTabs({
         {TABS.map((item) => (
           <Link
             key={item.id}
-            href={`/admin/membership-campaigns/${campaign.id}?tab=${item.id}`}
+            href={`/admin/campaigns/${campaign.id}?tab=${item.id}`}
             className={`rounded-2xl px-4 py-2 text-[13px] font-bold transition ${
               tab === item.id
                 ? "bg-blue-600 text-white"
@@ -199,111 +239,75 @@ export function AdminCampaignDetailTabs({
               />
             </dl>
           </div>
+          {issues?.length ? (
+            <div className="md:col-span-2">
+              <h3 className="mb-2 text-[14px] font-extrabold text-[#0f1f4d]">Sorunlar</h3>
+              <ul className="space-y-1 text-[12px]">
+                {issues.map((issue) => (
+                  <li key={issue.code} className="text-amber-800">
+                    <span className="font-bold">{issue.code}</span>: {issue.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           <div className="md:col-span-2">
             <AdminCampaignActions campaignId={campaign.id} status={campaign.status} />
           </div>
         </div>
       )}
 
-      {tab === "scope" && (
-        <div className={`${appPanelClass} p-5`}>
-          <p className="mb-4 text-[13px] text-slate-600">
-            {formatCampaignScopeSummary(campaign.scopes)}
-          </p>
-          {campaign.scopes.length === 0 ? (
-            <p className="text-[13px] text-slate-500">Tüm planlar ve dönemler</p>
-          ) : (
-            <ul className="space-y-2">
-              {campaign.scopes.map((scope) => (
-                <li
-                  key={scope.id}
-                  className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-[13px]"
-                >
-                  {scope.plan?.name ?? "Tüm planlar"} ·{" "}
-                  {formatIntervalLabel(scope.billingInterval)}
-                  {scope.company ? ` · ${scope.company.name}` : ""}
-                  {scope.partner
-                    ? ` · Partner: ${scope.partner.fullName ?? scope.partner.referralCode}`
-                    : ""}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+      {tab === "targeting" && (
+        <AdminCampaignTargetingEditor
+          campaignId={campaign.id}
+          plans={plans}
+          archived={campaign.status === "ARCHIVED"}
+        />
       )}
 
       {tab === "usage" && (
         <div className={`${appPanelClass} overflow-x-auto p-4`}>
-          {campaign.redemptions.length === 0 ? (
+          <p className="mb-3 text-[12px] text-slate-500">
+            Başarılı kullanım: {usageTotals?.successfulUsage ?? stats.usageCount} (yalnızca
+            FINALIZED)
+          </p>
+          {usage.length === 0 ? (
             <p className="py-8 text-center text-[13px] text-slate-500">Henüz kullanım yok.</p>
           ) : (
             <table className={appTableClass}>
               <thead>
                 <tr className={appTableHeadClass}>
-                  <th className="px-3 py-2">Firma</th>
-                  <th className="px-3 py-2">İndirim</th>
-                  <th className="px-3 py-2">Durum</th>
                   <th className="px-3 py-2">Tarih</th>
-                </tr>
-              </thead>
-              <tbody>
-                {campaign.redemptions.map((r) => (
-                  <tr key={r.id} className={appTableRowClass}>
-                    <td className="px-3 py-3">{r.company.name}</td>
-                    <td className="px-3 py-3">{formatMinorToMoney(r.amountMinor)}</td>
-                    <td className="px-3 py-3">{r.status}</td>
-                    <td className="px-3 py-3">{formatAdminDateTime(r.createdAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
-
-      {tab === "subscriptions" && (
-        <div className={`${appPanelClass} overflow-x-auto p-4`}>
-          {affected.length === 0 ? (
-            <p className="py-8 text-center text-[13px] text-slate-500">
-              Kapsama uyan aktif abonelik bulunamadı.
-            </p>
-          ) : (
-            <table className={appTableClass}>
-              <thead>
-                <tr className={appTableHeadClass}>
                   <th className="px-3 py-2">Firma</th>
                   <th className="px-3 py-2">Plan</th>
-                  <th className="px-3 py-2">Dönem</th>
+                  <th className="px-3 py-2">İndirim</th>
+                  <th className="px-3 py-2">Para Birimi</th>
                   <th className="px-3 py-2">Durum</th>
-                  <th className="px-3 py-2">Yenileme</th>
                 </tr>
               </thead>
               <tbody>
-                {affected.map((row) => (
-                  <tr key={row.id} className={appTableRowClass}>
-                    <td className="px-3 py-3">
-                      <Link
-                        href={`/admin/subscriptions/${row.id}`}
-                        className="font-bold text-blue-600 hover:underline"
-                      >
-                        {row.companyName}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-3">{row.planName}</td>
-                    <td className="px-3 py-3">{formatBillingInterval(row.billingInterval)}</td>
-                    <td className="px-3 py-3">{row.status}</td>
-                    <td className="px-3 py-3">
-                      {row.renewalEligible ? "Uygun" : "Kapalı"}
-                    </td>
+                {usage.map((r) => (
+                  <tr key={r.id} className={appTableRowClass}>
+                    <td className="px-3 py-3">{formatAdminDateTime(r.createdAt)}</td>
+                    <td className="px-3 py-3">{r.companyName}</td>
+                    <td className="px-3 py-3">{r.planName ?? "—"}</td>
+                    <td className="px-3 py-3">{formatMinorToMoney(r.amountMinor)}</td>
+                    <td className="px-3 py-3">{r.currency ?? "—"}</td>
+                    <td className="px-3 py-3">{r.status}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
+          {usagePagination && usagePagination.totalPages > 1 ? (
+            <p className="mt-3 text-[12px] text-slate-500">
+              Sayfa {usagePagination.page} / {usagePagination.totalPages}
+            </p>
+          ) : null}
         </div>
       )}
 
-      {tab === "preview" && (
+      {tab === "pricing" && (
         <div className={`${appPanelClass} space-y-4 p-5`}>
           <div className="grid gap-3 md:grid-cols-3">
             <select
@@ -317,12 +321,18 @@ export function AdminCampaignDetailTabs({
                 </option>
               ))}
             </select>
-            <input
+            <select
               value={previewPlanId}
               onChange={(e) => setPreviewPlanId(e.target.value)}
-              placeholder="Plan ID"
-              className={appInputClass}
-            />
+              className={appSelectClass}
+            >
+              <option value="">Plan seçin</option>
+              {plans.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
             <select
               value={previewInterval}
               onChange={(e) =>
@@ -354,12 +364,26 @@ export function AdminCampaignDetailTabs({
             <p className="text-[13px] font-semibold text-red-600">{previewError}</p>
           ) : null}
           {previewResult ? (
-            <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 text-[13px]">
-              <p>
-                Liste:{" "}
-                {String(previewResult.listFormatted ?? previewResult.listPriceMinor)}
+            <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 text-[13px] space-y-2">
+              <p className="font-bold">
+                Uygunluk:{" "}
+                {previewResult.eligible === true ? (
+                  <span className="text-emerald-700">Uygun</span>
+                ) : (
+                  <span className="text-red-600">Uygun değil</span>
+                )}
               </p>
-              <p className="mt-1 font-bold text-[#0f1f4d]">
+              {Array.isArray(previewResult.ineligibleReasons) &&
+              previewResult.ineligibleReasons.length ? (
+                <ul className="list-disc pl-4 text-red-700">
+                  {(previewResult.ineligibleReasons as string[]).map((r) => (
+                    <li key={r}>{r}</li>
+                  ))}
+                </ul>
+              ) : null}
+              <p>Liste: {String(previewResult.listFormatted ?? previewResult.listPriceMinor)}</p>
+              <p>Kampanya indirimi: {String(previewResult.campaignDiscountMinor ?? "—")}</p>
+              <p className="font-bold text-[#0f1f4d]">
                 Toplam: {String(previewResult.totalFormatted ?? previewResult.totalMinor)}
               </p>
             </div>
@@ -390,6 +414,44 @@ export function AdminCampaignDetailTabs({
               ))}
             </div>
           )}
+          {historyPagination && historyPagination.totalPages > 1 ? (
+            <p className="mt-3 text-[12px] text-slate-500">
+              Sayfa {historyPagination.page} / {historyPagination.totalPages}
+            </p>
+          ) : null}
+        </div>
+      )}
+
+      {tab === "activity" && (
+        <div className={`${appPanelClass} p-5`}>
+          {activity.length === 0 ? (
+            <p className="text-[13px] text-slate-500">Aktivite kaydı bulunamadı.</p>
+          ) : (
+            <div className="space-y-3">
+              {activity.map((item) => (
+                <div
+                  key={item.id}
+                  className="rounded-xl border border-slate-100 px-4 py-3 text-[13px]"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-bold text-[#0f1f4d]">{item.action}</p>
+                    <p className="text-[11px] text-slate-400">
+                      {formatAdminDateTime(item.createdAt)}
+                    </p>
+                  </div>
+                  {item.message ? <p className="mt-1 text-slate-600">{item.message}</p> : null}
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    {item.actor?.name ?? item.actor?.email ?? "Sistem"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+          {activityPagination && activityPagination.totalPages > 1 ? (
+            <p className="mt-3 text-[12px] text-slate-500">
+              Sayfa {activityPagination.page} / {activityPagination.totalPages}
+            </p>
+          ) : null}
         </div>
       )}
     </div>

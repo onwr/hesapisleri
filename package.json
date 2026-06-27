@@ -22,6 +22,8 @@
     "test:demo": "tsx scripts/test-demo-flow.ts",
     "load-test:db": "tsx scripts/load-test-db.ts",
     "security:audit-tenants": "tsx scripts/audit-tenant-isolation.ts",
+    "env:check": "node --import tsx scripts/check-env.mjs",
+    "smoke:production": "node scripts/production-smoke.mjs",
     "test:tenant-isolation": "node --import tsx --test lib/tenant/**/*.test.ts lib/customer-balance-utils.test.ts",
     "test:admin-visual": "tsx scripts/capture-admin-screenshots.ts",
     "test:partnership-visual": "tsx scripts/capture-partnership-screenshots.ts",
@@ -29,6 +31,7 @@
     "test:rls": "tsx scripts/test-tenant-rls.ts",
     "postinstall": "prisma generate",
     "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
     "db:push": "prisma db push"
   },
   "prisma": {

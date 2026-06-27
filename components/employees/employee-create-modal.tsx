@@ -7,6 +7,7 @@ import { EmployeeAvatar } from "@/components/employees/employee-avatar";
 import { EmployeeDepartmentSelect } from "@/components/employees/employee-department-select";
 import { EMPLOYEE_AVATAR_UPLOAD_FOLDER } from "@/lib/employee-pos-utils";
 import { uploadImageToCdn } from "@/lib/storage/upload-client";
+import { usePlatformUploadLimits } from "@/components/platform-runtime/platform-runtime-provider";
 
 type EmployeeCreateModalProps = {
   open: boolean;
@@ -23,6 +24,7 @@ export function EmployeeCreateModal({
   onClose,
   onSubmit,
 }: EmployeeCreateModalProps) {
+  const { maxImageBytes } = usePlatformUploadLimits();
   const [step, setStep] = useState(0);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -70,7 +72,7 @@ export function EmployeeCreateModal({
     setUploading(true);
     setUploadError("");
     try {
-      const url = await uploadImageToCdn(file, EMPLOYEE_AVATAR_UPLOAD_FOLDER);
+      const url = await uploadImageToCdn(file, EMPLOYEE_AVATAR_UPLOAD_FOLDER, maxImageBytes);
       setAvatarUrl(url);
     } catch (error) {
       setUploadError(

@@ -9,6 +9,8 @@ import {
   Upload,
 } from "lucide-react";
 import { uploadTaxCertificateToCdn } from "@/lib/storage/tax-certificate-upload";
+import { formatMaxBytesMbLabel } from "@/lib/storage/upload-limit-utils";
+import { usePlatformUploadLimits } from "@/components/platform-runtime/platform-runtime-provider";
 
 export type TaxCertificateFormValue = {
   taxCertificateUrl: string;
@@ -35,6 +37,8 @@ export function CustomerTaxCertificateField({
   onChange,
   error,
 }: CustomerTaxCertificateFieldProps) {
+  const { maxTaxCertificateBytes } = usePlatformUploadLimits();
+  const maxTaxMbLabel = formatMaxBytesMbLabel(maxTaxCertificateBytes);
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -46,7 +50,7 @@ export function CustomerTaxCertificateField({
     setUploadError("");
 
     try {
-      const url = await uploadTaxCertificateToCdn(file);
+      const url = await uploadTaxCertificateToCdn(file, maxTaxCertificateBytes);
       onChange({
         taxCertificateUrl: url,
         taxCertificateFileName: file.name,
@@ -159,7 +163,7 @@ export function CustomerTaxCertificateField({
             </button>
 
             <p className="mt-2 text-[11px] font-medium text-slate-500">
-              PDF, JPEG, PNG veya WebP · Maks. 5MB
+              PDF, JPEG, PNG veya WebP · Maks. {maxTaxMbLabel}MB
             </p>
           </div>
         )}

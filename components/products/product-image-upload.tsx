@@ -4,8 +4,10 @@ import { useCallback, useRef, useState } from "react";
 import { ImagePlus, Loader2, Trash2, Upload } from "lucide-react";
 import {
   PRODUCT_IMAGE_UPLOAD_FOLDER,
+  formatMaxBytesMbLabel,
   uploadImageToCdn,
 } from "@/lib/storage/upload-client";
+import { usePlatformUploadLimits } from "@/components/platform-runtime/platform-runtime-provider";
 import { ProductThumbnail } from "@/components/products/product-thumbnail";
 
 type ProductImageUploadProps = {
@@ -21,6 +23,8 @@ export function ProductImageUpload({
   onChange,
   error,
 }: ProductImageUploadProps) {
+  const { maxImageBytes } = usePlatformUploadLimits();
+  const maxImageMbLabel = formatMaxBytesMbLabel(maxImageBytes);
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [localError, setLocalError] = useState("");
@@ -36,7 +40,8 @@ export function ProductImageUpload({
       try {
         const url = await uploadImageToCdn(
           file,
-          `${PRODUCT_IMAGE_UPLOAD_FOLDER}/${companyId}`
+          `${PRODUCT_IMAGE_UPLOAD_FOLDER}/${companyId}`,
+          maxImageBytes
         );
         onChange(url);
       } catch (err) {
@@ -47,7 +52,7 @@ export function ProductImageUpload({
         setUploading(false);
       }
     },
-    [companyId, onChange]
+    [companyId, maxImageBytes, onChange]
   );
 
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -91,7 +96,7 @@ export function ProductImageUpload({
               Ürün Görseli
             </h2>
             <p className="text-[12px] font-medium text-slate-500">
-              JPG, PNG veya WebP · Maks. 5MB · Opsiyonel
+              JPG, PNG veya WebP · Maks. {maxImageMbLabel}MB · Opsiyonel
             </p>
           </div>
         </div>

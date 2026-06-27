@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdminApi } from "@/lib/admin-auth";
-import { getAdminUsers } from "@/lib/admin-service";
+import {
+  getAdminUserList,
+  getAdminUsersSummaryExtended,
+} from "@/lib/admin/users/admin-user-list-service";
+import { adminUserListQuerySchema } from "@/lib/admin/users/admin-user-schemas";
 
 export async function GET(req: Request) {
   try {
@@ -8,17 +12,24 @@ export async function GET(req: Request) {
     if ("error" in auth) return auth.error;
 
     const { searchParams } = new URL(req.url);
+    const rawQuery = Object.fromEntries(searchParams.entries());
+    const parsed = adminUserListQuerySchema.safeParse(rawQuery);
 
-    const data = await getAdminUsers({
-      q: searchParams.get("q") ?? undefined,
-      status: searchParams.get("status") ?? undefined,
-      role: searchParams.get("role") ?? undefined,
-    });
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, message: "Geçersiz sorgu parametreleri." },
+        { status: 400 }
+      );
+    }
 
-    return NextResponse.json({ success: true, data });
+    const [list, summary] = await Promise.all([
+      getAdminUserList(parsed.data),
+      getAdminUsersSummaryExtended(),
+    ]);
+
+    return NextResponse.json({ success: true, data: { list, summary } });
   } catch (error) {
-    console.error("ADMIN_USERS_ERROR", error);
-
+    console.error("ADMIN_USERS_LIST_ERROR", error);
     return NextResponse.json(
       { success: false, message: "Kullanıcılar yüklenemedi." },
       { status: 500 }

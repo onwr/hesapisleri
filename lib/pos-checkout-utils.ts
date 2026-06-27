@@ -26,6 +26,10 @@ export type PosPaymentLineInput = z.infer<typeof posPaymentLineSchema>;
 
 export const posCheckoutSchema = z
   .object({
+    idempotencyKey: z
+      .string()
+      .min(16, "İşlem anahtarı en az 16 karakter olmalıdır.")
+      .max(128, "İşlem anahtarı en fazla 128 karakter olabilir."),
     customerId: z.string().optional(),
     warehouseId: z.string().optional(),
     paymentStatus: z.enum(["PAID", "UNPAID", "PARTIAL"]).default("PAID"),

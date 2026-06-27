@@ -7,13 +7,19 @@ export type SessionTokenPayload = {
   email?: string;
   role?: string;
   companyId?: string | null;
+  // sv = sessionVersion; resolveAuthState içinde DB değeriyle karşılaştırılır.
+  // sv eksik veya eşleşmeyen tokenlar geçersiz sayılır.
+  sv?: number;
   exp?: number;
   iat?: number;
 };
 
-export function signSessionToken(payload: Omit<SessionTokenPayload, "exp" | "iat">) {
+export function signSessionToken(
+  payload: Omit<SessionTokenPayload, "exp" | "iat">,
+  maxAgeDays = 7
+) {
   return jwt.sign(payload, JWT_SECRET, {
-    expiresIn: "7d",
+    expiresIn: `${maxAgeDays}d`,
   });
 }
 

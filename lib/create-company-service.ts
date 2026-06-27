@@ -1,11 +1,14 @@
 import type { Company, Prisma } from "@prisma/client";
 import { createNotification } from "@/lib/notification-service";
+import { PLATFORM_SETTINGS_DEFAULTS } from "@/lib/admin/platform-settings/platform-settings-defaults";
+import { getNewCompanyDefaults } from "@/lib/admin/platform-settings/platform-settings-loader";
 import { DEFAULT_MEMBERSHIP_PLAN_CODE } from "@/lib/membership-service";
 import { db } from "@/lib/prisma";
-import { DEFAULT_COMPANY_SETTINGS } from "@/lib/settings-utils";
+import { createOnboardingForNewCompany } from "@/lib/onboarding/onboarding-service";
 
-export const TRIAL_DAYS = 14;
-export const TRIAL_AMOUNT = 1499;
+/** @deprecated Test uyumluluğu için; runtime `getNewCompanyDefaults()` kullanın. */
+export const TRIAL_DAYS = PLATFORM_SETTINGS_DEFAULTS.trialDays;
+export const TRIAL_AMOUNT = PLATFORM_SETTINGS_DEFAULTS.trialAmount;
 
 export type CreateCompanySource = "REGISTER" | "NEW_COMPANY";
 
@@ -22,25 +25,29 @@ export type CreateCompanyForUserInput = {
   defaultVatRate?: number;
   source: CreateCompanySource;
   registerCompanyNameProvided?: boolean;
+  platformDefaults?: Awaited<ReturnType<typeof getNewCompanyDefaults>>;
 };
 
 export type CreateCompanyForUserResult = {
   company: Company;
 };
 
-function getNotificationContent(input: CreateCompanyForUserInput) {
+function getNotificationContent(
+  input: CreateCompanyForUserInput,
+  trialDays: number
+) {
   if (input.source === "REGISTER") {
     return {
       title: "Hesabınız oluşturuldu",
       message: input.registerCompanyNameProvided
-        ? `Firma bilgilerinizle hesabınız açıldı. ${TRIAL_DAYS} gün ücretsiz deneme süreniz başladı.`
-        : `Hesabınız açıldı. ${TRIAL_DAYS} gün ücretsiz deneme süreniz başladı. Firma bilgilerinizi panelden tamamlayabilirsiniz.`,
+        ? `Firma bilgilerinizle hesabınız açıldı. ${trialDays} gün ücretsiz deneme süreniz başladı.`
+        : `Hesabınız açıldı. ${trialDays} gün ücretsiz deneme süreniz başladı. Firma bilgilerinizi panelden tamamlayabilirsiniz.`,
     };
   }
 
   return {
     title: "Yeni firma oluşturuldu",
-    message: `${input.name.trim()} firması oluşturuldu. ${TRIAL_DAYS} gün ücretsiz deneme süreniz başladı.`,
+    message: `${input.name.trim()} firması oluşturuldu. ${trialDays} gün ücretsiz deneme süreniz başladı.`,
   };
 }
 
@@ -62,9 +69,14 @@ export async function createCompanyForUser(
   tx: Prisma.TransactionClient,
   input: CreateCompanyForUserInput
 ): Promise<CreateCompanyForUserResult> {
-  const currency = input.currency?.trim() || DEFAULT_COMPANY_SETTINGS.currency;
-  const defaultVatRate =
-    input.defaultVatRate ?? DEFAULT_COMPANY_SETTINGS.defaultVatRate;
+  const defaults = input.platformDefaults;
+  if (!defaults) {
+    throw new Error("platformDefaults zorunludur.");
+  }
+  const currency = input.currency?.trim() || defaults.currency;
+  const defaultVatRate = input.defaultVatRate ?? defaults.defaultVatRate;
+  const trialDays = defaults.trialDays;
+  const trialAmount = defaults.trialAmount;
 
   const company = await tx.company.create({
     data: {
@@ -91,14 +103,14 @@ export async function createCompanyForUser(
 
   const now = new Date();
   const trialEnd = new Date();
-  trialEnd.setDate(trialEnd.getDate() + TRIAL_DAYS);
+  trialEnd.setDate(trialEnd.getDate() + trialDays);
 
   await tx.membershipPayment.create({
     data: {
       companyId: company.id,
       periodStart: now,
       periodEnd: trialEnd,
-      amount: TRIAL_AMOUNT,
+      amount: trialAmount,
       status: "PENDING",
       provider: "TRIAL",
       paymentRef: `TRIAL-${Date.now()}`,
@@ -107,7 +119,7 @@ export async function createCompanyForUser(
   });
 
   const defaultPlan = await tx.membershipPlan.findFirst({
-    where: { code: DEFAULT_MEMBERSHIP_PLAN_CODE, isActive: true },
+    where: { code: DEFAULT_MEMBERSHIP_PLAN_CODE, planStatus: "ACTIVE" },
   });
 
   if (defaultPlan) {
@@ -159,14 +171,25 @@ export async function createCompanyForUser(
   await tx.companySettings.create({
     data: {
       companyId: company.id,
-      ...DEFAULT_COMPANY_SETTINGS,
       currency,
       defaultVatRate,
+      defaultInvoiceType: "E_ARCHIVE",
+      invoiceNumberPrefix: "FTR",
+      defaultDueDays: 30,
       invoiceNoteTemplate: null,
+      defaultCollectionAccountId: null,
+      defaultExpenseAccountId: null,
+      autoCreateCashAccount: true,
+      hideInactiveAccounts: true,
+      notifyLowStock: defaults.notifyLowStock,
+      notifyDueInvoices: defaults.notifyDueInvoices,
+      notifyLateCollections: defaults.notifyLateCollections,
+      notifyDailySummary: defaults.notifyDailySummary,
+      notifyEmployeePayments: defaults.notifyEmployeePayments,
     },
   });
 
-  const notification = getNotificationContent(input);
+  const notification = getNotificationContent(input, trialDays);
   const activity = getActivityContent(input.source);
 
   await createNotification(
@@ -195,11 +218,16 @@ export async function createCompanyForUser(
     },
   });
 
+  await createOnboardingForNewCompany(tx, company.id);
+
   return { company };
 }
 
 export async function createCompanyForUserInTransaction(
   input: CreateCompanyForUserInput
 ): Promise<CreateCompanyForUserResult> {
-  return db.$transaction(async (tx) => createCompanyForUser(tx, input));
+  const platformDefaults = await getNewCompanyDefaults();
+  return db.$transaction(async (tx) =>
+    createCompanyForUser(tx, { ...input, platformDefaults })
+  );
 }

@@ -15,8 +15,12 @@ import {
   MAX_IMAGE_BYTES,
   MAX_TAX_CERTIFICATE_BYTES,
   validateImageFile,
+  validateImageFileWithLimits,
   validateTaxCertificateFile,
+  validateTaxCertificateFileWithLimits,
 } from "@/lib/storage/upload-validation";
+import { getPlatformUploadLimits } from "@/lib/admin/platform-settings/platform-settings-loader";
+import { formatMaxBytesMessage } from "@/lib/storage/upload-limit-utils";
 
 export { ImageOptimizerError } from "@/lib/uploads/image-optimizer";
 export {
@@ -144,7 +148,8 @@ export async function saveFileFromWebFile(
   folder: string,
   fileName?: string
 ): Promise<string | null> {
-  validateImageFile(file);
+  const limits = await getPlatformUploadLimits();
+  validateImageFileWithLimits(file, limits.maxImageBytes);
   const buffer = Buffer.from(await file.arrayBuffer());
   return saveFileFromBuffer(buffer, file.type, folder, fileName);
 }
@@ -154,7 +159,8 @@ export async function saveTaxCertificateFromWebFile(
   folder: string,
   fileName?: string
 ): Promise<string | null> {
-  validateTaxCertificateFile(file);
+  const limits = await getPlatformUploadLimits();
+  validateTaxCertificateFileWithLimits(file, limits.maxTaxCertificateBytes);
   const buffer = Buffer.from(await file.arrayBuffer());
   return saveFileFromBuffer(buffer, file.type, folder, fileName);
 }
@@ -183,8 +189,9 @@ export async function saveFile(
       throw new Error("Sadece JPEG, PNG veya WebP yükleyebilirsiniz");
     }
 
-    if (buffer.length > MAX_IMAGE_BYTES) {
-      throw new Error("Dosya boyutu 5MB'dan küçük olmalıdır");
+    const limits = await getPlatformUploadLimits();
+    if (buffer.length > limits.maxImageBytes) {
+      throw new Error(formatMaxBytesMessage(limits.maxImageBytes));
     }
 
     const optimized = await optimizeUploadedImage(buffer);

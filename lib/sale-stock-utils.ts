@@ -137,7 +137,7 @@ export async function applySaleStockDecrement(
           .filter((id): id is string => Boolean(id)),
       },
     },
-    select: { id: true, productType: true },
+    select: { id: true, productType: true, name: true },
   });
 
   const stockProductIds = new Set(
@@ -166,12 +166,28 @@ export async function applySaleStockDecrement(
       tx
     );
 
-    await tx.warehouseStock.update({
-      where: { id: warehouseStock.id },
+    const product = products.find((entry) => entry.id === item.productId);
+
+    const claim = await tx.warehouseStock.updateMany({
+      where: {
+        id: warehouseStock.id,
+        companyId,
+        quantity: { gte: item.quantity },
+      },
       data: {
-        quantity: warehouseStock.quantity - item.quantity,
+        quantity: { decrement: item.quantity },
       },
     });
+
+    if (claim.count === 0) {
+      const named = await tx.product.findFirst({
+        where: { id: item.productId, companyId },
+        select: { name: true },
+      });
+      throw new SaleStockValidationError(
+        `${named?.name ?? product?.name ?? "Ürün"} için yeterli stok bulunmuyor.`
+      );
+    }
 
     await tx.stockMovement.create({
       data: {

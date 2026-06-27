@@ -2,6 +2,7 @@ import type {
   MembershipPaymentMethod,
   MembershipPeriod,
   MembershipPaymentStatus,
+  Prisma,
 } from "@prisma/client";
 import { z } from "zod";
 import { db } from "@/lib/prisma";
@@ -56,16 +57,26 @@ export const updateMembershipPaymentAdminSchema = z.object({
   note: z.string().max(2000).optional(),
 });
 
-export const updateMembershipPlanSchema = z.object({
-  name: z.string().min(2).optional(),
-  description: z.string().nullable().optional(),
-  monthlyPrice: z.number().positive().optional(),
-  quarterlyPrice: z.number().positive().optional(),
-  semiAnnualPrice: z.number().positive().optional(),
-  yearlyPrice: z.number().positive().optional(),
-  isActive: z.boolean().optional(),
-  features: z.array(z.string()).optional(),
-});
+export const updateMembershipPlanSchema = z
+  .object({
+    name: z.string().min(2).optional(),
+    description: z.string().nullable().optional(),
+    shortDescription: z.string().max(500).nullable().optional(),
+    sortOrder: z.number().int().optional(),
+    trialEnabled: z.boolean().optional(),
+    trialDays: z.number().int().min(0).max(365).optional(),
+  })
+  .strict();
+
+/** @deprecated Generic PATCH daraltıldı — admin-plan-patch-service kullanın */
+export async function updateMembershipPlan(
+  planId: string,
+  input: z.infer<typeof updateMembershipPlanSchema>
+) {
+  const { patchAdminPlanMetadata } = await import("@/lib/admin/plans/admin-plan-patch-service");
+  const plan = await patchAdminPlanMetadata(planId, input);
+  return serializePlan(plan);
+}
 
 function serializePlan(
   plan: Awaited<ReturnType<typeof getDefaultMembershipPlan>>
@@ -138,7 +149,7 @@ export async function getDefaultMembershipPlan() {
   const plan = await db.membershipPlan.findFirst({
     where: {
       code: DEFAULT_MEMBERSHIP_PLAN_CODE,
-      isActive: true,
+      planStatus: "ACTIVE",
     },
   });
 
@@ -270,7 +281,7 @@ export async function createMembershipPayment(input: {
 
   const plan = input.planId
     ? await db.membershipPlan.findFirst({
-        where: { id: input.planId, isActive: true },
+        where: { id: input.planId, planStatus: "ACTIVE" },
       })
     : await getDefaultMembershipPlan();
 
@@ -445,62 +456,45 @@ async function applyPaidMembershipPayment(
   return payment;
 }
 
-export async function updateMembershipPaymentAdmin(input: {
+export async function updateMembershipPaymentAdmin(_input: {
   paymentId: string;
   actorUserId: string;
   status: MembershipPaymentStatus;
   note?: string;
-}) {
-  if (input.status === "PAID") {
-    const payment = await applyPaidMembershipPayment(
-      input.paymentId,
-      input.actorUserId,
-      input.note
-    );
-    return serializePayment(payment);
-  }
-
-  const payment = await db.membershipPayment.findUnique({
-    where: { id: input.paymentId },
-    include: { company: true },
-  });
-
-  if (!payment) {
-    throw new MembershipServiceError("Ödeme kaydı bulunamadı.", 404);
-  }
-
-  if (payment.status === "PAID") {
-    throw new MembershipServiceError("Onaylanmış ödeme güncellenemez.", 400);
-  }
-
-  const updated = await db.$transaction(async (tx) => {
-    const saved = await tx.membershipPayment.update({
-      where: { id: payment.id },
-      data: {
-        status: input.status,
-        note: input.note ?? payment.note,
-      },
-    });
-
-    await tx.activityLog.create({
-      data: {
-        companyId: payment.companyId,
-        userId: input.actorUserId,
-        action: "UPDATE",
-        module: "admin",
-        message: `Üyelik ödemesi ${getMembershipPaymentStatusLabel(input.status)}: ${payment.company.name}`,
-      },
-    });
-
-    return saved;
-  });
-
-  return serializePayment(updated);
+}): Promise<never> {
+  throw new MembershipServiceError(
+    "Ödeme durumu doğrudan değiştirilemez. Yalnızca doğrulanmış callback, provider sync veya güvenli iade servisi kullanılabilir.",
+    405
+  );
 }
 
-export async function listAdminMembershipPayments() {
+export async function listAdminMembershipPayments(input?: {
+  status?: string;
+  companyId?: string;
+  paymentId?: string;
+}) {
+  const where: Prisma.MembershipPaymentWhereInput = {
+    provider: { not: "TRIAL" },
+  };
+
+  if (input?.status && input.status !== "ALL") {
+    if (input.status === "REFUNDED") {
+      where.status = { in: ["REFUNDED", "PARTIALLY_REFUNDED"] };
+    } else {
+      where.status = input.status as Prisma.EnumMembershipPaymentStatusFilter["equals"];
+    }
+  }
+
+  if (input?.companyId) {
+    where.companyId = input.companyId;
+  }
+
+  if (input?.paymentId) {
+    where.id = input.paymentId;
+  }
+
   const payments = await db.membershipPayment.findMany({
-    where: { provider: { not: "TRIAL" } },
+    where,
     orderBy: { createdAt: "desc" },
     take: 200,
     include: {
@@ -525,27 +519,6 @@ export async function listMembershipPlans() {
   });
 
   return plans.map(serializePlan);
-}
-
-export async function updateMembershipPlan(
-  planId: string,
-  input: z.infer<typeof updateMembershipPlanSchema>
-) {
-  const plan = await db.membershipPlan.update({
-    where: { id: planId },
-    data: {
-      name: input.name,
-      description: input.description,
-      monthlyPrice: input.monthlyPrice,
-      quarterlyPrice: input.quarterlyPrice,
-      semiAnnualPrice: input.semiAnnualPrice,
-      yearlyPrice: input.yearlyPrice,
-      isActive: input.isActive,
-      features: input.features,
-    },
-  });
-
-  return serializePlan(plan);
 }
 
 export async function getMembershipAlertForCompany(companyId: string) {

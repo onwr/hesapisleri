@@ -42,11 +42,12 @@ export async function POST(req: Request) {
       },
     });
 
-    attachAuthCookie(response, {
+    await attachAuthCookie(response, {
       userId: result.user.id,
       email: result.user.email,
       role: result.user.role,
       companyId: result.companyId,
+      sv: result.user.sessionVersion,
     });
 
     return response;

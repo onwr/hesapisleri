@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireApiModuleAccess } from "@/lib/module-access";
+import { getPlatformRuntimeUploadLimits } from "@/lib/platform-runtime";
 import { db } from "@/lib/prisma";
 import {
   customerFormSchema,
@@ -27,9 +28,13 @@ export async function POST(req: Request) {
       );
     }
 
+    const uploadLimits = await getPlatformRuntimeUploadLimits();
+
     let normalized;
     try {
-      normalized = normalizeCustomerInput(parsed.data);
+      normalized = normalizeCustomerInput(parsed.data, {
+        maxTaxCertificateBytes: uploadLimits.maxTaxCertificateBytes,
+      });
     } catch (error) {
       return NextResponse.json(
         {

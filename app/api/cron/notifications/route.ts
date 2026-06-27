@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { runProactiveNotificationCron } from "@/lib/notification-cron-service";
+import { buildCronRouteResponse } from "@/lib/admin/jobs/cron-response";
+import { runCronJob } from "@/lib/admin/jobs/job-run-service";
 
 function isAuthorized(request: Request) {
   const expected = process.env.CRON_SECRET;
@@ -18,9 +19,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const summary = await runProactiveNotificationCron();
-
-    return NextResponse.json(summary);
+    const run = await runCronJob("notifications");
+    return NextResponse.json(buildCronRouteResponse("notifications", run));
   } catch (error) {
     return NextResponse.json(
       {

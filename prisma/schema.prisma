@@ -17,6 +17,27 @@ enum UserRole {
   SUPER_ADMIN
 }
 
+enum LoginTrackingStatus {
+  UNKNOWN_LEGACY
+  NEVER_LOGGED_IN
+  LOGGED_IN
+}
+
+enum EmailVerificationStatus {
+  NOT_TRACKED
+  PENDING
+  VERIFIED
+}
+
+enum AdminUserNoteCategory {
+  GENERAL
+  BILLING
+  SUPPORT
+  RISK
+  FRAUD
+  TECHNICAL
+}
+
 enum CompanyInviteStatus {
   PENDING
   ACCEPTED
@@ -583,20 +604,53 @@ model User {
   role     UserRole @default(OWNER)
   status   Status   @default(ACTIVE)
 
-  consents           UserConsent[]
-  companyUsers       CompanyUser[]
-  sentInvites        CompanyInvite[]     @relation("SentInvites")
-  sales              Sale[]              @relation("SaleCreatedBy")
-  cancelledSales     Sale[]              @relation("SaleCancelledBy")
-  expenses           Expense[]
-  notifications      Notification[]
-  activityLogs       ActivityLog[]
-  warehouseTransfers WarehouseTransfer[]
-  calendarEvents     CalendarEvent[]
-  directoryContacts  DirectoryContact[]  @relation("DirectoryContactCreator")
-  createdSuppliers   Supplier[]          @relation("SupplierCreator")
-  aiConversations    AIConversation[]
-  aiUsageLogs        AIUsageLog[]
+  // Session invalidation: JWT payload'daki sv bu değerle karşılaştırılır.
+  sessionVersion Int @default(1)
+
+  // Login tracking
+  lastLoginAt         DateTime?
+  loginTrackingStatus LoginTrackingStatus @default(UNKNOWN_LEGACY)
+
+  // Admin suspend metadata
+  suspendedAt        DateTime?
+  suspendedReason    String?
+  suspendedUntil     DateTime?
+  suspendedByAdminId String?
+  suspendedByAdmin   User?     @relation("SuspendedByAdmin", fields: [suspendedByAdminId], references: [id], onDelete: SetNull)
+  suspendedUsers     User[]    @relation("SuspendedByAdmin")
+
+  // Email verification
+  emailVerificationStatus EmailVerificationStatus @default(NOT_TRACKED)
+
+  consents                           UserConsent[]
+  companyUsers                       CompanyUser[]
+  sentInvites                        CompanyInvite[]          @relation("SentInvites")
+  sales                              Sale[]                   @relation("SaleCreatedBy")
+  cancelledSales                     Sale[]                   @relation("SaleCancelledBy")
+  expenses                           Expense[]
+  notifications                      Notification[]
+  activityLogs                       ActivityLog[]
+  warehouseTransfers                 WarehouseTransfer[]
+  calendarEvents                     CalendarEvent[]
+  directoryContacts                  DirectoryContact[]       @relation("DirectoryContactCreator")
+  createdSuppliers                   Supplier[]               @relation("SupplierCreator")
+  aiConversations                    AIConversation[]
+  aiUsageLogs                        AIUsageLog[]
+  adminCompanyNotesAuthored          AdminCompanyNote[]       @relation("AdminCompanyNotesAuthored")
+  adminUserNotesAuthored             AdminUserNote[]          @relation("AdminUserNotesAuthored")
+  adminUserNotesAbout                AdminUserNote[]          @relation("AdminUserNotesAbout")
+  adminSubscriptionNotesAuthored     AdminSubscriptionNote[]  @relation("AdminSubscriptionNotesAuthored")
+  adminPaymentNotesAuthored          AdminPaymentNote[]       @relation("AdminPaymentNotesAuthored")
+  adminPlanNotesAuthored             AdminPlanNote[]          @relation("AdminPlanNotesAuthored")
+  adminPartnerNotesAuthored          AdminPartnerNote[]       @relation("AdminPartnerNotesAuthored")
+  adminPartnerPayoutNotesAuthored    AdminPartnerPayoutNote[] @relation("AdminPartnerPayoutNotesAuthored")
+  partnerPayoutsPaid                 PartnerPayout[]          @relation("PartnerPayoutsPaidBy")
+  systemJobRunsTriggered             SystemJobRun[]           @relation("SystemJobRunsTriggeredBy")
+  companyOnboardingUpdates           CompanyOnboarding[]      @relation("CompanyOnboardingUpdatedBy")
+  platformSettingsUpdated            PlatformSettings[]       @relation("PlatformSettingsUpdatedBy")
+  cancellationScheduledSubscriptions CompanySubscription[]    @relation("SubscriptionCancellationScheduledBy")
+  passwordResetTokens                PasswordResetToken[]
+  passwordResetsCreated              PasswordResetToken[]     @relation("PasswordResetCreatedByAdmin")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -628,74 +682,113 @@ model Company {
   logoUrl   String?
   status    Status  @default(ACTIVE)
 
-  users                      CompanyUser[]
-  customers                  Customer[]
-  customerGroups             CustomerGroup[]
-  products                   Product[]
-  categories                 ProductCategory[]
-  sales                      Sale[]
-  salePayments               SalePayment[]
-  invoices                   Invoice[]
-  expenses                   Expense[]
-  expenseCategories          ExpenseCategory[]
-  accounts                   Account[]
-  stockMovements             StockMovement[]
-  membershipPayments         MembershipPayment[]
-  paymentMethods             CompanyPaymentMethod[]
-  paymentRefunds             PaymentRefund[]
-  billingRuns                SubscriptionBillingRun[]
-  billingOutboxEvents        BillingOutboxEvent[]
-  subscription               CompanySubscription?
-  notifications              Notification[]
-  activityLogs               ActivityLog[]
-  settings                   CompanySettings?
-  invites                    CompanyInvite[]
-  warehouses                 Warehouse[]
-  warehouseStocks            WarehouseStock[]
-  warehouseTransfers         WarehouseTransfer[]
-  marketplaceIntegrations    MarketplaceIntegration[]
-  marketplaceSyncRuns        MarketplaceSyncRun[]
-  productChannelMappings     ProductChannelMapping[]
-  efaturamIntegration              EfaturamIntegration?
-  invoiceDocumentSubmissions       InvoiceDocumentSubmission[]
-  eDocumentTaxpayerLookupCaches    EDocumentTaxpayerLookupCache[]
-  eDocumentGibUserListCache        EDocumentGibUserListCache?
-  calendarEvents             CalendarEvent[]
-  employees                  Employee[]
-  employeeSalaries           EmployeeSalary[]
-  employeePayments           EmployeePayment[]
-  employeeLeaves             EmployeeLeave[]
-  employeePerformanceRecords EmployeePerformanceRecord[]
-  employeePerformanceTargets EmployeePerformanceTarget[]
-  payrollRuns                PayrollRun[]
-  payrollRunItems            PayrollRunItem[]
-  employeeDepartments        EmployeeDepartment[]
-  directoryContacts          DirectoryContact[]
-  suppliers                  Supplier[]
-  supplierContacts           SupplierContact[]
-  supplierProducts           SupplierProduct[]
-  partnerConversions         PartnerConversion[]
-  campaignScopes             MembershipCampaignScope[]
-  couponRedemptions          MembershipCouponRedemption[]
-  discountRedemptions        MembershipDiscountRedemption[]
-  planPriceOverrides         CompanyPlanPriceOverride[]
-  addOnSubscriptions         CompanyAddOnSubscription[]
-  entitlementOverrides       CompanyEntitlementOverride[]
-  usagePeriods               UsagePeriod[]
-  usageEvents                UsageEvent[]
-  usageCredits               CompanyUsageCredit[]
-  aiSettings                 CompanyAISettings?
-  aiConversations            AIConversation[]
-  aiUsageLogs                AIUsageLog[]
-  aiInsightCaches            AIInsightCache[]
+  users                         CompanyUser[]
+  customers                     Customer[]
+  customerGroups                CustomerGroup[]
+  products                      Product[]
+  categories                    ProductCategory[]
+  sales                         Sale[]
+  salePayments                  SalePayment[]
+  invoices                      Invoice[]
+  expenses                      Expense[]
+  expenseCategories             ExpenseCategory[]
+  accounts                      Account[]
+  stockMovements                StockMovement[]
+  membershipPayments            MembershipPayment[]
+  paymentMethods                CompanyPaymentMethod[]
+  paymentRefunds                PaymentRefund[]
+  billingRuns                   SubscriptionBillingRun[]
+  billingOutboxEvents           BillingOutboxEvent[]
+  subscription                  CompanySubscription?
+  notifications                 Notification[]
+  activityLogs                  ActivityLog[]
+  settings                      CompanySettings?
+  invites                       CompanyInvite[]
+  warehouses                    Warehouse[]
+  warehouseStocks               WarehouseStock[]
+  warehouseTransfers            WarehouseTransfer[]
+  marketplaceIntegrations       MarketplaceIntegration[]
+  marketplaceSyncRuns           MarketplaceSyncRun[]
+  productChannelMappings        ProductChannelMapping[]
+  efaturamIntegration           EfaturamIntegration?
+  invoiceDocumentSubmissions    InvoiceDocumentSubmission[]
+  eDocumentTaxpayerLookupCaches EDocumentTaxpayerLookupCache[]
+  eDocumentGibUserListCache     EDocumentGibUserListCache?
+  calendarEvents                CalendarEvent[]
+  employees                     Employee[]
+  employeeSalaries              EmployeeSalary[]
+  employeePayments              EmployeePayment[]
+  employeeLeaves                EmployeeLeave[]
+  employeePerformanceRecords    EmployeePerformanceRecord[]
+  employeePerformanceTargets    EmployeePerformanceTarget[]
+  payrollRuns                   PayrollRun[]
+  payrollRunItems               PayrollRunItem[]
+  employeeDepartments           EmployeeDepartment[]
+  directoryContacts             DirectoryContact[]
+  suppliers                     Supplier[]
+  supplierContacts              SupplierContact[]
+  supplierProducts              SupplierProduct[]
+  partnerConversions            PartnerConversion[]
+  campaignScopes                MembershipCampaignScope[]
+  couponRedemptions             MembershipCouponRedemption[]
+  discountRedemptions           MembershipDiscountRedemption[]
+  planPriceOverrides            CompanyPlanPriceOverride[]
+  addOnSubscriptions            CompanyAddOnSubscription[]
+  entitlementOverrides          CompanyEntitlementOverride[]
+  usagePeriods                  UsagePeriod[]
+  usageEvents                   UsageEvent[]
+  usageCredits                  CompanyUsageCredit[]
+  aiSettings                    CompanyAISettings?
+  aiConversations               AIConversation[]
+  aiUsageLogs                   AIUsageLog[]
+  aiInsightCaches               AIInsightCache[]
+  adminNotes                    AdminCompanyNote[]
+  onboarding                    CompanyOnboarding?
 
   referringPartnerId String?
   referringPartner   PartnerProfile? @relation("ReferredCompanies", fields: [referringPartnerId], references: [id], onDelete: SetNull)
   referralCode       String?
   referredAt         DateTime?
 
+  suspendedAt       DateTime?
+  suspendedReason   String?
+  suspendedUntil    DateTime?
+  suspendedByUserId String?
+  archivedAt        DateTime?
+  archivedByUserId  String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+enum CompanyOnboardingStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  DISMISSED
+}
+
+model CompanyOnboarding {
+  id        String  @id @default(cuid())
+  companyId String  @unique
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  status      CompanyOnboardingStatus @default(NOT_STARTED)
+  currentStep Int                     @default(1)
+  flowVersion Int                     @default(1)
+
+  checklistDismissedAt DateTime?
+  startedAt            DateTime?
+  completedAt          DateTime?
+  dismissedAt          DateTime?
+
+  updatedByUserId String?
+  updatedByUser   User?   @relation("CompanyOnboardingUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, status])
 }
 
 enum DirectoryContactType {
@@ -1164,6 +1257,10 @@ model Sale {
   discount Decimal @default(0)
   total    Decimal @default(0)
 
+  /// POS checkout idempotency — company-scoped unique when set
+  idempotencyKey String?
+  payloadHash    String?
+
   status        SaleStatus    @default(COMPLETED)
   paymentStatus PaymentStatus @default(UNPAID)
   paidAmount    Decimal       @default(0)
@@ -1197,6 +1294,7 @@ model Sale {
   updatedAt DateTime @updatedAt
 
   @@unique([companyId, sourceChannel, externalOrderId])
+  @@unique([companyId, idempotencyKey])
   @@index([companyId])
   @@index([warehouseId])
   @@index([companyId, orderStatus])
@@ -1233,7 +1331,7 @@ model SalePayment {
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   saleId String
-  sale   Sale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  sale   Sale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
 
   accountId String
   account   Account @relation(fields: [accountId], references: [id], onDelete: Restrict)
@@ -1389,14 +1487,14 @@ model InvoiceDocumentSubmission {
 
 /// Sovos/GİB mükellef listesi senkron cache (getRAWUserList / getPartialUserList).
 model EDocumentGibUserListCache {
-  id             String   @id @default(cuid())
-  companyId      String   @unique
-  syncOperation  String
-  userIndex      Json
-  syncedAt       DateTime
-  expiresAt      DateTime
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id            String   @id @default(cuid())
+  companyId     String   @unique
+  syncOperation String
+  userIndex     Json
+  syncedAt      DateTime
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
@@ -1451,22 +1549,22 @@ model Invoice {
   pdfUrl     String?
   xmlUrl     String?
 
-  sellerSnapshot         Json?
-  buyerSnapshot          Json?
-  lineSnapshots          Json?
-  internetSaleSnapshot   Json?
-  financialSnapshot      Json?
-  eDocumentSnapshotAt    DateTime?
+  sellerSnapshot          Json?
+  buyerSnapshot           Json?
+  lineSnapshots           Json?
+  internetSaleSnapshot    Json?
+  financialSnapshot       Json?
+  eDocumentSnapshotAt     DateTime?
   eDocumentSnapshotStatus EDocumentSnapshotStatus?
-  eDocumentRevisionHash  String?
-  eDocumentSnapshotHash  String?
+  eDocumentRevisionHash   String?
+  eDocumentSnapshotHash   String?
 
   dueDate   DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  items        InvoiceItem[]
-  transactions AccountTransaction[]
+  items              InvoiceItem[]
+  transactions       AccountTransaction[]
   documentSubmission InvoiceDocumentSubmission?
 
   @@index([companyId])
@@ -1677,6 +1775,7 @@ model MembershipPlan {
   updatedAt           DateTime       @updatedAt
 
   prices              MembershipPlanPrice[]
+  planFeatures        PlanFeature[]
   entitlements        PlanEntitlement[]
   entitlementVersions PlanEntitlementVersion[]
   subscriptions       CompanySubscription[]
@@ -1684,6 +1783,7 @@ model MembershipPlan {
   campaignScopes      MembershipCampaignScope[]
   couponScopes        MembershipCouponPlan[]
   priceOverrides      CompanyPlanPriceOverride[]
+  adminNotes          AdminPlanNote[]
 }
 
 model MembershipPlanPrice {
@@ -2165,17 +2265,33 @@ model CompanySubscription {
   nextPlanPriceId         String?
   nextPlanPrice           MembershipPlanPrice?           @relation("SubscriptionNextPrice", fields: [nextPlanPriceId], references: [id], onDelete: SetNull)
   nextPriceEffectiveAt    DateTime?
-  createdAt               DateTime                       @default(now())
-  updatedAt               DateTime                       @updatedAt
+
+  // Admin-managed cancellation scheduling metadata
+  cancellationScheduledAt        DateTime?
+  cancellationScheduledByAdminId String?
+  cancellationScheduledByAdmin   User?     @relation("SubscriptionCancellationScheduledBy", fields: [cancellationScheduledByAdminId], references: [id], onDelete: SetNull)
+  internalCancellationNote       String?
+
+  // Trial extension tracking
+  trialExtensionReason String?
+
+  // Provider synchronization metadata
+  lastProviderSyncAt     DateTime?
+  lastProviderSyncStatus String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   billingRuns        SubscriptionBillingRun[]
   pendingChanges     SubscriptionPendingChange[]
   addOnSubscriptions CompanyAddOnSubscription[]
+  adminNotes         AdminSubscriptionNote[]
 
   @@index([planId])
   @@index([status])
   @@index([nextBillingAt, status])
   @@index([defaultPaymentMethodId])
+  @@index([lastProviderSyncAt])
 }
 
 model SubscriptionPendingChange {
@@ -2269,6 +2385,7 @@ model MembershipPayment {
   partnerEarning      PartnerEarning?
   couponRedemptions   MembershipCouponRedemption[]
   discountRedemptions MembershipDiscountRedemption[]
+  adminNotes          AdminPaymentNote[]
 
   @@unique([companyId, idempotencyKey])
   @@index([companyId])
@@ -2532,12 +2649,310 @@ model ActivityLog {
   userId String?
   user   User?   @relation(fields: [userId], references: [id])
 
-  action  String
-  module  String
-  message String?
-  ip      String?
+  action     String
+  module     String
+  message    String?
+  entityType String?
+  entityId   String?
+  metadata   Json?
+  ip         String?
 
   createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+  @@index([module, createdAt])
+  @@index([action, createdAt])
+  @@index([companyId, createdAt])
+  @@index([userId, createdAt])
+}
+
+enum SystemJobRunStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  SKIPPED
+  TIMED_OUT
+}
+
+enum SystemJobRunTrigger {
+  CRON
+  MANUAL
+  SYSTEM
+}
+
+model SystemJobRun {
+  id                String              @id @default(cuid())
+  jobKey            String
+  status            SystemJobRunStatus  @default(QUEUED)
+  trigger           SystemJobRunTrigger
+  triggeredByUserId String?
+  triggeredByUser   User?               @relation("SystemJobRunsTriggeredBy", fields: [triggeredByUserId], references: [id], onDelete: SetNull)
+  idempotencyKey    String?             @unique
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  durationMs        Int?
+  summary           String?
+  errorCode         String?
+  safeMetadata      Json?
+  createdAt         DateTime            @default(now())
+
+  @@index([jobKey, startedAt])
+  @@index([status, startedAt])
+  @@index([trigger, startedAt])
+}
+
+model PlatformSettings {
+  id      String @id @default("default")
+  version Int    @default(1)
+
+  brandName    String  @default("Hesap İşleri")
+  supportEmail String  @default("destek@hesapisleri.com")
+  supportPhone String?
+  websiteUrl   String  @default("https://hesapisleri.com")
+
+  registrationEnabled Boolean @default(true)
+
+  trialDays   Int     @default(14)
+  trialAmount Decimal @default(1499) @db.Decimal(18, 2)
+
+  defaultCurrency String @default("TRY")
+  defaultVatRate  Int    @default(20)
+
+  defaultNotifyLowStock         Boolean @default(true)
+  defaultNotifyDueInvoices      Boolean @default(true)
+  defaultNotifyLateCollections  Boolean @default(true)
+  defaultNotifyDailySummary     Boolean @default(false)
+  defaultNotifyEmployeePayments Boolean @default(true)
+
+  maxImageBytes          Int @default(5242880)
+  maxTaxCertificateBytes Int @default(5242880)
+
+  sessionMaxAgeDays Int @default(7)
+
+  maintenanceMode    Boolean @default(false)
+  maintenanceMessage String? @db.VarChar(500)
+
+  updatedByUserId String?
+  updatedByUser   User?   @relation("PlatformSettingsUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum AdminCompanyNoteCategory {
+  GENERAL
+  BILLING
+  SUPPORT
+  RISK
+  SALES
+  TECHNICAL
+}
+
+enum AdminCompanyNotePriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model AdminCompanyNote {
+  id           String                   @id @default(cuid())
+  companyId    String
+  company      Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  authorUserId String
+  author       User                     @relation("AdminCompanyNotesAuthored", fields: [authorUserId], references: [id], onDelete: Cascade)
+  content      String
+  category     AdminCompanyNoteCategory @default(GENERAL)
+  priority     AdminCompanyNotePriority @default(NORMAL)
+  isPinned     Boolean                  @default(false)
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+  deletedAt    DateTime?
+
+  @@index([companyId, deletedAt])
+  @@index([companyId, isPinned])
+}
+
+model AdminUserNote {
+  id           String                   @id @default(cuid())
+  userId       String
+  user         User                     @relation("AdminUserNotesAbout", fields: [userId], references: [id], onDelete: Cascade)
+  // authorUserId nullable: admin silinse bile not audit kaydı olarak korunur.
+  authorUserId String?
+  author       User?                    @relation("AdminUserNotesAuthored", fields: [authorUserId], references: [id], onDelete: SetNull)
+  content      String
+  category     AdminUserNoteCategory    @default(GENERAL)
+  priority     AdminCompanyNotePriority @default(NORMAL)
+  isPinned     Boolean                  @default(false)
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+  deletedAt    DateTime?
+
+  @@index([userId, deletedAt])
+  @@index([userId, isPinned])
+}
+
+model PasswordResetToken {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash        String    @unique
+  expiresAt        DateTime
+  createdByAdminId String?
+  createdByAdmin   User?     @relation("PasswordResetCreatedByAdmin", fields: [createdByAdminId], references: [id], onDelete: SetNull)
+  usedAt           DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@index([userId, expiresAt])
+}
+
+enum AdminSubscriptionNoteCategory {
+  GENERAL
+  BILLING
+  PAYMENT
+  RETENTION
+  RISK
+  SUPPORT
+  TECHNICAL
+}
+
+model AdminSubscriptionNote {
+  id             String                        @id @default(cuid())
+  subscriptionId String
+  subscription   CompanySubscription           @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  // authorUserId nullable: admin silinse bile not korunur.
+  authorUserId   String?
+  author         User?                         @relation("AdminSubscriptionNotesAuthored", fields: [authorUserId], references: [id], onDelete: SetNull)
+  content        String
+  category       AdminSubscriptionNoteCategory @default(GENERAL)
+  priority       AdminCompanyNotePriority      @default(NORMAL)
+  isPinned       Boolean                       @default(false)
+  createdAt      DateTime                      @default(now())
+  updatedAt      DateTime                      @updatedAt
+  deletedAt      DateTime?
+
+  @@index([subscriptionId, deletedAt])
+  @@index([subscriptionId, isPinned])
+}
+
+enum AdminPaymentNoteCategory {
+  GENERAL
+  PAYMENT
+  CALLBACK
+  REFUND
+  BILLING
+  RISK
+  SUPPORT
+  TECHNICAL
+}
+
+model AdminPaymentNote {
+  id           String                   @id @default(cuid())
+  paymentId    String
+  payment      MembershipPayment        @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  authorUserId String?
+  author       User?                    @relation("AdminPaymentNotesAuthored", fields: [authorUserId], references: [id], onDelete: SetNull)
+  content      String
+  category     AdminPaymentNoteCategory @default(GENERAL)
+  priority     AdminCompanyNotePriority @default(NORMAL)
+  isPinned     Boolean                  @default(false)
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+  deletedAt    DateTime?
+
+  @@index([paymentId, deletedAt])
+  @@index([paymentId, isPinned])
+  @@index([authorUserId])
+}
+
+enum AdminPlanNoteCategory {
+  GENERAL
+  PRICING
+  LIFECYCLE
+  ENTITLEMENT
+  BILLING
+  RISK
+  SUPPORT
+  TECHNICAL
+}
+
+model AdminPlanNote {
+  id           String                   @id @default(cuid())
+  planId       String
+  plan         MembershipPlan           @relation(fields: [planId], references: [id], onDelete: Restrict)
+  authorUserId String?
+  author       User?                    @relation("AdminPlanNotesAuthored", fields: [authorUserId], references: [id], onDelete: SetNull)
+  content      String
+  category     AdminPlanNoteCategory    @default(GENERAL)
+  priority     AdminCompanyNotePriority @default(NORMAL)
+  isPinned     Boolean                  @default(false)
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+  deletedAt    DateTime?
+
+  @@index([planId, deletedAt])
+  @@index([planId, isPinned])
+  @@index([authorUserId])
+}
+
+model AdminPartnerNote {
+  id           String                   @id @default(cuid())
+  partnerId    String
+  partner      PartnerProfile           @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  authorUserId String?
+  author       User?                    @relation("AdminPartnerNotesAuthored", fields: [authorUserId], references: [id], onDelete: SetNull)
+  content      String
+  category     AdminPlanNoteCategory    @default(GENERAL)
+  priority     AdminCompanyNotePriority @default(NORMAL)
+  isPinned     Boolean                  @default(false)
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+  deletedAt    DateTime?
+
+  @@index([partnerId, deletedAt])
+  @@index([partnerId, isPinned])
+  @@index([authorUserId])
+}
+
+model AdminPartnerPayoutNote {
+  id           String                   @id @default(cuid())
+  payoutId     String
+  payout       PartnerPayout            @relation(fields: [payoutId], references: [id], onDelete: Restrict)
+  authorUserId String?
+  author       User?                    @relation("AdminPartnerPayoutNotesAuthored", fields: [authorUserId], references: [id], onDelete: SetNull)
+  content      String
+  category     AdminPlanNoteCategory    @default(GENERAL)
+  priority     AdminCompanyNotePriority @default(NORMAL)
+  isPinned     Boolean                  @default(false)
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+  deletedAt    DateTime?
+
+  @@index([payoutId, deletedAt])
+  @@index([payoutId, isPinned])
+  @@index([authorUserId])
+}
+
+model PlanFeature {
+  id               String         @id @default(cuid())
+  planId           String
+  plan             MembershipPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  label            String
+  shortDescription String?
+  iconKey          String?
+  sortOrder        Int            @default(100)
+  isHighlighted    Boolean        @default(false)
+  isVisible        Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  deletedAt        DateTime?
+
+  @@unique([planId, label])
+  @@index([planId, deletedAt])
+  @@index([planId, sortOrder])
+  @@index([planId, isVisible])
 }
 
 enum EmployeeStatus {
@@ -2934,6 +3349,7 @@ enum PartnerProfileStatus {
   ACTIVE
   PASSIVE
   SUSPENDED
+  ARCHIVED
 }
 
 enum PartnerBadgeType {
@@ -3041,6 +3457,7 @@ model PartnerProfile {
   payouts           PartnerPayout[]
   referredCompanies Company[]                 @relation("ReferredCompanies")
   campaignScopes    MembershipCampaignScope[]
+  adminNotes        AdminPartnerNote[]
 
   @@index([email])
   @@index([status])
@@ -3125,23 +3542,29 @@ model PartnerEarning {
 }
 
 model PartnerPayout {
-  id              String                     @id @default(cuid())
-  partnerId       String
-  partner         PartnerProfile             @relation(fields: [partnerId], references: [id], onDelete: Cascade)
-  amount          Decimal                    @db.Decimal(18, 2)
-  currency        String                     @default("TRY")
-  status          PartnerPayoutStatus        @default(DRAFT)
-  paymentMethod   PartnerPayoutPaymentMethod @default(MANUAL)
-  paidAt          DateTime?
-  note            String?
-  createdByUserId String?
-  createdAt       DateTime                   @default(now())
-  updatedAt       DateTime                   @updatedAt
+  id               String                     @id @default(cuid())
+  partnerId        String
+  partner          PartnerProfile             @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  amount           Decimal                    @db.Decimal(18, 2)
+  currency         String                     @default("TRY")
+  status           PartnerPayoutStatus        @default(DRAFT)
+  paymentMethod    PartnerPayoutPaymentMethod @default(MANUAL)
+  paymentReference String?
+  paidAt           DateTime?
+  paidByUserId     String?
+  paidByUser       User?                      @relation("PartnerPayoutsPaidBy", fields: [paidByUserId], references: [id], onDelete: SetNull)
+  note             String?
+  createdByUserId  String?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
 
-  earnings PartnerEarning[]
+  earnings   PartnerEarning[]
+  adminNotes AdminPartnerPayoutNote[]
 
+  @@unique([partnerId, paymentReference])
   @@index([partnerId])
   @@index([status])
+  @@index([paidByUserId])
 }
 
 model PartnerSettings {
@@ -3162,22 +3585,22 @@ model CompanyAISettings {
   companyId String  @unique
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  enabled               Boolean @default(true)
-  provider              String  @default("openai")
-  model                 String?
-  defaultLanguage       String  @default("tr")
-  maxResponseTokens     Int     @default(800)
-  monthlyCostWarningUsd Decimal? @db.Decimal(10, 4)
-  readOnlyMode          Boolean @default(true)
-  requireUserApproval   Boolean @default(true)
-  autoDisableOnCostExceeded Boolean @default(false)
+  enabled                   Boolean  @default(true)
+  provider                  String   @default("openai")
+  model                     String?
+  defaultLanguage           String   @default("tr")
+  maxResponseTokens         Int      @default(800)
+  monthlyCostWarningUsd     Decimal? @db.Decimal(10, 4)
+  readOnlyMode              Boolean  @default(true)
+  requireUserApproval       Boolean  @default(true)
+  autoDisableOnCostExceeded Boolean  @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model AIConversation {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   companyId String
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   userId    String
@@ -3187,9 +3610,9 @@ model AIConversation {
   provider String?
   model    String?
 
-  messages        AIMessage[]
-  usageLogs       AIUsageLog[]
-  toolExecutions  AIToolExecution[]
+  messages       AIMessage[]
+  usageLogs      AIUsageLog[]
+  toolExecutions AIToolExecution[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

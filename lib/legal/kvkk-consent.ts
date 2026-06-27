@@ -1,4 +1,4 @@
-import { COMPANY_LEGAL_INFO } from "@/lib/legal/company-legal-info";
+import { PLATFORM_SETTINGS_DEFAULTS } from "@/lib/admin/platform-settings/platform-settings-defaults";
 
 /** Aydınlatma metni sürümü — metin güncellendiğinde artırılmalıdır. */
 export const KVKK_AYDINLATMA_VERSION = "2026-06-2";
@@ -14,9 +14,17 @@ export const KVKK_AYDINLATMA_ACKNOWLEDGMENT_TEXT =
 
 export const MARKETING_CONSENT_VERSION = "2026-06-1";
 
-export const MARKETING_CONSENT_TEXT =
-  `${COMPANY_LEGAL_INFO.brandName} tarafından ürün, hizmet, kampanya ve duyurular hakkında ` +
-  "e-posta, SMS ve diğer elektronik iletişim kanalları üzerinden ticari ileti gönderilmesini kabul ediyorum.";
+export function buildMarketingConsentText(brandName: string) {
+  return (
+    `${brandName} tarafından ürün, hizmet, kampanya ve duyurular hakkında ` +
+    "e-posta, SMS ve diğer elektronik iletişim kanalları üzerinden ticari ileti gönderilmesini kabul ediyorum."
+  );
+}
+
+/** @deprecated buildMarketingConsentText(brandName) veya server prop kullanın */
+export const MARKETING_CONSENT_TEXT = buildMarketingConsentText(
+  PLATFORM_SETTINGS_DEFAULTS.brandName
+);
 
 /** Denetim kaydı için sürüm, gösterim tarihi ve bilgilendirme ifadesi. */
 export function buildKvkkAcknowledgmentRecord(): string {

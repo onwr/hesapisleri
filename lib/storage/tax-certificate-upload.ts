@@ -1,10 +1,15 @@
-import { validateTaxCertificateFile } from "@/lib/storage/upload-validation";
+import {
+  validateTaxCertificateFileWithLimits,
+} from "@/lib/storage/upload-validation";
 
 export const CUSTOMER_TAX_CERTIFICATE_UPLOAD_FOLDER =
   "hesapisleri/customers/tax-certificates";
 
-export async function uploadTaxCertificateToCdn(file: File) {
-  validateTaxCertificateFile(file);
+export async function uploadTaxCertificateToCdn(
+  file: File,
+  maxTaxCertificateBytes: number
+) {
+  validateTaxCertificateFileWithLimits(file, maxTaxCertificateBytes);
 
   const formData = new FormData();
   formData.append("file", file);

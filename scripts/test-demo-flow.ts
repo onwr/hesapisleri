@@ -484,8 +484,13 @@ async function testSettingsData(ctx: DemoContext) {
 
 async function testSuperAdminData(ctx: DemoContext) {
   const overview = await getAdminOverview();
-  assertMin("Admin toplam firma", overview.metrics.totalCompanies, 1);
-  assertMin("Admin toplam kullanıcı", overview.metrics.totalUsers, 4);
+  const totalCompanies =
+    overview.metrics.find((metric) => metric.key === "companies_total")?.value ??
+    0;
+  const totalUsers =
+    overview.metrics.find((metric) => metric.key === "users_total")?.value ?? 0;
+  assertMin("Admin toplam firma", totalCompanies, 1);
+  assertMin("Admin toplam kullanıcı", totalUsers, 4);
 
   const companies = await getAdminCompanies({ q: "Örnek" });
   const demoListed = companies.some(

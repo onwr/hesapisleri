@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { resetExpiredUsagePeriods } from "@/lib/billing/usage/usage-period-service";
+import { buildCronRouteResponse } from "@/lib/admin/jobs/cron-response";
+import { runCronJob } from "@/lib/admin/jobs/job-run-service";
 
 export async function POST(req: Request) {
   const secret = process.env.CRON_SECRET;
@@ -9,8 +10,8 @@ export async function POST(req: Request) {
   }
 
   try {
-    const result = await resetExpiredUsagePeriods();
-    return NextResponse.json({ success: true, data: result });
+    const run = await runCronJob("usage-period-reset");
+    return NextResponse.json(buildCronRouteResponse("usage-period-reset", run));
   } catch (error) {
     console.error("USAGE_PERIOD_RESET_ERROR", error);
     return NextResponse.json(

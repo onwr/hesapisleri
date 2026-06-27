@@ -4,11 +4,10 @@ import {
   adminCompanyPatchSchema,
   adminUserPatchSchema,
   parseOptionalDate,
-  validateSuperAdminRoleChange,
-  validateUserStatusChange,
 } from "@/lib/admin-utils";
-import { startOfDay, startOfMonth, endOfMonth } from "@/lib/dashboard-metrics";
-import { activeSaleStatusFilter } from "@/lib/sale-query-utils";
+import { startOfMonth, endOfMonth } from "@/lib/dashboard-metrics";
+import { getCachedAdminOverview } from "@/lib/admin/admin-overview-cache";
+import type { AdminOverviewQuery } from "@/lib/admin/admin-overview-period-utils";
 
 export class AdminServiceError extends Error {
   status: number;
@@ -54,364 +53,8 @@ async function ensureCompanySettings(companyId: string) {
   });
 }
 
-function monthShift(date: Date, months: number) {
-  const next = new Date(date);
-  next.setMonth(next.getMonth() + months);
-  return next;
-}
-
-export async function getAdminOverview() {
-  const now = new Date();
-  const todayStart = startOfDay(now);
-  const monthStart = startOfMonth(now);
-  const monthEnd = endOfMonth(now);
-  const prevMonthStart = startOfMonth(monthShift(now, -1));
-  const prevMonthEnd = endOfMonth(monthShift(now, -1));
-  const sevenDaysAgo = new Date(now);
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-  const [
-    totalCompanies,
-    activeCompanies,
-    totalUsers,
-    todaySales,
-    monthSalesAgg,
-    prevMonthSalesAgg,
-    activeMemberships,
-    pastDueMemberships,
-    trialSubscriptions,
-    pendingPayments,
-    monthMembershipRevenue,
-    prevMonthMembershipRevenue,
-    recentCompanies,
-    recentLogs,
-    overdueCompanies,
-    recentPayments,
-    pendingPartnerApplications,
-    graceSubscriptions,
-    expiringTrials,
-    revenueByDay,
-    companiesByDay,
-  ] = await Promise.all([
-    db.company.count(),
-    db.company.count({ where: { status: "ACTIVE" } }),
-    db.user.count(),
-    db.sale.count({
-      where: {
-        createdAt: { gte: todayStart },
-        ...activeSaleStatusFilter(),
-      },
-    }),
-    db.sale.aggregate({
-      where: {
-        createdAt: { gte: monthStart, lte: monthEnd },
-        ...activeSaleStatusFilter(),
-      },
-      _sum: { total: true },
-    }),
-    db.sale.aggregate({
-      where: {
-        createdAt: { gte: prevMonthStart, lte: prevMonthEnd },
-        ...activeSaleStatusFilter(),
-      },
-      _sum: { total: true },
-    }),
-    db.companySubscription.count({
-      where: { status: { in: ["ACTIVE", "CANCEL_AT_PERIOD_END"] } },
-    }),
-    db.companySubscription.count({ where: { status: "PAST_DUE" } }),
-    db.companySubscription.count({ where: { status: "TRIAL" } }),
-    db.membershipPayment.count({ where: { status: "PENDING" } }),
-    db.membershipPayment.aggregate({
-      where: {
-        status: "PAID",
-        paidAt: { gte: monthStart, lte: monthEnd },
-        provider: { not: "TRIAL" },
-      },
-      _sum: { amount: true },
-    }),
-    db.membershipPayment.aggregate({
-      where: {
-        status: "PAID",
-        paidAt: { gte: prevMonthStart, lte: prevMonthEnd },
-        provider: { not: "TRIAL" },
-      },
-      _sum: { amount: true },
-    }),
-    db.company.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 6,
-      include: {
-        users: {
-          where: { isOwner: true },
-          include: { user: true },
-          take: 1,
-        },
-        settings: true,
-        subscription: { include: { plan: true } },
-        _count: { select: { users: true, sales: true } },
-      },
-    }),
-    db.activityLog.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 8,
-      include: {
-        user: true,
-        company: true,
-      },
-    }),
-    db.company.findMany({
-      where: {
-        OR: [
-          { subscription: { status: "PAST_DUE" } },
-          { settings: { membershipStatus: "PAST_DUE" } },
-          {
-            settings: {
-              membershipStatus: "ACTIVE",
-              nextPaymentDate: { lt: now },
-            },
-          },
-        ],
-      },
-      take: 5,
-      include: { settings: true, subscription: true },
-      orderBy: { updatedAt: "desc" },
-    }),
-    db.membershipPayment.findMany({
-      where: { provider: { not: "TRIAL" } },
-      orderBy: { createdAt: "desc" },
-      take: 6,
-      include: { company: true, plan: true },
-    }),
-    db.partnerApplication.count({ where: { status: "PENDING" } }),
-    db.companySubscription.count({ where: { status: "GRACE_PERIOD" } }),
-    db.companySubscription.findMany({
-      where: {
-        status: "TRIAL",
-        trialEndsAt: { lte: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) },
-      },
-      take: 5,
-      include: { company: true },
-      orderBy: { trialEndsAt: "asc" },
-    }),
-    db.membershipPayment.findMany({
-      where: {
-        status: "PAID",
-        paidAt: { gte: sevenDaysAgo },
-        provider: { not: "TRIAL" },
-      },
-      select: { paidAt: true, amount: true },
-      orderBy: { paidAt: "asc" },
-    }),
-    db.company.findMany({
-      where: { createdAt: { gte: sevenDaysAgo } },
-      select: { createdAt: true },
-      orderBy: { createdAt: "asc" },
-    }),
-  ]);
-
-  const monthMembershipRevenueValue = decimalToNumber(
-    monthMembershipRevenue._sum.amount
-  );
-  const prevMonthMembershipRevenueValue = decimalToNumber(
-    prevMonthMembershipRevenue._sum.amount
-  );
-  const membershipRevenueChange =
-    prevMonthMembershipRevenueValue > 0
-      ? ((monthMembershipRevenueValue - prevMonthMembershipRevenueValue) /
-          prevMonthMembershipRevenueValue) *
-        100
-      : 0;
-
-  const revenueChart = buildDailyChart(revenueByDay, sevenDaysAgo, now, "amount");
-  const companiesChart = buildDailyChart(companiesByDay, sevenDaysAgo, now, "count");
-
-  const attentionItems = buildAttentionItems({
-    overdueCompanies,
-    graceSubscriptions,
-    pendingPayments,
-    pendingPartnerApplications,
-    expiringTrials,
-  });
-
-  return {
-    metrics: {
-      totalCompanies,
-      activeCompanies,
-      totalUsers,
-      todaySales,
-      monthBusinessVolume: decimalToNumber(monthSalesAgg._sum.total),
-      prevMonthBusinessVolume: decimalToNumber(prevMonthSalesAgg._sum.total),
-      monthMembershipRevenue: monthMembershipRevenueValue,
-      membershipRevenueChange,
-      activeMemberships,
-      pastDueMemberships,
-      trialSubscriptions,
-      pendingPayments,
-    },
-    revenueChart,
-    companiesChart,
-    attentionItems,
-    recentPayments: recentPayments.map((payment) => ({
-      id: payment.id,
-      companyName: payment.company.name,
-      companyId: payment.company.id,
-      amount: decimalToNumber(payment.amount),
-      status: payment.status,
-      planName: payment.plan?.name ?? "Standart Paket",
-      createdAt: payment.createdAt.toISOString(),
-      paidAt: payment.paidAt?.toISOString() ?? null,
-    })),
-    recentCompanies: recentCompanies.map((company) => ({
-      id: company.id,
-      name: company.name,
-      status: company.status,
-      ownerName: company.users[0]?.user.name ?? "—",
-      userCount: company._count.users,
-      salesCount: company._count.sales,
-      membershipStatus:
-        company.subscription?.status ??
-        company.settings?.membershipStatus ??
-        "ACTIVE",
-      planName: company.subscription?.plan?.name ?? null,
-      createdAt: company.createdAt.toISOString(),
-    })),
-    recentLogs: recentLogs.map((log) => ({
-      id: log.id,
-      action: log.action,
-      module: log.module,
-      message: log.message ?? "",
-      userName: log.user?.name ?? "Sistem",
-      companyName: log.company?.name ?? null,
-      createdAt: log.createdAt.toISOString(),
-    })),
-    overdueCompanies: overdueCompanies.map((company) => ({
-      id: company.id,
-      name: company.name,
-      membershipStatus:
-        company.subscription?.status ??
-        company.settings?.membershipStatus ??
-        "ACTIVE",
-      nextPaymentDate:
-        company.subscription?.currentPeriodEnd?.toISOString() ??
-        company.settings?.nextPaymentDate?.toISOString() ??
-        null,
-    })),
-    pendingPartnerApplications,
-  };
-}
-
-function buildDailyChart(
-  rows: Array<{
-    paidAt?: Date | null;
-    createdAt?: Date;
-    amount?: Prisma.Decimal | number | null;
-  }>,
-  start: Date,
-  end: Date,
-  mode: "amount" | "count"
-) {
-  const buckets: { date: string; label: string; value: number }[] = [];
-  const cursor = new Date(start);
-
-  while (cursor <= end) {
-    const key = cursor.toISOString().slice(0, 10);
-    buckets.push({
-      date: key,
-      label: `${cursor.getDate()}/${cursor.getMonth() + 1}`,
-      value: 0,
-    });
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  for (const row of rows) {
-    const date = (row.paidAt ?? row.createdAt)?.toISOString().slice(0, 10);
-    if (!date) continue;
-    const bucket = buckets.find((item) => item.date === date);
-    if (!bucket) continue;
-    bucket.value += mode === "amount" ? decimalToNumber(row.amount) : 1;
-  }
-
-  return buckets;
-}
-
-function buildAttentionItems(input: {
-  overdueCompanies: Array<{ id: string; name: string }>;
-  graceSubscriptions: number;
-  pendingPayments: number;
-  pendingPartnerApplications: number;
-  expiringTrials: Array<{
-    company: { id: string; name: string };
-    trialEndsAt: Date | null;
-  }>;
-}) {
-  const items: Array<{
-    id: string;
-    type: string;
-    title: string;
-    description: string;
-    priority: "high" | "medium" | "low";
-    href: string;
-    date?: string | null;
-  }> = [];
-
-  for (const company of input.overdueCompanies) {
-    items.push({
-      id: `past-due-${company.id}`,
-      type: "PAST_DUE",
-      title: company.name,
-      description: "Geciken üyelik ödemesi",
-      priority: "high",
-      href: `/admin/companies/${company.id}`,
-    });
-  }
-
-  if (input.graceSubscriptions > 0) {
-    items.push({
-      id: "grace-period",
-      type: "GRACE",
-      title: `${input.graceSubscriptions} firma grace period içinde`,
-      description: "Ödeme gecikmesi tolerans süresi",
-      priority: "high",
-      href: "/admin/companies?membershipStatus=PAST_DUE",
-    });
-  }
-
-  if (input.pendingPayments > 0) {
-    items.push({
-      id: "pending-payments",
-      type: "PAYMENT",
-      title: `${input.pendingPayments} bekleyen ödeme`,
-      description: "Onay veya mutabakat bekliyor",
-      priority: "medium",
-      href: "/admin/payments",
-    });
-  }
-
-  if (input.pendingPartnerApplications > 0) {
-    items.push({
-      id: "partner-applications",
-      type: "PARTNER",
-      title: `${input.pendingPartnerApplications} partner başvurusu`,
-      description: "İnceleme bekliyor",
-      priority: "medium",
-      href: "/admin/partners/applications",
-    });
-  }
-
-  for (const trial of input.expiringTrials) {
-    items.push({
-      id: `trial-${trial.company.id}`,
-      type: "TRIAL",
-      title: trial.company.name,
-      description: "Deneme süresi yakında bitiyor",
-      priority: "low",
-      href: `/admin/companies/${trial.company.id}`,
-      date: trial.trialEndsAt?.toISOString() ?? null,
-    });
-  }
-
-  return items.slice(0, 12);
+export async function getAdminOverview(query: AdminOverviewQuery = {}) {
+  return getCachedAdminOverview(query);
 }
 
 export async function getAdminCompaniesSummary() {
@@ -460,7 +103,6 @@ export async function getAdminUsersSummary() {
     withoutCompany,
   };
 }
-
 export async function getAdminLogs(input?: {
   q?: string;
   module?: string;
@@ -954,83 +596,24 @@ export async function getAdminUserDetail(userId: string) {
   };
 }
 
+// updateAdminUser kasıtlı olarak hiçbir alan kabul etmez.
+// Kullanıcı durumu yalnızca /suspend ve /reactivate endpointlerinden değiştirilebilir.
+// Platform rol değişikliği ayrı bir güvenlik fazında ele alınacak.
 export async function updateAdminUser(
-  targetUserId: string,
-  actorUserId: string,
+  _targetUserId: string,
+  _actorUserId: string,
   body: unknown
 ) {
   const parsed = adminUserPatchSchema.safeParse(body);
-
   if (!parsed.success) {
-    throw new AdminServiceError("Geçersiz kullanıcı güncelleme verisi.", 400);
+    throw new AdminServiceError(
+      "Bu endpoint üzerinden kullanıcı güncellemesi yapılamaz. Durum değişikliği için /suspend veya /reactivate kullanın.",
+      405
+    );
   }
-
-  const user = await db.user.findUnique({ where: { id: targetUserId } });
-
-  if (!user) {
-    throw new AdminServiceError("Kullanıcı bulunamadı.", 404);
-  }
-
-  const data = parsed.data;
-
-  if (data.role !== undefined) {
-    const validation = validateSuperAdminRoleChange({
-      actorUserId,
-      targetUserId,
-      nextRole: data.role,
-    });
-
-    if (!validation.ok) {
-      throw new AdminServiceError(validation.message, 400);
-    }
-  }
-
-  if (data.status !== undefined) {
-    const validation = validateUserStatusChange({
-      actorUserId,
-      targetUserId,
-      nextStatus: data.status,
-    });
-
-    if (!validation.ok) {
-      throw new AdminServiceError(validation.message, 400);
-    }
-  }
-
-  const updated = await db.user.update({
-    where: { id: targetUserId },
-    data: {
-      ...(data.role !== undefined ? { role: data.role } : {}),
-      ...(data.status !== undefined ? { status: data.status } : {}),
-    },
-  });
-
-  if (data.role !== undefined && data.role !== user.role) {
-    const action =
-      data.role === "SUPER_ADMIN"
-        ? "Super Admin yetkisi verildi"
-        : "Super Admin yetkisi kaldırıldı";
-
-    await logAdminAction({
-      userId: actorUserId,
-      action: "UPDATE",
-      message: `${user.name} (${user.email}) için ${action}.`,
-    });
-  }
-
-  if (data.status !== undefined && data.status !== user.status) {
-    await logAdminAction({
-      userId: actorUserId,
-      action: "UPDATE",
-      message: `${user.name} (${user.email}) kullanıcısı ${data.status} durumuna alındı.`,
-    });
-  }
-
-  return {
-    id: updated.id,
-    name: updated.name,
-    email: updated.email,
-    role: updated.role,
-    status: updated.status,
-  };
+  // Şema strict() olduğu için boş gövde geçerse bile değiştirecek alan yoktur.
+  throw new AdminServiceError(
+    "Bu endpoint üzerinden kullanıcı güncellemesi yapılamaz.",
+    405
+  );
 }

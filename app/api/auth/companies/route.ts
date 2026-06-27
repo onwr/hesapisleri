@@ -107,11 +107,12 @@ export async function POST(req: Request) {
       { status: 201 }
     );
 
-    attachAuthCookie(response, {
+    await attachAuthCookie(response, {
       userId: user.id,
       email: user.email,
       role: user.role,
       companyId: company.id,
+      sv: user.sessionVersion,
     });
 
     return response;

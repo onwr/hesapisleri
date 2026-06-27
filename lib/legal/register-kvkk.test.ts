@@ -46,8 +46,9 @@ describe("register KVKK aydınlatma", () => {
     );
     assert.match(source, /KvkkAydinlatmaModal/);
     assert.match(source, /kvkkInformed/);
-    assert.match(source, /MARKETING_CONSENT_TEXT/);
+    assert.match(source, /marketingConsentText/);
     assert.match(source, /marketingConsent/);
+    assert.match(source, /legalInfo/);
   });
 
   it("public aydınlatma page exists", () => {
@@ -56,5 +57,6 @@ describe("register KVKK aydınlatma", () => {
       "utf8"
     );
     assert.match(source, /KvkkAydinlatmaContent/);
+    assert.match(source, /getPlatformLegalInfo/);
   });
 });

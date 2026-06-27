@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { TicketPercent } from "lucide-react";
+import { Archive, PauseCircle, PlayCircle, TicketPercent } from "lucide-react";
 import { AdminCouponFilters } from "@/components/admin/promotions/admin-coupon-filters";
 import { AdminCouponCopyButton, AdminCouponRowActions } from "@/components/admin/admin-coupon-row-actions";
 import { AdminPageContainer } from "@/components/admin/layout/admin-page-container";
@@ -18,6 +18,7 @@ import {
 import { formatAdminDate } from "@/lib/admin-utils";
 import { formatMinorToMoney } from "@/lib/billing/pricing-utils";
 import type { CouponListFilters } from "@/lib/admin/promotions/promotion-types";
+import { COUPON_PAGE_SIZES } from "@/lib/admin/promotions/promotion-types";
 import {
   formatCouponIntervalSummary,
   formatCouponPlanSummary,
@@ -32,6 +33,15 @@ import type { getCouponSummary, listCoupons } from "@/lib/admin/promotions/coupo
 type ListData = Awaited<ReturnType<typeof listCoupons>>;
 type SummaryData = Awaited<ReturnType<typeof getCouponSummary>>;
 type Plan = { id: string; name: string };
+
+function buildPageHref(filters: CouponListFilters, page: number) {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined && value !== "") params.set(key, String(value));
+  });
+  params.set("page", String(page));
+  return `/admin/coupons?${params.toString()}`;
+}
 
 export function AdminMembershipCouponsContent({
   list,
@@ -55,7 +65,7 @@ export function AdminMembershipCouponsContent({
         title="Kuponlar"
         description="Üyelik ödemelerinde kullanılacak indirim kodlarını yönetin."
         primaryAction={
-          <Link href="/admin/membership-coupons/new" className={appPrimaryButtonClass}>
+          <Link href="/admin/coupons/new" className={appPrimaryButtonClass}>
             Yeni Kupon
           </Link>
         }
@@ -67,17 +77,18 @@ export function AdminMembershipCouponsContent({
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        <AdminStatCard title="Toplam Kupon" value={String(summary.total)} icon={TicketPercent} tone="blue" />
-        <AdminStatCard title="Aktif" value={String(summary.active)} icon={TicketPercent} tone="green" />
-        <AdminStatCard title="Bu Ay Kullanılan" value={String(summary.monthlyUsage)} icon={TicketPercent} tone="purple" />
-        <AdminStatCard title="Limit Dolan" value={String(summary.limitReached)} icon={TicketPercent} tone="red" />
-        <AdminStatCard title="Yakında Bitecek" value={String(summary.endingSoon)} icon={TicketPercent} tone="amber" />
-        <AdminStatCard
-          title="Toplam İndirim"
-          value={formatMinorToMoney(summary.totalDiscountMinor)}
-          icon={TicketPercent}
-          tone="blue"
-        />
+        <AdminStatCard title="Toplam" value={String(summary.total)} icon={TicketPercent} tone="blue" />
+        <AdminStatCard title="Taslak" value={String(summary.draft)} icon={TicketPercent} tone="purple" />
+        <AdminStatCard title="Aktif" value={String(summary.active)} icon={PlayCircle} tone="green" />
+        <AdminStatCard title="Duraklatılmış" value={String(summary.paused)} icon={PauseCircle} tone="amber" />
+        <AdminStatCard title="Yakında Bitecek" value={String(summary.endingSoon)} icon={Archive} tone="amber" />
+        <AdminStatCard title="Limit Dolu" value={String(summary.usageLimitReached)} icon={Archive} tone="red" />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <AdminStatCard title="Süresi Dolmuş" value={String(summary.expired)} icon={Archive} tone="purple" />
+        <AdminStatCard title="Arşiv" value={String(summary.archived)} icon={Archive} tone="blue" />
+        <AdminStatCard title="Hiç Kullanılmamış" value={String(summary.neverUsed)} icon={TicketPercent} tone="green" />
+        <AdminStatCard title="Hedef Sorunu" value={String(summary.targetingIssues)} icon={TicketPercent} tone="amber" />
       </div>
 
       <AdminCouponFilters filters={filters} plans={plans} activeFilterCount={activeFilterCount} />
@@ -103,14 +114,15 @@ export function AdminMembershipCouponsContent({
                 <tr className={appTableHeadClass}>
                   <th className="px-3 py-2">Kod</th>
                   <th className="px-3 py-2">İsim</th>
+                  <th className="px-3 py-2">Durum</th>
                   <th className="px-3 py-2">İndirim</th>
+                  <th className="px-3 py-2">Para Birimi</th>
                   <th className="px-3 py-2">Planlar</th>
                   <th className="px-3 py-2">Dönemler</th>
                   <th className="px-3 py-2">Kullanım</th>
-                  <th className="px-3 py-2">Firma Limiti</th>
                   <th className="px-3 py-2">Başlangıç</th>
                   <th className="px-3 py-2">Bitiş</th>
-                  <th className="px-3 py-2">Durum</th>
+                  <th className="px-3 py-2">Sorun</th>
                   <th className="px-3 py-2">İşlemler</th>
                 </tr>
               </thead>
@@ -123,7 +135,21 @@ export function AdminMembershipCouponsContent({
                         <AdminCouponCopyButton code={item.code} />
                       </div>
                     </td>
-                    <td className="px-3 py-3">{item.name}</td>
+                    <td className="px-3 py-3">
+                      <p className="font-semibold">{item.name}</p>
+                      {item.description ? (
+                        <p className="mt-0.5 text-[11px] text-slate-500 line-clamp-1">
+                          {item.description}
+                        </p>
+                      ) : null}
+                    </td>
+                    <td className="px-3 py-3">
+                      <span
+                        className={`inline-block rounded-md px-2 py-0.5 text-[10px] font-bold ${getCampaignStatusBadgeClass(item.status)}`}
+                      >
+                        {getCouponStatusLabel(item.status)}
+                      </span>
+                    </td>
                     <td className="px-3 py-3">
                       {formatDiscountLabel(
                         item.discountType,
@@ -131,9 +157,8 @@ export function AdminMembershipCouponsContent({
                         formatMinorToMoney
                       )}
                     </td>
-                    <td className="px-3 py-3">
-                      {formatCouponPlanSummary(item.planScopes)}
-                    </td>
+                    <td className="px-3 py-3">{item.currency}</td>
+                    <td className="px-3 py-3">{formatCouponPlanSummary(item.planScopes)}</td>
                     <td className="px-3 py-3">
                       {formatCouponIntervalSummary(item.allowedIntervals)}
                     </td>
@@ -141,15 +166,16 @@ export function AdminMembershipCouponsContent({
                       {item.usageCount}
                       {item.maxUsage ? ` / ${item.maxUsage}` : ""}
                     </td>
-                    <td className="px-3 py-3">{item.maxUsagePerCompany}</td>
                     <td className="px-3 py-3">{formatAdminDate(item.startsAt)}</td>
                     <td className="px-3 py-3">{formatAdminDate(item.expiresAt)}</td>
                     <td className="px-3 py-3">
-                      <span
-                        className={`inline-block rounded-md px-2 py-0.5 text-[10px] font-bold ${getCampaignStatusBadgeClass(item.status)}`}
-                      >
-                        {getCouponStatusLabel(item.status)}
-                      </span>
+                      {item.issues.length ? (
+                        <span className="text-[11px] font-bold text-amber-800">
+                          {item.issues[0]!.code}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     <td className="px-3 py-3">
                       <AdminCouponRowActions
@@ -188,7 +214,8 @@ export function AdminMembershipCouponsContent({
                     item.discountType,
                     item.discountValue,
                     formatMinorToMoney
-                  )}
+                  )}{" "}
+                  · {item.currency}
                 </p>
                 <p className="text-[12px] text-slate-600">
                   {formatCouponPlanSummary(item.planScopes)} ·{" "}
@@ -216,18 +243,13 @@ export function AdminMembershipCouponsContent({
             ))}
           </div>
 
-          {pagination.totalPages > 1 ? (
-            <div className="flex items-center justify-center gap-2">
-              {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map((page) => {
-                const params = new URLSearchParams();
-                Object.entries(filters).forEach(([key, value]) => {
-                  if (value !== undefined && value !== "") params.set(key, String(value));
-                });
-                params.set("page", String(page));
-                return (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {pagination.totalPages > 1 ? (
+              <div className="flex items-center justify-center gap-2">
+                {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map((page) => (
                   <Link
                     key={page}
-                    href={`/admin/membership-coupons?${params.toString()}`}
+                    href={buildPageHref(filters, page)}
                     className={`rounded-xl px-3 py-1.5 text-[13px] font-bold ${
                       page === pagination.page
                         ? "bg-blue-600 text-white"
@@ -236,10 +258,28 @@ export function AdminMembershipCouponsContent({
                   >
                     {page}
                   </Link>
-                );
-              })}
+                ))}
+              </div>
+            ) : (
+              <span />
+            )}
+            <div className="flex items-center gap-2 text-[12px] text-slate-500">
+              <span>Sayfa başına:</span>
+              {COUPON_PAGE_SIZES.map((size) => (
+                <Link
+                  key={size}
+                  href={buildPageHref({ ...filters, pageSize: size, page: 1 }, 1)}
+                  className={`rounded-lg px-2 py-1 font-bold ${
+                    (filters.pageSize ?? pagination.pageSize) === size
+                      ? "bg-blue-100 text-blue-700"
+                      : "text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  {size}
+                </Link>
+              ))}
             </div>
-          ) : null}
+          </div>
         </>
       )}
     </AdminPageContainer>

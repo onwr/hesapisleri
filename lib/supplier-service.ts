@@ -341,7 +341,13 @@ export async function deleteSupplier(input: {
   }
 
   await db.$transaction(async (tx) => {
-    await tx.supplier.delete({ where: { id: input.supplierId } });
+    const deleted = await tx.supplier.deleteMany({
+      where: { id: input.supplierId, companyId: input.companyId },
+    });
+
+    if (deleted.count === 0) {
+      throw new SupplierServiceError("Tedarikçi bulunamadı.", 404);
+    }
 
     await tx.activityLog.create({
       data: {

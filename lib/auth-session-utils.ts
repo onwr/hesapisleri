@@ -1,4 +1,5 @@
 import type { NextResponse } from "next/server";
+import { getSessionMaxAgeDays } from "@/lib/admin/platform-settings";
 import { signSessionToken } from "@/lib/auth/jwt";
 import {
   AUTH_COOKIE_NAME,
@@ -10,14 +11,16 @@ export type AuthTokenPayload = {
   email: string;
   role: string;
   companyId: string | null;
+  sv: number;
 };
 
 export { getAuthCookieOptions };
 
-export function attachAuthCookie(
+export async function attachAuthCookie(
   response: NextResponse,
   payload: AuthTokenPayload
 ) {
-  const token = signSessionToken(payload);
-  response.cookies.set(AUTH_COOKIE_NAME, token, getAuthCookieOptions());
+  const sessionMaxAgeDays = await getSessionMaxAgeDays();
+  const token = signSessionToken(payload, sessionMaxAgeDays);
+  response.cookies.set(AUTH_COOKIE_NAME, token, getAuthCookieOptions(sessionMaxAgeDays));
 }

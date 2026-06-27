@@ -1,63 +1,43 @@
-import Link from "next/link";
-import { AdminPageContainer } from "@/components/admin/layout/admin-page-container";
-import { AdminPageHeader } from "@/components/admin/layout/admin-page-header";
 import {
-  adminPanelClass,
-  adminTableClass,
-  adminTableHeadClass,
-} from "@/lib/admin-ui";
-import { formatAdminDate, formatAdminMoney } from "@/lib/admin-utils";
-import { listAdminPayouts } from "@/lib/partner-service";
+  getPartnerPayoutSummary,
+  listPartnerPayoutsAdmin,
+  parsePayoutListFilters,
+} from "@/lib/admin/partner-payouts";
+import { getAdminPartnerSettings } from "@/lib/admin/partner-settings";
+import { listPartners } from "@/lib/admin/partners";
+import { AdminPartnerPayoutsContent } from "@/components/admin/admin-partner-payouts-content";
 
-export default async function AdminPartnerPayoutsPage() {
-  const payouts = await listAdminPayouts();
+type PageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function AdminPartnerPayoutsPage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const filters = parsePayoutListFilters(params);
+
+  const [summary, list, partnersData, settingsData] = await Promise.all([
+    getPartnerPayoutSummary(),
+    listPartnerPayoutsAdmin(filters),
+    listPartners({ page: 1, pageSize: 100, sort: "name_asc" }),
+    getAdminPartnerSettings(),
+  ]);
+
+  const partners = partnersData.items
+    .filter((p) => p.status !== "ARCHIVED")
+    .map((p) => ({
+      id: p.id,
+      fullName: p.fullName,
+      referralCode: p.referralCode,
+      status: p.status,
+    }));
 
   return (
-    <AdminPageContainer size="full">
-      <AdminPageHeader
-        title="Partner Ödemeleri"
-        description="Partnerlere yapılan nakit ödemeleri görüntüleyin."
-      />
-
-      <div className={adminPanelClass}>
-        <div className="overflow-x-auto">
-          <table className={adminTableClass}>
-            <thead>
-              <tr className={adminTableHeadClass}>
-                <th className="px-3 py-2">Partner</th>
-                <th className="px-3 py-2">Kod</th>
-                <th className="px-3 py-2">Tutar</th>
-                <th className="px-3 py-2">Yöntem</th>
-                <th className="px-3 py-2">Durum</th>
-                <th className="px-3 py-2">Oluşturma</th>
-                <th className="px-3 py-2">Ödeme</th>
-              </tr>
-            </thead>
-            <tbody>
-              {payouts.map((payout) => (
-                <tr key={payout.id} className="border-b border-slate-50 last:border-0">
-                  <td className="px-3 py-3">
-                    <Link
-                      href={`/admin/partners/${payout.partnerId}`}
-                      className="font-bold text-slate-800 hover:underline"
-                    >
-                      {payout.partnerName}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-3 font-mono text-[12px]">{payout.referralCode}</td>
-                  <td className="px-3 py-3">{formatAdminMoney(payout.amount)}</td>
-                  <td className="px-3 py-3">{payout.paymentMethod}</td>
-                  <td className="px-3 py-3">{payout.status}</td>
-                  <td className="px-3 py-3">{formatAdminDate(payout.createdAt)}</td>
-                  <td className="px-3 py-3">
-                    {payout.paidAt ? formatAdminDate(payout.paidAt) : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </AdminPageContainer>
+    <AdminPartnerPayoutsContent
+      summary={summary}
+      list={list}
+      filters={filters}
+      partners={partners}
+      minimumPayoutAmount={settingsData.settings.minimumPayoutAmount}
+    />
   );
 }

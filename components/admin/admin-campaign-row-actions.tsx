@@ -28,7 +28,7 @@ export function AdminCampaignRowActions({
   async function run(action: Action) {
     setLoading(action);
     try {
-      const res = await fetch(`/api/admin/membership-campaigns/${campaignId}/${action}`, {
+      const res = await fetch(`/api/admin/campaigns/${campaignId}/${action}`, {
         method: "POST",
       });
       const json = await res.json();
@@ -44,7 +44,7 @@ export function AdminCampaignRowActions({
   return (
     <div className="flex items-center gap-1.5">
       <Link
-        href={`/admin/membership-campaigns/${campaignId}`}
+        href={`/admin/campaigns/${campaignId}`}
         className={`${appPrimaryButtonClass} !px-3 !py-1.5 !text-[12px]`}
       >
         Görüntüle
@@ -59,7 +59,7 @@ export function AdminCampaignRowActions({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[180px]">
           <DropdownMenuItem asChild>
-            <Link href={`/admin/membership-campaigns/${campaignId}?tab=preview`}>
+            <Link href={`/admin/campaigns/${campaignId}?tab=pricing`}>
               Önizle
             </Link>
           </DropdownMenuItem>

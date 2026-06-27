@@ -18,11 +18,13 @@ export function AdminCouponActions({
   const router = useRouter();
   const [loading, setLoading] = useState<Action | "copy" | null>(null);
 
-  async function run(action: Action) {
+  async function run(action: Action, body?: Record<string, unknown>) {
     setLoading(action);
     try {
-      const res = await fetch(`/api/admin/membership-coupons/${couponId}/${action}`, {
+      const res = await fetch(`/api/admin/coupons/${couponId}/${action}`, {
         method: "POST",
+        headers: body ? { "Content-Type": "application/json" } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
       });
       if (!res.ok) {
         const json = await res.json();
@@ -33,6 +35,19 @@ export function AdminCouponActions({
     } finally {
       setLoading(null);
     }
+  }
+
+  function activate() {
+    const reason = prompt("Aktivasyon gerekçesi:");
+    if (!reason?.trim()) return;
+    void run("activate", { confirm: true, reason: reason.trim() });
+  }
+
+  function archive() {
+    const reason = prompt("Arşivleme gerekçesi:");
+    if (!reason?.trim()) return;
+    if (!confirm("Kupon arşivlensin mi? Yeni kullanım kapanır.")) return;
+    void run("archive", { confirm: true, reason: reason.trim() });
   }
 
   async function copyCode() {
@@ -49,6 +64,16 @@ export function AdminCouponActions({
       <button type="button" onClick={copyCode} className={appOutlineButtonClass}>
         {loading === "copy" ? "Kopyalandı" : "Kodu Kopyala"}
       </button>
+      {status === "DRAFT" || status === "PAUSED" ? (
+        <button
+          type="button"
+          disabled={loading !== null}
+          onClick={activate}
+          className={appOutlineButtonClass}
+        >
+          {loading === "activate" ? "…" : "Aktifleştir"}
+        </button>
+      ) : null}
       {status === "ACTIVE" ? (
         <button
           type="button"
@@ -56,29 +81,17 @@ export function AdminCouponActions({
           onClick={() => run("pause")}
           className={appOutlineButtonClass}
         >
-          Duraklat
-        </button>
-      ) : null}
-      {status === "PAUSED" ? (
-        <button
-          type="button"
-          disabled={loading !== null}
-          onClick={() => run("activate")}
-          className={appOutlineButtonClass}
-        >
-          Aktifleştir
+          {loading === "pause" ? "…" : "Duraklat"}
         </button>
       ) : null}
       {status !== "ARCHIVED" ? (
         <button
           type="button"
           disabled={loading !== null}
-          onClick={() => {
-            if (confirm("Kupon arşivlensin mi?")) run("archive");
-          }}
+          onClick={archive}
           className={appOutlineButtonClass}
         >
-          Arşivle
+          {loading === "archive" ? "…" : "Arşivle"}
         </button>
       ) : null}
     </div>

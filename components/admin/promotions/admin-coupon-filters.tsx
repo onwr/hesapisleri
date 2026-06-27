@@ -13,6 +13,7 @@ import {
 import type { CouponListFilters } from "@/lib/admin/promotions/promotion-types";
 import {
   BOOL_FILTER_OPTIONS,
+  COUPON_ISSUE_OPTIONS,
   COUPON_STATUS_OPTIONS,
   COUPON_USAGE_STATUS_OPTIONS,
   DISCOUNT_TYPE_OPTIONS,
@@ -45,7 +46,7 @@ export function AdminCouponFilters({
   const [draft, setDraft] = useState(filters);
 
   function apply(next: CouponListFilters) {
-    router.push(`/admin/membership-coupons?${buildParams(next, q)}`);
+    router.push(`/admin/coupons?${buildParams(next, q)}`);
   }
 
   function applyDraft() {
@@ -56,7 +57,7 @@ export function AdminCouponFilters({
   function clearAll() {
     setQ("");
     setDraft({});
-    router.push("/admin/membership-coupons");
+    router.push("/admin/coupons");
   }
 
   const advancedFields = (
@@ -213,6 +214,17 @@ export function AdminCouponFilters({
       >
         <option value="asc">Artan</option>
         <option value="desc">Azalan</option>
+      </select>
+      <select
+        value={draft.issue ?? ""}
+        onChange={(e) => setDraft({ ...draft, issue: e.target.value || undefined })}
+        className={appSelectClass}
+      >
+        {COUPON_ISSUE_OPTIONS.map((o) => (
+          <option key={o.value || "all-issue"} value={o.value}>
+            {o.label}
+          </option>
+        ))}
       </select>
     </>
   );

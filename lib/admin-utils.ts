@@ -16,10 +16,10 @@ export const adminCompanyPatchSchema = z.object({
   membershipNote: z.string().nullable().optional(),
 });
 
-export const adminUserPatchSchema = z.object({
-  role: z.enum(["OWNER", "ADMIN", "ACCOUNTANT", "STAFF", "SUPER_ADMIN"]).optional(),
-  status: z.enum(["ACTIVE", "PASSIVE", "SUSPENDED"]).optional(),
-});
+// role ve status bu schema üzerinden değiştirilemez.
+// Durum değişikliği yalnızca /suspend ve /reactivate endpointleri üzerinden yapılır.
+// Platform rol değişikliği ayrı bir güvenlik fazında ele alınacak.
+export const adminUserPatchSchema = z.object({}).strict();
 
 export function getMembershipStatusLabel(status: MembershipStatus | string) {
   const map: Record<string, string> = {

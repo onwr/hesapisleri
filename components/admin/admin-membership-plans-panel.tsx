@@ -114,7 +114,6 @@ export function AdminMembershipPlansPanel({
         body: JSON.stringify({
           name: plan.name,
           description: plan.description,
-          isActive: plan.isActive,
         }),
       });
       const json = await res.json();

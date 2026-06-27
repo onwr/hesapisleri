@@ -13,7 +13,8 @@ describe("exchange rate infrastructure", () => {
   it("cron route uses CRON_SECRET", () => {
     const source = read("app/api/cron/exchange-rates/route.ts");
     assert.match(source, /CRON_SECRET/);
-    assert.match(source, /fetchAndStoreExchangeRatesForWindow/);
+    assert.match(source, /runCronJob\("exchange-rates"\)/);
+    assert.match(source, /buildCronRouteResponse/);
   });
 
   it("dashboard service reads snapshots only", () => {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { runEmployeePerformanceSnapshotCron } from "@/lib/employee-performance-cron-service";
+import { buildCronRouteResponse } from "@/lib/admin/jobs/cron-response";
+import { runCronJob } from "@/lib/admin/jobs/job-run-service";
 import { isEmployeePerformanceCronAuthorized } from "@/lib/employee-performance-cron-utils";
 
 export async function POST(request: Request) {
@@ -11,8 +12,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const summary = await runEmployeePerformanceSnapshotCron();
-    return NextResponse.json(summary);
+    const run = await runCronJob("employee-performance");
+    return NextResponse.json(buildCronRouteResponse("employee-performance", run));
   } catch (error) {
     return NextResponse.json(
       {

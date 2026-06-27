@@ -9,6 +9,7 @@ import {
   EMPLOYEE_AVATAR_UPLOAD_FOLDER,
 } from "@/lib/employee-pos-utils";
 import { uploadImageToCdn } from "@/lib/storage/upload-client";
+import { usePlatformUploadLimits } from "@/components/platform-runtime/platform-runtime-provider";
 import type { SerializedEmployee } from "@/lib/employee-page-types";
 
 type EmployeeEditModalProps = {
@@ -26,6 +27,7 @@ export function EmployeeEditModal({
   onClose,
   onSubmit,
 }: EmployeeEditModalProps) {
+  const { maxImageBytes } = usePlatformUploadLimits();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -61,7 +63,7 @@ export function EmployeeEditModal({
     setUploading(true);
     setUploadError("");
     try {
-      const url = await uploadImageToCdn(file, EMPLOYEE_AVATAR_UPLOAD_FOLDER);
+      const url = await uploadImageToCdn(file, EMPLOYEE_AVATAR_UPLOAD_FOLDER, maxImageBytes);
       setAvatarUrl(url);
     } catch (error) {
       setUploadError(

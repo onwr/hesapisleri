@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { DashboardContent } from "@/components/dashboard/dashboard-content";
 import { db } from "@/lib/prisma";
@@ -5,20 +6,33 @@ import { requireCompanyUser } from "@/lib/auth/auth-dal";
 import { formatRelativeTime } from "@/lib/dashboard-metrics";
 import { getCachedDashboardPageData } from "@/lib/dashboard-cache";
 import { resolveDashboardPeriodKey } from "@/lib/dashboard-period-utils";
-import { shouldShowOnboardingAlert } from "@/lib/company-onboarding-utils";
 import { getMembershipAlertForCompany } from "@/lib/membership-service";
-import { canManageMembership } from "@/lib/permission-utils";
+import { canManageMembership, canManageSettings } from "@/lib/permission-utils";
 import { mapActivityLogToDashboardItem } from "@/lib/activity-log-utils";
 import { getDashboardActionNotifications, getNotificationSummary } from "@/lib/notification-service";
 import { getDashboardExchangeRates } from "@/lib/exchange-rate-service";
+import {
+  getDashboardOnboardingChecklist,
+  getOrCreateCompanyOnboarding,
+  resolveOnboardingRedirectPath,
+} from "@/lib/onboarding";
 
 export default async function DashboardPage() {
   const session = await requireCompanyUser();
-  const { user, company, companyUser } = session;
+  const { user, company, companyUser, isSuperAdmin } = session;
+
+  const onboardingState = await getOrCreateCompanyOnboarding(company.id);
+  const onboardingRedirect = resolveOnboardingRedirectPath(
+    onboardingState,
+    isSuperAdmin
+  );
+  if (onboardingRedirect) {
+    redirect(onboardingRedirect);
+  }
 
   const periodKey = resolveDashboardPeriodKey();
 
-  const [dashboardData, activityLogs, actionNotifications, notificationSummary, exchangeRates] =
+  const [dashboardData, activityLogs, actionNotifications, notificationSummary, exchangeRates, onboardingChecklist] =
     await Promise.all([
     getCachedDashboardPageData({
       companyId: company.id,
@@ -46,9 +60,14 @@ export default async function DashboardPage() {
       userId: user.id,
     }),
     getDashboardExchangeRates(),
+    getDashboardOnboardingChecklist({
+      userId: user.id,
+      companyId: company.id,
+      effectiveRole: session.effectiveRole,
+      isOwner: companyUser.isOwner,
+      isSuperAdmin,
+    }),
   ]);
-
-  const showOnboardingAlert = shouldShowOnboardingAlert(company);
 
   const membershipAlert =
     companyUser && canManageMembership(companyUser.role, companyUser.isOwner)
@@ -58,7 +77,18 @@ export default async function DashboardPage() {
   return (
     <AppShell>
       <DashboardContent
-        showOnboardingAlert={showOnboardingAlert}
+        onboardingChecklist={
+          onboardingChecklist.showChecklist
+            ? {
+                items: onboardingChecklist.items,
+                progressPercent: onboardingChecklist.progressPercent,
+                canManage: canManageSettings(
+                  session.effectiveRole,
+                  companyUser.isOwner
+                ),
+              }
+            : null
+        }
         membershipAlert={membershipAlert}
         firstName={user.name.split(" ")[0]}
         monthLabel={dashboardData.monthLabel}

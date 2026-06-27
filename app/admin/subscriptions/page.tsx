@@ -1,11 +1,8 @@
-import { AdminSubscriptionsContent } from "@/components/admin/admin-subscriptions-content";
-import {
-  getAdminSubscriptionsSummary,
-  listAdminSubscriptionPartners,
-  listAdminSubscriptionPlans,
-  listAdminSubscriptions,
-} from "@/lib/admin-subscription-service";
-import { parseAdminSubscriptionFilters } from "@/lib/admin-subscription-utils";
+import { AdminSubscriptionsListShell } from "@/components/admin/subscriptions/admin-subscriptions-list-shell";
+import { getAdminSubscriptionList } from "@/lib/admin/subscriptions/admin-subscription-list-service";
+import { getAdminSubscriptionMetrics } from "@/lib/admin/subscriptions/admin-subscription-metric-service";
+import { adminSubListQuerySchema } from "@/lib/admin/subscriptions/admin-subscription-schemas";
+import { db } from "@/lib/prisma";
 
 type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -13,22 +10,28 @@ type PageProps = {
 
 export default async function AdminSubscriptionsPage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const filters = parseAdminSubscriptionFilters(params);
+  const flatParams = Object.fromEntries(
+    Object.entries(params).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v ?? ""])
+  );
 
-  const [list, summary, plans, partners] = await Promise.all([
-    listAdminSubscriptions(filters),
-    getAdminSubscriptionsSummary(),
-    listAdminSubscriptionPlans(),
-    listAdminSubscriptionPartners(),
+  const query = adminSubListQuerySchema.parse(flatParams);
+
+  const [list, metrics, plans] = await Promise.all([
+    getAdminSubscriptionList(query),
+    getAdminSubscriptionMetrics(),
+    db.membershipPlan.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, code: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   return (
-    <AdminSubscriptionsContent
+    <AdminSubscriptionsListShell
       list={list}
-      summary={summary}
-      filters={filters}
+      metrics={metrics}
+      query={query}
       plans={plans}
-      partners={partners}
     />
   );
 }

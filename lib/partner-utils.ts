@@ -34,25 +34,6 @@ export const partnerApplicationSchema = z.object({
     }),
 });
 
-export const approvePartnerApplicationSchema = z.object({
-  referralCode: z.string().min(3).max(32).optional(),
-  commissionRate: z.number().min(0).max(100),
-  badgeType: z.enum([
-    "NONE",
-    "PARTNER",
-    "VERIFIED",
-    "INFLUENCER",
-    "CELEBRITY",
-    "VIP",
-  ]),
-  badgeLabel: z.string().max(80).optional(),
-  notes: z.string().max(2000).optional(),
-});
-
-export const rejectPartnerApplicationSchema = z.object({
-  rejectionReason: z.string().min(3, "Red nedeni zorunludur."),
-});
-
 export const updatePartnerProfileAdminSchema = z.object({
   commissionRate: z.number().min(0).max(100).optional(),
   badgeType: z
@@ -61,23 +42,6 @@ export const updatePartnerProfileAdminSchema = z.object({
   badgeLabel: z.string().max(80).nullable().optional(),
   status: z.enum(["ACTIVE", "PASSIVE", "SUSPENDED"]).optional(),
   notes: z.string().max(2000).nullable().optional(),
-});
-
-export const updatePartnerSettingsSchema = z.object({
-  defaultCommissionRate: z.number().min(0).max(100).optional(),
-  cookieDurationDays: z.number().int().min(1).max(365).optional(),
-  minimumPayoutAmount: z.number().min(0).optional(),
-  autoApproveConversions: z.boolean().optional(),
-  commissionOnRenewals: z.boolean().optional(),
-  isApplicationOpen: z.boolean().optional(),
-  termsText: z.string().max(5000).nullable().optional(),
-});
-
-export const createPartnerPayoutSchema = z.object({
-  earningIds: z.array(z.string()).min(1),
-  paymentMethod: z.enum(["IBAN", "CASH", "MANUAL"]).default("MANUAL"),
-  note: z.string().max(2000).optional(),
-  markPaid: z.boolean().default(true),
 });
 
 const AUDIENCE_LABELS: Record<PartnerAudienceType, string> = {

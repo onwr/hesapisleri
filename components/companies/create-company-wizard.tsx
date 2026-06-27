@@ -19,7 +19,7 @@ import {
 import { AuthAlert } from "@/components/auth/auth-alert";
 import {
   authFlatFormClassName,
-  authInputClassName,
+  authInputWithIconClassName,
   authPrimaryButtonClassName,
   authPrimaryButtonInlineClassName,
 } from "@/components/auth/auth-styles";
@@ -295,7 +295,7 @@ export function CreateCompanyWizard() {
                   <Input
                     value={form.name}
                     onChange={(e) => updateForm("name", e.target.value)}
-                    className={authInputClassName}
+                    className={authInputWithIconClassName}
                     placeholder="Örnek Ticaret Ltd. Şti."
                     disabled={saving}
                     required
@@ -405,7 +405,7 @@ export function CreateCompanyWizard() {
                     <Input
                       value={form.phone}
                       onChange={(e) => updateForm("phone", e.target.value)}
-                      className={authInputClassName}
+                      className={authInputWithIconClassName}
                       placeholder="05xx xxx xx xx"
                       disabled={saving}
                     />
@@ -421,7 +421,7 @@ export function CreateCompanyWizard() {
                       type="email"
                       value={form.email}
                       onChange={(e) => updateForm("email", e.target.value)}
-                      className={authInputClassName}
+                      className={authInputWithIconClassName}
                       placeholder="info@firma.com"
                       disabled={saving}
                     />

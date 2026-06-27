@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/prisma";
 import { requireApiModuleAccess } from "@/lib/module-access";
 import {
+  formatProductValidationErrors,
   getFirstProductErrorMessage,
   normalizeImageUrl,
   normalizeOptionalText,
@@ -86,11 +87,15 @@ export async function PATCH(req: Request, { params }: Props) {
     const parsed = productUpdateSchema.safeParse(body);
 
     if (!parsed.success) {
+      const errors = formatProductValidationErrors(
+        parsed.error.flatten().fieldErrors
+      );
+
       return NextResponse.json(
         {
           success: false,
-          message: "Bilgileri kontrol edin.",
-          errors: parsed.error.flatten().fieldErrors,
+          message: getFirstProductErrorMessage("Bilgileri kontrol edin.", errors),
+          errors,
         },
         { status: 400 }
       );

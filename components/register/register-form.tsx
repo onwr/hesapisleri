@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { AuthAlert } from "@/components/auth/auth-alert";
 import {
-  authInputClassName,
+  authInputWithIconClassName,
   authInputWithToggleClassName,
   authPrimaryButtonClassName,
   authFlatFormClassName,
@@ -223,7 +223,7 @@ export function RegisterForm({
                 id="name"
                 value={form.name}
                 onChange={(e) => updateForm("name", e.target.value)}
-                className={authInputClassName}
+                className={authInputWithIconClassName}
                 placeholder="Ahmet Yılmaz"
                 disabled={loading || transitioning}
                 required
@@ -242,7 +242,7 @@ export function RegisterForm({
                 type="email"
                 value={form.email}
                 onChange={(e) => updateForm("email", e.target.value)}
-                className={authInputClassName}
+                className={authInputWithIconClassName}
                 placeholder="ornek@mail.com"
                 disabled={loading || transitioning}
                 required
@@ -297,7 +297,7 @@ export function RegisterForm({
                 id="companyName"
                 value={form.companyName}
                 onChange={(e) => updateForm("companyName", e.target.value)}
-                className={authInputClassName}
+                className={authInputWithIconClassName}
                 placeholder="Örnek Ticaret Ltd. Şti."
                 disabled={loading || transitioning}
                 required

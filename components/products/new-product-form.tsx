@@ -235,7 +235,7 @@ export function NewProductForm({
               <button
                 type="submit"
                 disabled={saving}
-                className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-linear-to-r from-rose-500 to-pink-600 text-[13px] font-black text-white shadow-lg shadow-pink-100 transition hover:opacity-95 disabled:opacity-60"
+                className="flex h-12 p-2 flex-1 items-center justify-center gap-2 rounded-2xl bg-linear-to-r from-rose-500 to-pink-600 text-[13px] font-black text-white shadow-lg shadow-pink-100 transition hover:opacity-95 disabled:opacity-60"
               >
                 {saving ? (
                   <Loader2 className="animate-spin" size={20} />

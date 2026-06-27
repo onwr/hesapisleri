@@ -1,4 +1,4 @@
-import { RegisterForm } from "@/components/register/register-form";
+import { RegisterContent } from "@/components/register/register-content";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { buildMarketingConsentText } from "@/lib/legal/kvkk-consent";
 import { getPlatformLegalInfo } from "@/lib/legal/platform-legal-info";
@@ -25,7 +25,7 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
 
   return (
     <AuthShell variant="register">
-      <RegisterForm
+      <RegisterContent
         referral={referral}
         legalInfo={legalInfo}
         trialDays={companyDefaults.trialDays}

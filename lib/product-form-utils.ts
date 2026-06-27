@@ -52,19 +52,89 @@ export const PRODUCT_UNIT_LABELS: Record<ProductUnitType, string> = {
 export const DEFAULT_CATEGORY_NAME = "Genel";
 export const DEFAULT_MIN_STOCK = 10;
 
+const optionalTextField = z.string().nullish();
+
+export const PRODUCT_FIELD_LABELS: Record<string, string> = {
+  productType: "Ürün tipi",
+  name: "Ürün adı",
+  categoryName: "Kategori",
+  sku: "Stok kodu",
+  barcode: "Barkod",
+  description: "Açıklama",
+  imageUrl: "Görsel",
+  status: "Durum",
+  stock: "Stok",
+  minStock: "Minimum stok",
+  unitType: "Birim",
+  warehouseLocation: "Depo konumu",
+  buyPrice: "Alış fiyatı",
+  sellPrice: "Satış fiyatı",
+  vatRate: "KDV oranı",
+};
+
+function humanizeProductFieldError(field: string, message: string) {
+  const label = PRODUCT_FIELD_LABELS[field] ?? field;
+
+  if (/[ğüşıöçĞÜŞİÖÇ]/.test(message)) {
+    return message;
+  }
+
+  if (message.includes("expected string, received null")) {
+    return `${label} alanı geçersiz.`;
+  }
+  if (message.includes("expected string, received number")) {
+    return `${label} metin olmalıdır.`;
+  }
+  if (message.includes("expected number, received")) {
+    return `${label} sayısal bir değer olmalıdır.`;
+  }
+  if (
+    message.includes("Invalid enum value") ||
+    message.includes("Invalid option")
+  ) {
+    return `${label} için geçersiz seçim.`;
+  }
+  if (message.includes("Too small") || message.includes("too small")) {
+    return `${label} çok kısa.`;
+  }
+  if (message.includes("Too big") || message.includes("too big")) {
+    return `${label} çok uzun.`;
+  }
+  if (message.startsWith("Invalid input")) {
+    return `${label} alanı geçersiz.`;
+  }
+
+  return message;
+}
+
+export function formatProductValidationErrors(
+  fieldErrors: Record<string, string[] | undefined>
+) {
+  const formatted: Record<string, string[]> = {};
+
+  for (const [field, messages] of Object.entries(fieldErrors)) {
+    if (!messages?.length) continue;
+    formatted[field] = messages.map((message) =>
+      humanizeProductFieldError(field, message)
+    );
+  }
+
+  return formatted;
+}
+
 export const productFormSchema = z.object({
   productType: z.enum(["STOCK", "SERVICE"]).default("STOCK"),
   name: z.string().min(2, "Ürün adı en az 2 karakter olmalıdır."),
-  categoryName: z.string().optional(),
-  sku: z.string().optional(),
+  categoryName: optionalTextField,
+  sku: optionalTextField,
   barcode: z.string().nullable().optional(),
-  description: z.string().optional(),
+  description: optionalTextField,
   imageUrl: z.string().nullable().optional(),
   status: z.enum(["ACTIVE", "PASSIVE"]).default("ACTIVE"),
   stock: z.number().min(0).default(0),
   minStock: z.number().min(0).default(DEFAULT_MIN_STOCK),
   unitType: z.enum(PRODUCT_UNIT_TYPES).default("PIECE"),
-  warehouseLocation: z.string().optional(),
+  warehouseLocation: optionalTextField,
   buyPrice: z.number().min(0).default(0),
   sellPrice: z.number().min(0).default(0),
   vatRate: z.number().min(0).default(20),
@@ -193,10 +263,10 @@ export function mapProductFieldErrors(
 ) {
   if (!errors) return {};
 
+  const formatted = formatProductValidationErrors(errors);
+
   return Object.fromEntries(
-    Object.entries(errors)
-      .filter((entry): entry is [string, string[]] => Boolean(entry[1]?.length))
-      .map(([key, value]) => [key, value[0] ?? ""])
+    Object.entries(formatted).map(([key, value]) => [key, value[0] ?? ""])
   );
 }
 
@@ -204,12 +274,18 @@ export function getFirstProductErrorMessage(
   message?: string,
   errors?: Record<string, string[] | undefined>
 ) {
+  const fieldErrors = mapProductFieldErrors(errors);
+  const firstFieldError = Object.values(fieldErrors)[0];
+
+  if (firstFieldError) {
+    return firstFieldError;
+  }
+
   if (message && message !== "Bilgileri kontrol edin.") {
     return message;
   }
 
-  const fieldErrors = mapProductFieldErrors(errors);
-  return Object.values(fieldErrors)[0] ?? message;
+  return message ?? "Bilgileri kontrol edin.";
 }
 
 export function calculateProductProfit(buyPrice: number, sellPrice: number) {

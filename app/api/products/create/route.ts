@@ -3,7 +3,8 @@ import { createActivityLog } from "@/lib/activity-log-utils";
 import { db } from "@/lib/prisma";
 import { requireApiModuleAccess } from "@/lib/module-access";
 import {
-  mapProductFieldErrors,
+  formatProductValidationErrors,
+  getFirstProductErrorMessage,
   normalizeImageUrl,
   normalizeOptionalText,
   productFormSchema,
@@ -28,11 +29,15 @@ export async function POST(req: Request) {
     const parsed = productFormSchema.safeParse(body);
 
     if (!parsed.success) {
+      const errors = formatProductValidationErrors(
+        parsed.error.flatten().fieldErrors
+      );
+
       return NextResponse.json(
         {
           success: false,
-          message: "Bilgileri kontrol edin.",
-          errors: parsed.error.flatten().fieldErrors,
+          message: getFirstProductErrorMessage("Bilgileri kontrol edin.", errors),
+          errors,
         },
         { status: 400 }
       );

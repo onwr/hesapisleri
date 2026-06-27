@@ -1,8 +1,16 @@
 export const authInputClassName =
+  "h-12 rounded-2xl border-slate-200 bg-white px-4 text-sm font-medium text-[#0f1f4d] shadow-none focus-visible:border-blue-500 focus-visible:ring-4 focus-visible:ring-blue-50";
+
+/** Sol tarafta ikon olan inputlar */
+export const authInputWithIconClassName =
   "h-12 rounded-2xl border-slate-200 bg-white pl-11 pr-4 text-sm font-medium text-[#0f1f4d] shadow-none focus-visible:border-blue-500 focus-visible:ring-4 focus-visible:ring-blue-50";
 
 export const authInputWithToggleClassName =
   "h-12 rounded-2xl border-slate-200 bg-white pl-11 pr-11 text-sm font-medium text-[#0f1f4d] shadow-none focus-visible:border-blue-500 focus-visible:ring-4 focus-visible:ring-blue-50";
+
+/** Sağda göz ikonu olan, solda ikon olmayan inputlar */
+export const authInputWithTogglePlainClassName =
+  "h-12 rounded-2xl border-slate-200 bg-white px-4 pr-11 text-sm font-medium text-[#0f1f4d] shadow-none focus-visible:border-blue-500 focus-visible:ring-4 focus-visible:ring-blue-50";
 
 const authPrimaryButtonBaseClassName =
   "h-12 rounded-2xl bg-linear-to-r from-blue-600 to-violet-600 text-sm font-black text-white shadow-lg shadow-blue-100 hover:opacity-95 disabled:opacity-60";

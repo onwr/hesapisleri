@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   buildProductPayload,
   emptyProductFormValues,
+  formatProductValidationErrors,
   normalizeImageUrl,
   productFormSchema,
   productToFormValues,
@@ -64,6 +65,54 @@ describe("product barcode payload", () => {
     });
 
     assert.equal(parsed.success, true);
+  });
+
+  it("productFormSchema null warehouseLocation kabul eder", () => {
+    const parsed = productFormSchema.safeParse({
+      name: "Ürün Adı",
+      warehouseLocation: null,
+    });
+
+    assert.equal(parsed.success, true);
+  });
+
+  it("hizmet ürünü payload null depo konumu ile doğrulanır", () => {
+    const payload = buildProductPayload({
+      ...emptyProductFormValues,
+      productType: "SERVICE",
+      name: "Danışmanlık",
+    });
+
+    const parsed = productFormSchema.safeParse(payload);
+    assert.equal(parsed.success, true);
+    if (parsed.success) {
+      assert.equal(parsed.data.warehouseLocation, null);
+    }
+  });
+});
+
+describe("product validation error messages", () => {
+  it("zod hatalarını Türkçe alan mesajına çevirir", () => {
+    const parsed = productFormSchema.safeParse({
+      name: "a",
+      warehouseLocation: 123,
+    });
+
+    assert.equal(parsed.success, false);
+    if (!parsed.success) {
+      const errors = formatProductValidationErrors(
+        parsed.error.flatten().fieldErrors
+      );
+
+      assert.equal(
+        errors.name?.[0],
+        "Ürün adı en az 2 karakter olmalıdır."
+      );
+      assert.equal(
+        errors.warehouseLocation?.[0],
+        "Depo konumu metin olmalıdır."
+      );
+    }
   });
 });
 

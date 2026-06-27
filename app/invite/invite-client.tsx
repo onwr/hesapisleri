@@ -19,8 +19,8 @@ import { AuthAlert } from "@/components/auth/auth-alert";
 import { AuthShell } from "@/components/auth/auth-shell";
 import {
   authFlatFormClassName,
-  authInputClassName,
-  authInputWithToggleClassName,
+  authInputWithIconClassName,
+  authInputWithTogglePlainClassName,
   authPrimaryButtonClassName,
   authPrimaryButtonInlineClassName,
 } from "@/components/auth/auth-styles";
@@ -332,7 +332,7 @@ export function InviteClient() {
                   id="invite-name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className={authInputClassName}
+                  className={authInputWithIconClassName}
                   placeholder="Adınız Soyadınız"
                   disabled={submitting}
                 />
@@ -352,7 +352,7 @@ export function InviteClient() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   type={showPassword ? "text" : "password"}
-                  className={authInputWithToggleClassName}
+                  className={authInputWithTogglePlainClassName}
                   placeholder="En az 6 karakter"
                   disabled={submitting}
                 />

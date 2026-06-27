@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { AuthAlert } from "@/components/auth/auth-alert";
 import {
-  authInputClassName,
+  authInputWithIconClassName,
   authInputWithToggleClassName,
   authPrimaryButtonClassName,
   authFlatFormClassName,
@@ -204,7 +204,7 @@ export function LoginForm({ sessionExpired = false }: LoginFormProps) {
                 placeholder="ornek@mail.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className={authInputClassName}
+                className={authInputWithIconClassName}
                 disabled={isSubmitting}
                 required
               />

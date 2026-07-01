@@ -1,6 +1,7 @@
 import type { Company, CompanySettings, MembershipPayment } from "@prisma/client";
 import { assertCompanyAccess, SettingsAccessError } from "@/lib/company-access";
 import { db } from "@/lib/prisma";
+import { isPrismaUniqueConstraintError } from "@/lib/prisma-transaction-utils";
 import {
   StorageConfigError,
   StorageUploadError,
@@ -43,13 +44,23 @@ export async function ensureCompanySettings(companyId: string) {
     return existing;
   }
 
-  return db.companySettings.create({
-    data: {
-      companyId,
-      ...DEFAULT_COMPANY_SETTINGS,
-      invoiceNoteTemplate: null,
-    },
-  });
+  try {
+    return await db.companySettings.create({
+      data: {
+        companyId,
+        ...DEFAULT_COMPANY_SETTINGS,
+        invoiceNoteTemplate: null,
+      },
+    });
+  } catch (error) {
+    if (isPrismaUniqueConstraintError(error)) {
+      const raced = await db.companySettings.findUnique({
+        where: { companyId },
+      });
+      if (raced) return raced;
+    }
+    throw error;
+  }
 }
 
 export type SerializedSettingsBundle = {

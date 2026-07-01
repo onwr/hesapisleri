@@ -14,6 +14,7 @@ import {
   EmployeeLinkBadge,
   ResetUserPasswordModal,
 } from "@/components/settings/create-user-from-employee-modal";
+import { formatDisplayDate } from "@/lib/format-utils";
 import { getCompanyUserStatusBadgeClass } from "@/lib/company-users-utils";
 import {
   getRoleModulePreview,
@@ -61,14 +62,6 @@ const ROLE_OPTIONS = [
   { value: "STAFF", label: "Personel" },
   { value: "POS_STAFF", label: "POS Personeli" },
 ];
-
-function formatDate(value: string | null | undefined) {
-  if (!value) return "—";
-  return new Intl.DateTimeFormat("tr-TR", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
 
 function getModuleSummary(role: string) {
   if (!ROLE_OPTIONS.some((option) => option.value === role)) {
@@ -502,7 +495,7 @@ export function SettingsUsersPanel() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-slate-500">
-                      {formatDate(user.lastLoginAt ?? user.joinedAt)}
+                      {formatDisplayDate(user.lastLoginAt ?? user.joinedAt)}
                     </td>
                     <td className="px-4 py-3 text-xs text-slate-500">
                       {getModuleSummary(user.role)}
@@ -588,7 +581,7 @@ export function SettingsUsersPanel() {
                   <p className="font-black text-slate-950">{invite.email}</p>
                   <p className="mt-1 text-sm text-slate-500">
                     {invite.roleLabel} · Son geçerlilik:{" "}
-                    {formatDate(invite.expiresAt)}
+                    {formatDisplayDate(invite.expiresAt)}
                   </p>
                 </div>
 

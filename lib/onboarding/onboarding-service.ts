@@ -5,6 +5,7 @@ import { revalidateTag } from "next/cache";
 import { getNewCompanyDefaults } from "@/lib/admin/platform-settings/platform-settings-loader";
 import { getPlatformLegalInfo } from "@/lib/legal/platform-legal-info";
 import { db } from "@/lib/prisma";
+import { isPrismaUniqueConstraintError } from "@/lib/prisma-transaction-utils";
 import { canManageSettings } from "@/lib/permission-utils";
 import { getDashboardCacheTag } from "@/lib/dashboard-cache-tags";
 import { getOnboardingCacheTag } from "@/lib/onboarding/onboarding-cache";
@@ -85,13 +86,15 @@ export async function createOnboardingForNewCompany(
   tx: Prisma.TransactionClient,
   companyId: string
 ) {
-  await tx.companyOnboarding.create({
-    data: {
+  await tx.companyOnboarding.upsert({
+    where: { companyId },
+    create: {
       companyId,
       status: "NOT_STARTED",
       currentStep: 1,
       flowVersion: ONBOARDING_FLOW_VERSION,
     },
+    update: {},
   });
 }
 
@@ -120,11 +123,7 @@ export async function getOrCreateCompanyOnboarding(
       },
     });
   } catch (error) {
-    if (
-      error instanceof Error &&
-      "code" in error &&
-      (error as { code?: string }).code === "P2002"
-    ) {
+    if (isPrismaUniqueConstraintError(error)) {
       const raced = await db.companyOnboarding.findUnique({
         where: { companyId },
       });

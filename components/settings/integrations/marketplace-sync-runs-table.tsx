@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Loader2, RefreshCcw } from "lucide-react";
 import { IntegrationChannelLogo } from "@/components/settings/integrations/integration-channel-logo";
 import type { MarketplaceChannelKey } from "@/lib/marketplace/marketplace-types";
+import { formatDateTimeDisplay } from "@/lib/format-utils";
 
 type SyncRunRow = {
   id: string;
@@ -112,7 +113,7 @@ export function MarketplaceSyncRunsTable({
               parsedRows.map((run) => (
                 <tr key={run.id} className="font-semibold text-slate-700">
                   <td className="whitespace-nowrap py-3">
-                    {new Date(run.startedAt).toLocaleString("tr-TR")}
+                    {formatDateTimeDisplay(run.startedAt)}
                   </td>
                   <td className="py-3">
                     <div className="flex items-center gap-2">

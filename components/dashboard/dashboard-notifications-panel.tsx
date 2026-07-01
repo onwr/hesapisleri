@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
+import { formatDateTimeDisplay } from "@/lib/format-utils";
 import {
   hasSafeTenantActionUrl,
   resolveSafeTenantActionUrl,
@@ -51,15 +52,6 @@ function getPriorityLabel(priority: string) {
   if (priority === "NORMAL") return "Normal";
   if (priority === "LOW") return "Düşük";
   return priority;
-}
-
-function formatTime(value: string) {
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
 }
 
 export function DashboardNotificationsPanel({
@@ -171,7 +163,7 @@ export function DashboardNotificationsPanel({
 
                     <div className="mt-2 flex items-center justify-between gap-2">
                       <span className="text-[11px] font-medium text-slate-400">
-                        {formatTime(item.createdAt)}
+                        {formatDateTimeDisplay(item.createdAt)}
                       </span>
 
                       {hasSafeTenantActionUrl(item.actionUrl) ? (

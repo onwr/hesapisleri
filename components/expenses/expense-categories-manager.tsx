@@ -352,7 +352,7 @@ export function ExpenseCategoriesManager({
                   label="Son Gider"
                   value={
                     category.lastExpenseDate
-                      ? formatExpenseDate(new Date(category.lastExpenseDate))
+                      ? formatExpenseDate(category.lastExpenseDate)
                       : "—"
                   }
                 />

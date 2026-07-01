@@ -12,6 +12,7 @@ import {
   Wifi,
 } from "lucide-react";
 import type { IntegrationSummary } from "@/lib/marketplace/marketplace-integration-service";
+import { formatDateTimeDisplay } from "@/lib/format-utils";
 import type { MarketplaceChannelKey } from "@/lib/marketplace/marketplace-types";
 import { IntegrationConfigModal } from "@/components/settings/integrations/integration-config-modal";
 import { IntegrationChannelLogo } from "@/components/settings/integrations/integration-channel-logo";
@@ -230,7 +231,7 @@ export function MarketplaceIntegrationCard({
             label="Son Senkronizasyon"
             value={
               integration?.lastSyncAt
-                ? new Date(integration.lastSyncAt).toLocaleString("tr-TR")
+                ? formatDateTimeDisplay(integration.lastSyncAt)
                 : "—"
             }
           />

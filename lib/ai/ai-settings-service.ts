@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { db } from "@/lib/prisma";
+import { getOrCreateCompanyAiSettings } from "@/lib/ai/company-ai-settings-repository";
 import { getPlatformAiConfig } from "@/lib/ai/ai-config";
+import { db } from "@/lib/prisma";
 
 export const updateCompanyAiSettingsSchema = z.object({
   enabled: z.boolean().optional(),
@@ -34,11 +35,7 @@ export async function getCompanyAiSettingsView(
   companyId: string
 ): Promise<CompanyAiSettingsView> {
   const platform = getPlatformAiConfig();
-  const settings = await db.companyAISettings.upsert({
-    where: { companyId },
-    create: { companyId },
-    update: {},
-  });
+  const settings = await getOrCreateCompanyAiSettings(companyId);
 
   return {
     enabled: settings.enabled,
@@ -64,14 +61,10 @@ export async function updateCompanyAiSettings(
   input: z.infer<typeof updateCompanyAiSettingsSchema>
 ) {
   const parsed = updateCompanyAiSettingsSchema.parse(input);
-  return db.companyAISettings.upsert({
+  await getOrCreateCompanyAiSettings(companyId);
+  return db.companyAISettings.update({
     where: { companyId },
-    create: {
-      companyId,
-      ...parsed,
-      monthlyCostWarningUsd: parsed.monthlyCostWarningUsd ?? undefined,
-    },
-    update: {
+    data: {
       ...parsed,
       monthlyCostWarningUsd: parsed.monthlyCostWarningUsd ?? undefined,
     },

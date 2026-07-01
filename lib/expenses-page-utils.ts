@@ -4,6 +4,7 @@ import {
   normalizeDateRange,
   parseDateParam,
 } from "@/lib/sales-page-utils";
+import { coerceValidDate, formatShortDisplayDate } from "@/lib/format-utils";
 
 export type ExpenseTabKey = "all" | "paid" | "unpaid" | "cancelled";
 
@@ -82,12 +83,19 @@ export function parseSearchQuery(value?: string | null) {
 
 export { formatMoney as formatExpenseMoney } from "@/lib/format-utils";
 
-export function formatExpenseDate(date: Date) {
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date);
+export function formatExpenseDate(
+  date: Date | string | number | null | undefined
+) {
+  return formatShortDisplayDate(date, "—");
+}
+
+export function getExpenseDocumentNo(expense: {
+  id: string;
+  date: Date | string | number | null | undefined;
+}) {
+  const parsed = coerceValidDate(expense.date);
+  const year = parsed ? parsed.getFullYear() : new Date().getFullYear();
+  return `GIS-${year}-${expense.id.slice(-6).toUpperCase()}`;
 }
 
 export function getExpenseHaystack(expense: {
@@ -100,11 +108,6 @@ export function getExpenseHaystack(expense: {
     .filter(Boolean)
     .join(" ")
     .toLocaleLowerCase("tr-TR");
-}
-
-export function getExpenseDocumentNo(expense: { id: string; date: Date }) {
-  const year = expense.date.getFullYear();
-  return `GIS-${year}-${expense.id.slice(-6).toUpperCase()}`;
 }
 
 export function getCategoryBadge(category?: string | null) {

@@ -31,7 +31,7 @@ import { SettingsUsersPanel } from "@/components/settings/settings-users-panel";
 import { TeamSettingsBanner } from "@/components/settings/team-settings-banner";
 import { TeamActionButton } from "@/components/team/team-action-button";
 import type { SerializedSettingsBundle } from "@/lib/settings-service";
-import { formatMoney, formatNumber } from "@/lib/format-utils";
+import { formatMoney, formatNumber, formatShortDisplayDate } from "@/lib/format-utils";
 import { getInvoiceTypeLabel } from "@/lib/settings-utils";
 import { uploadImageToCdn } from "@/lib/storage/upload-client";
 import { usePlatformUploadLimits } from "@/components/platform-runtime/platform-runtime-provider";
@@ -861,7 +861,7 @@ export function SettingsCenter({
             value={bundle.membership.statusLabel}
             subtitle={
               bundle.membership.nextPaymentDate
-                ? `Sonraki: ${formatShortDate(bundle.membership.nextPaymentDate)}`
+                ? `Sonraki: ${formatShortDisplayDate(bundle.membership.nextPaymentDate)}`
                 : "Ödeme bilgisi yok"
             }
             icon={<CreditCard size={18} />}
@@ -1076,15 +1076,6 @@ function SummaryRow({
     </div>
   );
 }
-
-function formatShortDate(value: string) {
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(value));
-}
-
 function ToggleRow({
   label,
   description,

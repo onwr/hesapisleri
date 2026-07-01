@@ -11,7 +11,7 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
-import { formatMoney, formatNumber } from "@/lib/format-utils";
+import { formatMoney, formatNumber, formatShortDisplayDate } from "@/lib/format-utils";
 import { MEMBERSHIP_PERIOD_OPTIONS } from "@/lib/membership-utils";
 import type { MembershipPeriod } from "@prisma/client";
 import { SipayCheckoutButton } from "@/components/billing/sipay-checkout-button";
@@ -94,15 +94,6 @@ type BillingData = {
     paytrEnabled: boolean;
   };
 };
-
-function formatDate(value: string | null) {
-  if (!value) return "—";
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(value));
-}
 
 function getStatusBadgeClass(status: string) {
   if (status === "ACTIVE" || status === "PAID") {
@@ -552,7 +543,7 @@ export function MembershipBillingPanel({
             {formatNumber(data.subscription.remainingDays)} gün kaldı
           </span>
           <span className="text-[11px] font-semibold text-slate-500">
-            Bitiş: {formatDate(data.subscription.currentPeriodEnd)}
+            Bitiş: {formatShortDisplayDate(data.subscription.currentPeriodEnd)}
           </span>
         </div>
       </div>
@@ -929,7 +920,7 @@ export function MembershipBillingPanel({
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-slate-500">
-                      {formatDate(payment.paidAt)}
+                      {formatShortDisplayDate(payment.paidAt)}
                     </td>
                   </tr>
                 ))}

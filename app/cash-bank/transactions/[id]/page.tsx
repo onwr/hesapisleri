@@ -18,21 +18,12 @@ import { guardPageModule } from "@/lib/module-access";
 import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
 import { getCachedAccountTransactionDetailData } from "@/lib/tenant-cache/cached-tenant-page-data";
 import { formatCashMoney } from "@/lib/cash-bank-page-utils";
+import { formatDateTimeDisplay } from "@/lib/format-utils";
 import type { AccountTransactionDetailLink } from "@/lib/cash-bank/get-account-transaction-detail";
 
 type Props = {
   params: Promise<{ id: string }>;
 };
-
-function formatDateTime(date: Date) {
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
-}
 
 function DetailRow({
   label,
@@ -157,7 +148,7 @@ export default async function CashBankTransactionDetailPage({ params }: Props) {
             <DetailRow label="Tarih / Saat">
               <span className="inline-flex items-center gap-1.5">
                 <CalendarDays size={12} className="text-slate-400" />
-                {formatDateTime(tx.date)}
+                {formatDateTimeDisplay(tx.date)}
               </span>
             </DetailRow>
             <DetailRow label="Durum">{tx.statusLabel}</DetailRow>
@@ -166,7 +157,7 @@ export default async function CashBankTransactionDetailPage({ params }: Props) {
             ) : null}
             {tx.reference ? <DetailRow label="Referans">{tx.reference}</DetailRow> : null}
             {tx.note ? <DetailRow label="Açıklama">{tx.note}</DetailRow> : null}
-            <DetailRow label="Kayıt Tarihi">{formatDateTime(tx.createdAt)}</DetailRow>
+            <DetailRow label="Kayıt Tarihi">{formatDateTimeDisplay(tx.createdAt)}</DetailRow>
           </div>
         </section>
 

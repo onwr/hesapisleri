@@ -30,7 +30,7 @@ import { guardPageModule } from "@/lib/module-access";
 import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
 
 import { getCachedSaleDetailData } from "@/lib/tenant-cache/cached-tenant-page-data";
-import { formatMoney } from "@/lib/format-utils";
+import { formatMoney, formatDateTimeDisplay } from "@/lib/format-utils";
 import { getSaleRemainingAmount } from "@/lib/sale-payment-utils";
 import { getPosPaymentMethodLabel } from "@/lib/pos-checkout-utils";
 import { canCancelSales, canUpdateSales } from "@/lib/sale-permission-utils";
@@ -48,26 +48,6 @@ type Props = {
     convert?: string;
   }>;
 };
-
-function formatDate(date: Date) {
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
-}
-
-function formatShortDate(date: Date) {
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
-}
 
 function getPaymentStatusText(status: string) {
   if (status === "PAID") return "Ödendi";
@@ -198,13 +178,13 @@ const { id } = await params;
                 <div className="mt-5 flex flex-wrap gap-3">
                   <HeroBadge
                     label="Satış Tarihi"
-                    value={formatShortDate(sale.saleDate ?? sale.createdAt)}
+                    value={formatDateTimeDisplay(sale.saleDate ?? sale.createdAt)}
                     icon={<CalendarDays size={15} />}
                   />
 
                   <HeroBadge
                     label="Oluşturma"
-                    value={formatShortDate(sale.createdAt)}
+                    value={formatDateTimeDisplay(sale.createdAt)}
                     icon={<CalendarDays size={15} />}
                   />
 
@@ -414,7 +394,7 @@ const { id } = await params;
                     ? `Neden: ${sale.cancelReason}`
                     : "İptal nedeni kaydedilmemiş."}
                   {sale.cancelledAt
-                    ? ` · ${formatShortDate(sale.cancelledAt)}`
+                    ? ` · ${formatDateTimeDisplay(sale.cancelledAt)}`
                     : ""}
                   {sale.cancelledByUser?.name
                     ? ` · ${sale.cancelledByUser.name}`
@@ -619,7 +599,7 @@ const { id } = await params;
 
                   <InfoLine
                     label="Oluşturma Tarihi"
-                    value={formatShortDate(sale.createdAt)}
+                    value={formatDateTimeDisplay(sale.createdAt)}
                   />
 
                   <InfoLine
@@ -691,7 +671,7 @@ const { id } = await params;
                   ]
                     .filter(Boolean)
                     .join(" · "),
-                  date: formatShortDate(movement.createdAt),
+                  date: formatDateTimeDisplay(movement.createdAt),
                   value: `${movement.quantity > 0 ? "+" : ""}${movement.quantity}`,
                   positive: movement.quantity > 0,
                 }))}
@@ -720,7 +700,7 @@ const { id } = await params;
                   description: `${transaction.account.name} · ${
                     transaction.note || "Tahsilat hareketi"
                   }`,
-                  date: formatShortDate(transaction.createdAt),
+                  date: formatDateTimeDisplay(transaction.createdAt),
                   value: formatMoney(Number(transaction.amount)),
                   positive: Number(transaction.amount) >= 0,
                 }))}
@@ -1251,7 +1231,7 @@ function SaleReceipt({ company, sale, className = "" }: SaleReceiptProps) {
         ) : null}
         <p className="mt-1 text-[11px] text-slate-500">{sale.saleNo}</p>
         <p className="mt-1 text-[11px] text-slate-500">
-          {formatDate(sale.createdAt)}
+          {formatDateTimeDisplay(sale.createdAt)}
         </p>
       </div>
 

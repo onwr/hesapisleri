@@ -27,6 +27,7 @@ import {
   getSupplierPrimaryLine,
   getSupplierSecondaryLine,
 } from "@/lib/supplier-utils";
+import { formatShortDisplayDate } from "@/lib/format-utils";
 import { SUPPLIER_BALANCE_LABELS } from "@/lib/supplier-balance-utils";
 import { SupplierLedgerTable } from "@/components/suppliers/supplier-ledger-table";
 import { SupplierFinanceModal } from "@/components/suppliers/supplier-finance-modal";
@@ -492,7 +493,7 @@ export function SupplierDetailClient({
           {
             label: "Son Hareket",
             value: summary.lastMovementDate
-              ? new Date(summary.lastMovementDate).toLocaleDateString("tr-TR")
+              ? formatShortDisplayDate(summary.lastMovementDate)
               : "—",
             icon: Truck,
           },
@@ -554,7 +555,7 @@ export function SupplierDetailClient({
                       <p className="text-slate-500">{log.message || "Tedarikçi hareketi"}</p>
                     </div>
                     <span className="font-semibold text-slate-500">
-                      {new Date(log.createdAt).toLocaleDateString("tr-TR")}
+                      {formatShortDisplayDate(log.createdAt)}
                     </span>
                   </div>
                 ))
@@ -624,7 +625,7 @@ export function SupplierDetailClient({
                       {formatSupplierMoney(expense.amount, supplier.currency)}
                     </td>
                     <td className="px-3 py-2.5 text-slate-500">
-                      {new Date(expense.date).toLocaleDateString("tr-TR")}
+                      {formatShortDisplayDate(expense.date)}
                     </td>
                     <td className="px-3 py-2.5">
                       {expense.paymentStatus === "PAID" ? "Ödendi" : "Ödenmedi"}
@@ -669,7 +670,7 @@ export function SupplierDetailClient({
                       {formatSupplierMoney(payment.amount, supplier.currency)}
                     </td>
                     <td className="px-3 py-2.5 text-slate-500">
-                      {new Date(payment.date).toLocaleDateString("tr-TR")}
+                      {formatShortDisplayDate(payment.date)}
                     </td>
                     <td className="px-3 py-2.5">{payment.accountName}</td>
                     <td className="px-3 py-2.5">

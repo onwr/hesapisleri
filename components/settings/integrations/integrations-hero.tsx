@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, PlugZap } from "lucide-react";
+import { formatDateTimeDisplay } from "@/lib/format-utils";
 
 type IntegrationsHeroProps = {
   connectedCount: number;
@@ -53,12 +54,7 @@ export function IntegrationsHero({
               label="Son Sync"
               value={
                 lastSyncAt
-                  ? new Date(lastSyncAt).toLocaleString("tr-TR", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })
+                  ? formatDateTimeDisplay(lastSyncAt)
                   : "—"
               }
             />

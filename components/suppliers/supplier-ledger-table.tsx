@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { formatShortDisplayDate } from "@/lib/format-utils";
 import { formatSupplierMoney } from "@/lib/supplier-utils";
 import { SUPPLIER_BALANCE_LABELS } from "@/lib/supplier-balance-utils";
 import type { SupplierLedgerRow } from "@/lib/supplier-ledger-utils";
@@ -36,7 +37,7 @@ export function SupplierLedgerTable({ rows, currency = "TRY" }: Props) {
           {rows.map((row) => (
             <tr key={row.id} className="border-b border-slate-50 text-slate-700">
               <td className="px-2 py-2 whitespace-nowrap">
-                {new Date(row.date).toLocaleDateString("tr-TR")}
+                {formatShortDisplayDate(row.date)}
               </td>
               <td className="px-2 py-2">{row.typeLabel}</td>
               <td className="px-2 py-2">

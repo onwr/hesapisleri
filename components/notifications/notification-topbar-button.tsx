@@ -18,24 +18,26 @@ import {
   type NormalizedNotification,
 } from "@/lib/notification-utils";
 import {
+  formatDateTimeDisplay,
+  formatShortDisplayDate,
+  getTimeMs,
+} from "@/lib/format-utils";
+import {
   hasSafeTenantActionUrl,
   resolveSafeTenantActionUrl,
 } from "@/lib/tenant-action-url";
 
 function formatRelativeTime(value: string) {
-  const date = new Date(value);
-  const diffMs = Date.now() - date.getTime();
+  const timeMs = getTimeMs(value);
+  if (timeMs == null) return "—";
+
+  const diffMs = Date.now() - timeMs;
   const diffMin = Math.floor(diffMs / 60000);
 
   if (diffMin < 1) return "Az önce";
   if (diffMin < 60) return `${diffMin} dk önce`;
 
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
+  return formatShortDisplayDate(value);
 }
 
 function DropdownItem({

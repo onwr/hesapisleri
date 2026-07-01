@@ -71,6 +71,36 @@ export function formatDisplayDate(
   }).format(date);
 }
 
+export function formatShortDisplayDate(
+  value: Date | string | number | null | undefined,
+  fallback = "—"
+): string {
+  const date = coerceValidDate(value);
+  if (!date) return fallback;
+
+  return new Intl.DateTimeFormat("tr-TR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
+export function formatDateTimeDisplay(
+  value: Date | string | number | null | undefined,
+  fallback = "—"
+): string {
+  const date = coerceValidDate(value);
+  if (!date) return fallback;
+
+  return new Intl.DateTimeFormat("tr-TR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
 export function formatPercent(value: number | string | null | undefined): string {
   const numericValue = Number(value ?? 0);
 

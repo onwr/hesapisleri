@@ -20,6 +20,7 @@ import { guardPageModule } from "@/lib/module-access";
 import { BankLogo } from "@/components/shared/bank-logo";
 import { getCachedCashBankAccountDetailData } from "@/lib/tenant-cache/cached-tenant-page-data";
 import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
+import { formatDateTimeDisplay } from "@/lib/format-utils";
 import {
   formatCashMoney,
   getAccountTypeText,
@@ -29,16 +30,6 @@ type Props = {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ movement?: string }>;
 };
-
-function formatDateTime(date: Date) {
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
-}
 
 function MetricCard({
   title,
@@ -240,7 +231,7 @@ export default async function CashBankAccountDetailPage({ params,
                       className="text-[12px] font-semibold text-[#24345f] transition hover:bg-slate-50/80"
                     >
                       <td className="whitespace-nowrap px-3 py-3 text-[11px] text-slate-500">
-                        {formatDateTime(transaction.date)}
+                        {formatDateTimeDisplay(transaction.date)}
                       </td>
 
                       <td className="max-w-[180px] px-3 py-3">

@@ -13,6 +13,7 @@ import { InvoiceDetailActions } from "@/components/invoices/invoice-detail-actio
 import { InvoiceEDocumentPanel } from "@/components/invoices/invoice-e-document-panel";
 import { AppShell } from "@/components/layout/app-shell";
 import { guardPageModule } from "@/lib/module-access";
+import { formatDisplayDate } from "@/lib/format-utils";
 import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
 
 import { InvoicePrintOnLoad } from "@/components/invoices/invoice-print-on-load";
@@ -364,7 +365,7 @@ const { id } = await params;
                     </p>
                     <p className="mt-1 text-[11px] font-medium text-slate-500">
                       {collection.accountName} ·{" "}
-                      {new Intl.DateTimeFormat("tr-TR").format(collection.date)}
+                      {formatDisplayDate(collection.date)}
                     </p>
                     {collection.note ? (
                       <p className="mt-1 text-[11px] text-slate-500">{collection.note}</p>

@@ -1,4 +1,4 @@
-import { db } from "@/lib/prisma";
+import { getOrCreateCompanyAiSettings } from "@/lib/ai/company-ai-settings-repository";
 import { resolveEffectiveModel } from "@/lib/ai/ai-config";
 import { getAiUserMessage, type AiErrorCode } from "@/lib/ai/ai-errors";
 import { createOpenAiProvider } from "@/lib/ai/openai-provider";
@@ -19,11 +19,7 @@ export type AiHealthReport = AiProviderStatusReport & {
 };
 
 export async function getCompanyAiSettings(companyId: string) {
-  return db.companyAISettings.upsert({
-    where: { companyId },
-    create: { companyId },
-    update: {},
-  });
+  return getOrCreateCompanyAiSettings(companyId);
 }
 
 export async function buildAiHealthReport(companyId: string): Promise<AiHealthReport> {

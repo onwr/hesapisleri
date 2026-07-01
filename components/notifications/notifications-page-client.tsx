@@ -29,20 +29,11 @@ import {
   type NotificationSummary,
   type NotificationTab,
 } from "@/lib/notification-utils";
+import { formatDateTimeDisplay } from "@/lib/format-utils";
 import {
   hasSafeTenantActionUrl,
   resolveSafeTenantActionUrl,
 } from "@/lib/tenant-action-url";
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
 
 function getNotificationIcon(type: string) {
   if (type === "SUCCESS") return CheckCircle2;
@@ -561,7 +552,7 @@ export function NotificationsPageClient() {
                         {notification.message}
                       </p>
                       <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] font-semibold text-slate-400">
-                        <span>{formatDate(notification.createdAt)}</span>
+                        <span>{formatDateTimeDisplay(notification.createdAt)}</span>
                         <span className="h-1 w-1 rounded-full bg-slate-300" />
                         <span>{notification.isRead ? "Okundu" : "Okunmadı"}</span>
                       </div>

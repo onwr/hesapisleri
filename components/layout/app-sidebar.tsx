@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -30,6 +30,8 @@ type AppSidebarProps = {
     statusLabel: string;
     remainingDays: number;
     isExpired: boolean;
+    periodEndLabel?: string | null;
+    policyNote?: string | null;
   };
 };
 
@@ -74,12 +76,22 @@ function SidebarMembershipSummary({
       ].join(" ")}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] font-bold uppercase tracking-wide opacity-80">
+        <span className="text-[11px] font-bold uppercase tracking-wide opacity-80">
           {summary.statusLabel}
         </span>
         <Clock3 size={12} strokeWidth={2.2} className="shrink-0 opacity-70" />
       </div>
-      <p className="mt-0.5 text-[11px] font-black">{remainingLabel}</p>
+      <p className="mt-0.5 text-[12px] font-black">{remainingLabel}</p>
+      {summary.periodEndLabel ? (
+        <p className="mt-1 text-[11px] font-semibold opacity-80">
+          Bitiş: {summary.periodEndLabel}
+        </p>
+      ) : null}
+      {summary.policyNote ? (
+        <p className="mt-1 text-[11px] font-medium leading-snug opacity-75">
+          {summary.policyNote}
+        </p>
+      ) : null}
     </Link>
   );
 }
@@ -103,7 +115,7 @@ function SidebarLinkItem({
       href={entry.href}
       title={collapsed ? entry.title : undefined}
       className={[
-        "group flex h-[39px] items-center rounded-2xl text-[13px] font-bold transition-all duration-200 max-[820px]:h-[34px] max-[820px]:rounded-xl max-[820px]:text-[12px]",
+        "group flex h-[39px] items-center rounded-2xl text-[14px] font-bold transition-all duration-200 max-[820px]:h-[34px] max-[820px]:rounded-xl max-[820px]:text-[13px]",
         collapsed ? "justify-center px-0" : "gap-3 px-3.5",
         isActive
           ? "bg-linear-to-r from-blue-600 to-blue-500 text-white shadow-[0_12px_26px_rgba(37,99,235,0.24)]"
@@ -126,7 +138,7 @@ function SidebarLinkItem({
           {entry.badge ? (
             <span
               className={[
-                "ml-auto rounded-full px-2.5 py-1 text-[10px] font-black leading-none",
+                "ml-auto rounded-full px-2.5 py-1 text-[11px] font-black leading-none",
                 isActive
                   ? "bg-white/20 text-white"
                   : "bg-emerald-100 text-emerald-700",
@@ -190,7 +202,7 @@ function SidebarGroupItem({
           title={group.title}
           onClick={() => setFlyoutOpen((value) => !value)}
           className={[
-            "flex h-[39px] w-full items-center justify-center rounded-2xl text-[13px] font-bold transition-all duration-200 max-[820px]:h-[34px] max-[820px]:rounded-xl",
+            "flex h-[39px] w-full items-center justify-center rounded-2xl text-[14px] font-bold transition-all duration-200 max-[820px]:h-[34px] max-[820px]:rounded-xl",
             hasActiveChild
               ? "bg-linear-to-r from-blue-600 to-blue-500 text-white shadow-[0_12px_26px_rgba(37,99,235,0.24)]"
               : "text-[#0f1f4d] hover:bg-blue-50/70 hover:text-blue-600",
@@ -205,7 +217,7 @@ function SidebarGroupItem({
 
         {flyoutOpen ? (
           <div className="absolute left-full top-0 z-40 ml-2 min-w-[210px] rounded-2xl border border-slate-200/80 bg-white p-2 shadow-[0_16px_40px_rgba(15,23,42,0.12)]">
-            <p className="px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-slate-400">
+            <p className="px-2.5 py-1.5 text-[12px] font-black uppercase tracking-[0.08em] text-slate-400">
               {group.title}
             </p>
             <div className="space-y-1">
@@ -218,7 +230,7 @@ function SidebarGroupItem({
                     href={item.href}
                     onClick={() => setFlyoutOpen(false)}
                     className={[
-                      "flex h-9 items-center rounded-xl px-3 text-[12px] font-bold transition",
+                      "flex h-9 items-center rounded-xl px-3 text-[13px] font-bold transition",
                       isActive
                         ? "bg-blue-50 text-blue-600"
                         : "text-[#0f1f4d] hover:bg-slate-50 hover:text-blue-600",
@@ -241,7 +253,7 @@ function SidebarGroupItem({
         type="button"
         onClick={() => setOpen((value) => !value)}
         className={[
-          "flex h-[39px] w-full items-center rounded-2xl text-[13px] font-bold transition-all duration-200 max-[820px]:h-[34px] max-[820px]:rounded-xl max-[820px]:text-[12px]",
+          "flex h-[39px] w-full items-center rounded-2xl text-[14px] font-bold transition-all duration-200 max-[820px]:h-[34px] max-[820px]:rounded-xl max-[820px]:text-[13px]",
           "gap-3 px-3.5",
           hasActiveChild
             ? "bg-blue-50/80 text-blue-700"
@@ -273,7 +285,7 @@ function SidebarGroupItem({
                 key={item.href}
                 href={item.href}
                 className={[
-                  "flex h-[34px] items-center rounded-xl px-3 text-[12px] font-bold transition",
+                  "flex h-[34px] items-center rounded-xl px-3 text-[13px] font-bold transition",
                   isActive
                     ? "bg-linear-to-r from-blue-600 to-blue-500 text-white shadow-[0_10px_22px_rgba(37,99,235,0.2)]"
                     : "text-[#0f1f4d] hover:bg-blue-50/70 hover:text-blue-600",
@@ -289,44 +301,46 @@ function SidebarGroupItem({
   );
 }
 
-export function AppSidebar({
-  companyRole = "STAFF",
-  isSuperAdmin = false,
-  isOwner = false,
+function SidebarInner({
+  menuItems,
+  pathname,
+  collapsed,
+  isSuperAdmin,
   membershipSummary,
-}: AppSidebarProps) {
-  const pathname = usePathname();
-  const { collapsed, toggle } = useSidebar();
-
-  const menuItems = getSidebarNavItems(
-    companyRole as PermissionRole,
-    isOwner
-  );
-
+  toggle,
+  onLinkClick,
+}: {
+  menuItems: ReturnType<typeof getSidebarNavItems>;
+  pathname: string;
+  collapsed: boolean;
+  isSuperAdmin: boolean;
+  membershipSummary?: AppSidebarProps["membershipSummary"];
+  toggle: () => void;
+  onLinkClick?: () => void;
+}) {
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
     window.location.href = "/login";
   }
 
   return (
-    <aside
-      className={[
-        "fixed left-0 top-0 z-30 hidden h-screen border-r border-slate-200/70 bg-white transition-[width] duration-200 lg:flex lg:flex-col",
-        collapsed ? "w-[80px]" : "w-[250px]",
-      ].join(" ")}
-    >
-      <div className="flex h-[76px] shrink-0 items-center justify-center px-5 max-[820px]:h-[62px]">
+    <>
+      <div className="flex h-[76px] shrink-0 items-center justify-center px-5">
         <img
           src="/logo.svg"
           alt="Hesapişleri"
           className={[
-            "w-auto object-contain transition-all duration-200 max-[820px]:h-9",
+            "w-auto object-contain transition-all duration-200",
             collapsed ? "h-8" : "h-12",
           ].join(" ")}
         />
       </div>
 
-      <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 max-[820px]:space-y-[2px]">
+      <nav
+        className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3"
+        onClick={onLinkClick}
+        role="navigation"
+      >
         {menuItems.map((entry) => {
           if (entry.type === "group") {
             return (
@@ -338,7 +352,6 @@ export function AppSidebar({
               />
             );
           }
-
           return (
             <SidebarLinkItem
               key={entry.href}
@@ -354,7 +367,7 @@ export function AppSidebar({
             href="/admin"
             title={collapsed ? "Platform Yönetimi" : undefined}
             className={[
-              "mt-1 flex h-[39px] items-center rounded-2xl text-[13px] font-bold transition-all duration-200 max-[820px]:h-[34px] max-[820px]:rounded-xl max-[820px]:text-[12px]",
+              "mt-1 flex h-[39px] items-center rounded-2xl text-[14px] font-bold transition-all duration-200",
               collapsed ? "justify-center px-0" : "gap-3 px-3.5",
               pathname.startsWith("/admin")
                 ? "bg-slate-950 text-white shadow-[0_12px_26px_rgba(15,23,42,0.18)]"
@@ -367,7 +380,7 @@ export function AppSidebar({
         ) : null}
       </nav>
 
-      <div className="mt-auto shrink-0 px-3 pb-4 pt-4 max-[820px]:pb-2 max-[820px]:pt-2">
+      <div className="mt-auto shrink-0 px-3 pb-4 pt-4">
         {membershipSummary ? (
           <SidebarMembershipSummary
             summary={membershipSummary}
@@ -375,9 +388,7 @@ export function AppSidebar({
           />
         ) : null}
 
-        {!collapsed ? (
-          <div className="mb-2 h-px bg-slate-200 max-[820px]:hidden" />
-        ) : null}
+        {!collapsed ? <div className="mb-2 h-px bg-slate-200" /> : null}
 
         <div className="space-y-1">
           <button
@@ -385,26 +396,16 @@ export function AppSidebar({
             onClick={toggle}
             aria-label={collapsed ? "Menüyü genişlet" : "Menüyü daralt"}
             className={[
-              "flex h-9 w-full items-center rounded-xl text-[12px] font-bold text-[#0f1f4d] transition hover:bg-slate-50 max-[820px]:h-8 max-[820px]:text-[11px]",
+              "flex h-9 w-full items-center rounded-xl text-[13px] font-bold text-[#0f1f4d] transition hover:bg-slate-50",
               collapsed ? "justify-center px-0" : "justify-between px-2.5",
             ].join(" ")}
           >
-            <span
-              className={[
-                "flex items-center gap-2",
-                collapsed ? "justify-center" : "",
-              ].join(" ")}
-            >
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-[#0f1f4d] max-[820px]:h-6 max-[820px]:w-6">
-                {collapsed ? (
-                  <ChevronRight size={15} />
-                ) : (
-                  <ChevronLeft size={15} />
-                )}
+            <span className={["flex items-center gap-2", collapsed ? "justify-center" : ""].join(" ")}>
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-[#0f1f4d]">
+                {collapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
               </span>
               {!collapsed ? "Menüyü Daralt" : null}
             </span>
-
             {!collapsed ? <span className="text-slate-400">›</span> : null}
           </button>
 
@@ -413,17 +414,84 @@ export function AppSidebar({
             onClick={handleLogout}
             title={collapsed ? "Çıkış Yap" : undefined}
             className={[
-              "flex h-9 w-full items-center rounded-xl text-[12px] font-bold text-slate-500 transition hover:bg-red-50 hover:text-red-600 max-[820px]:h-8 max-[820px]:text-[11px]",
+              "flex h-9 w-full items-center rounded-xl text-[13px] font-bold text-slate-500 transition hover:bg-red-50 hover:text-red-600",
               collapsed ? "justify-center px-0" : "gap-2 px-2.5",
             ].join(" ")}
           >
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-red-500 max-[820px]:h-6 max-[820px]:w-6">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-red-500">
               <LogOut size={15} />
             </span>
             {!collapsed ? "Çıkış Yap" : null}
           </button>
         </div>
       </div>
-    </aside>
+    </>
+  );
+}
+
+export function AppSidebar({
+  companyRole = "STAFF",
+  isSuperAdmin = false,
+  isOwner = false,
+  membershipSummary,
+}: AppSidebarProps) {
+  const pathname = usePathname();
+  const { collapsed, toggle, mobileOpen, closeMobile } = useSidebar();
+
+  const menuItems = getSidebarNavItems(
+    companyRole as PermissionRole,
+    isOwner
+  );
+
+  // Close mobile sidebar on navigation
+  useEffect(() => {
+    closeMobile();
+  }, [pathname, closeMobile]);
+
+  return (
+    <>
+      {/* Mobile sidebar overlay */}
+      {mobileOpen ? (
+        <div className="lg:hidden">
+          <div
+            className="fixed inset-0 z-[35] bg-slate-900/40 backdrop-blur-sm"
+            onClick={closeMobile}
+            aria-hidden="true"
+          />
+          <aside
+            className="fixed left-0 top-0 z-[36] flex h-screen w-[280px] flex-col border-r border-slate-200/70 bg-white shadow-2xl"
+            aria-label="Mobil menü"
+          >
+            <SidebarInner
+              menuItems={menuItems}
+              pathname={pathname}
+              collapsed={false}
+              isSuperAdmin={isSuperAdmin}
+              membershipSummary={membershipSummary}
+              toggle={toggle}
+              onLinkClick={closeMobile}
+            />
+          </aside>
+        </div>
+      ) : null}
+
+      {/* Desktop sidebar */}
+      <aside
+        className={[
+          "fixed left-0 top-0 z-30 hidden h-screen border-r border-slate-200/70 bg-white transition-[width] duration-200 lg:flex lg:flex-col",
+          collapsed ? "w-[80px]" : "w-[250px]",
+        ].join(" ")}
+        aria-label="Ana menü"
+      >
+        <SidebarInner
+          menuItems={menuItems}
+          pathname={pathname}
+          collapsed={collapsed}
+          isSuperAdmin={isSuperAdmin}
+          membershipSummary={membershipSummary}
+          toggle={toggle}
+        />
+      </aside>
+    </>
   );
 }

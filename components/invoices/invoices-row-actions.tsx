@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import {
   Download,
   Edit3,
@@ -28,14 +27,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { InvoiceRowActionData } from "@/lib/invoices-page-utils";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 
 type InvoicesRowActionsProps = {
   row: InvoiceRowActionData;
 };
 
 export function InvoicesRowActions({ row }: InvoicesRowActionsProps) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const { mutate, isSubmitting } = useTenantMutation({ refresh: false });
   const [message, setMessage] = useState<string | null>(null);
   const [collectTarget, setCollectTarget] = useState<CollectPaymentTarget | null>(
     null
@@ -76,34 +75,20 @@ export function InvoicesRowActions({ row }: InvoicesRowActionsProps) {
 
     setMessage(null);
 
-    startTransition(async () => {
-      try {
-        const response = await fetch(`/api/invoices/${row.id}`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ action: "cancel" }),
-        });
-
-        const result = (await response.json()) as {
-          success?: boolean;
-          message?: string;
-        };
-
-        if (!response.ok || !result.success) {
-          setMessage(result.message ?? "İptal işlemi başarısız.");
-          return;
-        }
-
-        router.refresh();
-      } catch {
-        setMessage("İptal işlemi sırasında bir hata oluştu.");
-      }
+    const result = await mutate(`/api/invoices/${row.id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ action: "cancel" }),
     });
+
+    if (!result.ok) {
+      setMessage(result.error ?? "İptal işlemi başarısız.");
+    }
   }
 
-  const isBusy = isPending;
+  const isBusy = isSubmitting;
 
   return (
     <>

@@ -7,6 +7,7 @@ import {
   getExpenseCategoriesWithStats,
 } from "@/lib/expense-category-service";
 import { EXPENSE_CATEGORY_COLORS } from "@/lib/expense-category-utils";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 const createCategorySchema = z.object({
   name: z.string().trim().min(1, "Kategori adı zorunludur."),
@@ -68,11 +69,13 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      message: "Kategori başarıyla oluşturuldu.",
-      data: category,
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(auth.companyId, {
+        reason: "expense-category-change",
+        entity: category as Record<string, unknown>,
+        message: "Kategori başarıyla oluşturuldu.",
+      }),
+    );
   } catch (error) {
     console.error("CREATE_EXPENSE_CATEGORY_ERROR", error);
 

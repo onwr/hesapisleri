@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Loader2, Truck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 
 type OrderShippingModalProps = {
   orderId: string;
@@ -19,7 +20,7 @@ export function OrderShippingModal({
   onClose,
   onSuccess,
 }: OrderShippingModalProps) {
-  const [isPending, startTransition] = useTransition();
+  const { mutate, isSubmitting } = useTenantMutation({ refresh: false });
   const [shippingCarrier, setShippingCarrier] = useState("");
   const [trackingNumber, setTrackingNumber] = useState("");
   const [shippedAt, setShippedAt] = useState(
@@ -29,32 +30,28 @@ export function OrderShippingModal({
 
   if (!open) return null;
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
 
-    startTransition(async () => {
-      const response = await fetch(`/api/orders/${orderId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderStatus: "SHIPPING",
-          shippingCarrier,
-          trackingNumber,
-          shippedAt: shippedAt ? new Date(shippedAt).toISOString() : undefined,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
-        setError(result.message ?? "Kargo bilgisi kaydedilemedi.");
-        return;
-      }
-
-      onSuccess?.();
-      onClose();
+    const result = await mutate(`/api/orders/${orderId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        orderStatus: "SHIPPING",
+        shippingCarrier,
+        trackingNumber,
+        shippedAt: shippedAt ? new Date(shippedAt).toISOString() : undefined,
+      }),
     });
+
+    if (!result.ok) {
+      setError(result.error ?? "Kargo bilgisi kaydedilemedi.");
+      return;
+    }
+
+    onSuccess?.();
+    onClose();
   }
 
   return (
@@ -76,7 +73,7 @@ export function OrderShippingModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
           <label className="block">
             <span className="text-[12px] font-bold text-[#24345f]">Kargo Firması</span>
             <input
@@ -115,10 +112,10 @@ export function OrderShippingModal({
 
           <Button
             type="submit"
-            disabled={isPending}
+            disabled={isSubmitting}
             className="h-11 w-full rounded-xl bg-orange-500 font-black hover:bg-orange-600"
           >
-            {isPending ? (
+            {isSubmitting ? (
               <>
                 <Loader2 size={16} className="animate-spin" />
                 Kaydediliyor...

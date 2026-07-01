@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiModuleAccess } from "@/lib/module-access";
 import { bulkChangeExpenseCategory } from "@/lib/expense-bulk-actions-service";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 const schema = z.object({
   ids: z.array(z.string().min(1)).min(1, "En az bir gider seçin."),
@@ -41,11 +42,15 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      message: `${result.data.updatedCount} giderin kategorisi güncellendi.`,
-      data: result.data,
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(auth.companyId, {
+        reason: "expense-create",
+        affectedIds: parsed.data.ids,
+        entity: result.data as Record<string, unknown>,
+        message: `${result.data.updatedCount} giderin kategorisi güncellendi.`,
+        status: "bulk-category-updated",
+      }),
+    );
   } catch (error) {
     console.error("EXPENSE_BULK_CHANGE_CATEGORY_ERROR", error);
 

@@ -1,8 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { RefreshCw } from "lucide-react";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 
 type ProductsStockSyncButtonProps = {
   canSync: boolean;
@@ -13,38 +13,24 @@ export function ProductsStockSyncButton({
   canSync,
   compact = false,
 }: ProductsStockSyncButtonProps) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const { mutate, isSubmitting } = useTenantMutation({ refresh: false });
   const [message, setMessage] = useState<string | null>(null);
 
   if (!canSync) return null;
 
-  function handleSync() {
+  async function handleSync() {
     setMessage(null);
 
-    startTransition(async () => {
-      try {
-        const response = await fetch("/api/products/sync-stock", {
-          method: "POST",
-        });
-        const result = (await response.json()) as {
-          success?: boolean;
-          message?: string;
-          updated?: number;
-          unchanged?: number;
-        };
-
-        if (!response.ok || !result.success) {
-          setMessage(result.message ?? "Stok senkronizasyonu başarısız.");
-          return;
-        }
-
-        setMessage(result.message ?? "Stoklar senkronlandı.");
-        router.refresh();
-      } catch {
-        setMessage("Stok senkronizasyonu sırasında bir hata oluştu.");
-      }
+    const result = await mutate("/api/products/sync-stock", {
+      method: "POST",
     });
+
+    if (!result.ok) {
+      setMessage(result.error ?? "Stok senkronizasyonu başarısız.");
+      return;
+    }
+
+    setMessage("Stoklar senkronlandı.");
   }
 
   const buttonClass = compact
@@ -55,13 +41,13 @@ export function ProductsStockSyncButton({
     <div className={compact ? "relative" : "flex flex-col items-end gap-1"}>
       <button
         type="button"
-        onClick={handleSync}
-        disabled={isPending}
+        onClick={() => void handleSync()}
+        disabled={isSubmitting}
         className={buttonClass}
         title={message ?? undefined}
       >
-        <RefreshCw size={compact ? 14 : 16} className={isPending ? "animate-spin" : ""} />
-        {isPending ? "Senkronlanıyor..." : "Stokları Senkronla"}
+        <RefreshCw size={compact ? 14 : 16} className={isSubmitting ? "animate-spin" : ""} />
+        {isSubmitting ? "Senkronlanıyor..." : "Stokları Senkronla"}
       </button>
       {message && !compact ? (
         <p className="max-w-xs text-right text-[11px] font-semibold text-slate-500">

@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Bot, Sparkles } from "lucide-react";
+import { BarChart3, Bot, Sparkles } from "lucide-react";
 import { AiAssistantChatPanel } from "@/components/ai-assistant/ai-assistant-chat-panel";
 import { AiDrawerInsightContent } from "@/components/ai-assistant/ai-drawer-insight-content";
+import { FinanceAssistantPanel } from "@/components/ai-assistant/finance-assistant-panel";
 import { useAiDrawer } from "@/components/ai-assistant/ai-drawer-context";
 import { AiHealthBadge } from "@/components/ai-assistant/ai-health-badge";
 import {
@@ -85,12 +86,14 @@ export function GlobalAiDrawer() {
             <div className="min-w-0">
               <SheetTitle className="flex items-center gap-2 text-[15px] font-black text-[#0f1f4d]">
                 <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-linear-to-br from-blue-600 to-violet-600 text-white">
-                  <Bot size={16} />
+                  {state.tab === "finance" ? <BarChart3 size={16} /> : <Bot size={16} />}
                 </span>
-                Yapay Zekâ
+                {state.tab === "finance" ? "Finans Asistanı" : "Yapay Zekâ"}
               </SheetTitle>
               <SheetDescription className="mt-1 text-[11px] font-medium text-slate-500">
-                İşletme verilerinize göre sohbet ve modül özetleri
+                {state.tab === "finance"
+                  ? "Satış, kâr, stok, gider ve kasa verilerinizi hızlıca analiz edin."
+                  : "İşletme verilerinize göre sohbet ve modül özetleri"}
               </SheetDescription>
             </div>
             <AiHealthBadge className="shrink-0" />
@@ -110,6 +113,15 @@ export function GlobalAiDrawer() {
               <span className="inline-flex items-center justify-center gap-1.5">
                 <Sparkles size={12} />
                 Özet
+              </span>
+            </DrawerTabButton>
+            <DrawerTabButton
+              active={state.tab === "finance"}
+              onClick={() => setTab("finance")}
+            >
+              <span className="inline-flex items-center justify-center gap-1.5">
+                <BarChart3 size={12} />
+                Finans
               </span>
             </DrawerTabButton>
           </div>
@@ -133,6 +145,8 @@ export function GlobalAiDrawer() {
                 activeTopic="chat"
               />
             </div>
+          ) : state.tab === "finance" ? (
+            <FinanceAssistantPanel />
           ) : (
             <AiDrawerInsightContent
               moduleKey={insightModuleKey}

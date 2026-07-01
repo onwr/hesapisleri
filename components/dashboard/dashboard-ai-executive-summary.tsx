@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -49,7 +49,7 @@ export function DashboardAiExecutiveSummary() {
           <Sparkles size={16} className="text-violet-600" />
           AI Yönetici Özeti
         </h3>
-        <Link href="/ai-assistant" className="text-[11px] font-black text-violet-700 underline">
+        <Link href="/ai-assistant" className="text-[12px] font-black text-violet-700 underline">
           Asistan
         </Link>
       </div>

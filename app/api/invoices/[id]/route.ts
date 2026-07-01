@@ -7,6 +7,7 @@ import { cancelSaleById } from "@/lib/sale-cancel-service";
 import { parseNormalInvoiceMeta } from "@/lib/normal-invoice-meta";
 import { reverseCustomerDebtFromDocument, getInvoiceEffectivePaidAmount } from "@/lib/customer-balance-utils";
 import { validateInvoiceCancelEligibility } from "@/lib/invoice-service";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 type Props = {
   params: Promise<{
@@ -160,10 +161,14 @@ export async function PATCH(req: Request, { params }: Props) {
         );
       }
 
-      return NextResponse.json({
-        success: true,
-        message: result.message,
-      });
+      return NextResponse.json(
+        buildTenantMutationSuccess(companyId!, {
+          reason: "invoice-cancel",
+          entity: { id: invoice.id },
+          message: result.message,
+          entityIds: { invoiceId: invoice.id },
+        }),
+      );
     }
 
     await db.$transaction(async (tx) => {
@@ -213,10 +218,14 @@ export async function PATCH(req: Request, { params }: Props) {
       );
     });
 
-    return NextResponse.json({
-      success: true,
-      message: "Fatura başarıyla iptal edildi.",
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(companyId!, {
+        reason: "invoice-cancel",
+        entity: { id: invoice.id },
+        message: "Fatura başarıyla iptal edildi.",
+        entityIds: { invoiceId: invoice.id },
+      }),
+    );
   } catch (error) {
     console.error("INVOICE_CANCEL_API_ERROR", error);
 

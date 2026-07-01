@@ -13,6 +13,7 @@ import { InvoiceDetailActions } from "@/components/invoices/invoice-detail-actio
 import { InvoiceEDocumentPanel } from "@/components/invoices/invoice-e-document-panel";
 import { AppShell } from "@/components/layout/app-shell";
 import { guardPageModule } from "@/lib/module-access";
+import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
 
 import { InvoicePrintOnLoad } from "@/components/invoices/invoice-print-on-load";
 import { PrintInvoiceButton } from "@/components/invoices/print-invoice-button";
@@ -117,6 +118,7 @@ const { id } = await params;
 
   return (
     <AppShell>
+      <TenantPageSync />
       <InvoicePrintOnLoad enabled={shouldPrint} />
 
       <div className="space-y-5 print:space-y-4">

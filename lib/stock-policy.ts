@@ -6,8 +6,8 @@ export const STOCK_WARNING_NEGATIVE_RESULT =
 
 export const STOCK_WARNING_NEGATIVE_VALUE = "Stok eksi değerde.";
 
-export function allowsNegativeStock() {
-  return true;
+export function allowsNegativeStock(companySetting = false): boolean {
+  return companySetting;
 }
 
 export type StockWarningItem = {
@@ -35,10 +35,6 @@ export function getStockWarning(
   requestedQty: number,
   productName?: string
 ): string | null {
-  if (!allowsNegativeStock()) {
-    return null;
-  }
-
   if (availableQty < 0) {
     return STOCK_WARNING_NEGATIVE_VALUE;
   }
@@ -56,10 +52,6 @@ export function getStockMovementWarning(
   currentStock: number,
   newStock: number
 ): string | null {
-  if (!allowsNegativeStock()) {
-    return null;
-  }
-
   if (newStock < 0) {
     return STOCK_WARNING_NEGATIVE_RESULT;
   }

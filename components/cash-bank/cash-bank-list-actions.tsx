@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   ArrowRight,
@@ -22,6 +21,8 @@ import {
   CashBankTransferModal,
   type CashBankAccountOption,
 } from "@/components/cash-bank/cash-bank-transfer-modal";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
+import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 
 type CashBankActionCardsProps = {
   accounts: CashBankAccountOption[];
@@ -32,7 +33,6 @@ export function CashBankActionCards({
   accounts,
   canManage = false,
 }: CashBankActionCardsProps) {
-  const router = useRouter();
   const [transferOpen, setTransferOpen] = useState(false);
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
   const [banner, setBanner] = useState("");
@@ -155,7 +155,7 @@ export function CashBankActionCards({
         canManage={canManage}
         onSuccess={(message) => {
           setBanner(message);
-          router.refresh();
+          notifyTenantCacheSync();
         }}
       />
     </>
@@ -202,6 +202,8 @@ type CashBankAccountRowActionsProps = {
   canManage?: boolean;
   isDefault?: boolean;
   status?: string;
+  balance?: number;
+  accountName?: string;
 };
 
 export function CashBankAccountRowActions({
@@ -211,58 +213,61 @@ export function CashBankAccountRowActions({
   canManage = false,
   isDefault = false,
   status = "ACTIVE",
+  balance = 0,
+  accountName = "",
 }: CashBankAccountRowActionsProps) {
-  const router = useRouter();
+  const { mutate, isSubmitting } = useTenantMutation({ refresh: false });
   const [transferOpen, setTransferOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
 
   async function handleSetDefault() {
     setLoadingAction("default");
-    try {
-      const response = await fetch(`/api/cash-bank/accounts/${accountId}/default`, {
-        method: "POST",
-      });
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        alert(data.message || "Varsayılan hesap güncellenemedi.");
-        return;
-      }
-      router.refresh();
-    } catch {
-      alert("Sunucuya bağlanırken bir hata oluştu.");
-    } finally {
-      setLoadingAction(null);
+    const result = await mutate(`/api/cash-bank/accounts/${accountId}/default`, {
+      method: "POST",
+    });
+    if (!result.ok && result.error !== "duplicate_submit") {
+      alert(result.error || "Varsayılan hesap güncellenemedi.");
     }
+    setLoadingAction(null);
   }
 
   async function handleToggleStatus() {
     const nextStatus = status === "ACTIVE" ? "PASSIVE" : "ACTIVE";
-    setLoadingAction("status");
 
-    try {
-      const response = await fetch(`/api/cash-bank/accounts/${accountId}`, {
-        method: nextStatus === "PASSIVE" ? "DELETE" : "PATCH",
-        headers:
-          nextStatus === "ACTIVE"
-            ? { "Content-Type": "application/json" }
-            : undefined,
-        body:
-          nextStatus === "ACTIVE"
-            ? JSON.stringify({ status: "ACTIVE" })
-            : undefined,
-      });
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        alert(data.message || "Hesap durumu güncellenemedi.");
+    if (nextStatus === "PASSIVE") {
+      if (isDefault) {
+        window.alert("Varsayılan hesap arşivlenemez. Önce başka bir hesabı varsayılan yapın.");
         return;
       }
-      router.refresh();
-    } catch {
-      alert("Sunucuya bağlanırken bir hata oluştu.");
-    } finally {
-      setLoadingAction(null);
+
+      const name = accountName || account?.name || "Hesap";
+      const warning =
+        balance !== 0
+          ? `${name} hesabının bakiyesi ${balance.toFixed(2)} TRY. Arşivleme geçmiş hareketleri korur.`
+          : `${name} hesabı arşivlenecek ve yeni işlem seçimlerinde görünmez.`;
+
+      const confirmed = window.confirm(`${warning}\n\nDevam etmek istiyor musunuz?`);
+      if (!confirmed) return;
     }
+
+    setLoadingAction("status");
+
+    const result = await mutate(`/api/cash-bank/accounts/${accountId}`, {
+      method: nextStatus === "PASSIVE" ? "DELETE" : "PATCH",
+      headers:
+        nextStatus === "ACTIVE"
+          ? { "Content-Type": "application/json" }
+          : undefined,
+      body:
+        nextStatus === "ACTIVE"
+          ? JSON.stringify({ status: "ACTIVE" })
+          : undefined,
+    });
+    if (!result.ok && result.error !== "duplicate_submit") {
+      alert(result.error || "Hesap durumu güncellenemedi.");
+    }
+    setLoadingAction(null);
   }
 
   return (
@@ -308,7 +313,7 @@ export function CashBankAccountRowActions({
           <button
             type="button"
             onClick={handleSetDefault}
-            disabled={loadingAction === "default"}
+            disabled={isSubmitting || loadingAction === "default"}
             className="inline-flex h-7 items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 text-[10px] font-black text-amber-700 transition hover:bg-amber-100 disabled:opacity-60"
           >
             {loadingAction === "default" ? (
@@ -324,13 +329,13 @@ export function CashBankAccountRowActions({
           <button
             type="button"
             onClick={handleToggleStatus}
-            disabled={loadingAction === "status" || (isDefault && status === "ACTIVE")}
+            disabled={isSubmitting || loadingAction === "status" || (isDefault && status === "ACTIVE")}
             className="inline-flex h-7 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 text-[10px] font-black text-slate-600 transition hover:bg-slate-50 disabled:opacity-60"
           >
-            {loadingAction === "status" ? (
+            {isSubmitting || loadingAction === "status" ? (
               <Loader2 size={12} className="animate-spin" />
             ) : null}
-            {status === "ACTIVE" ? "Pasif" : "Aktif"}
+            {status === "ACTIVE" ? "Arşivle" : "Aktifleştir"}
           </button>
         ) : null}
       </div>
@@ -349,7 +354,7 @@ export function CashBankAccountRowActions({
           mode="edit"
           account={account}
           canManage={canManage}
-          onSuccess={() => router.refresh()}
+          onSuccess={() => notifyTenantCacheSync()}
         />
       ) : null}
     </>
@@ -361,7 +366,6 @@ type CashBankEmptyAccountsCtaProps = {
 };
 
 export function CashBankEmptyAccountsCta({ canManage }: CashBankEmptyAccountsCtaProps) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
 
   if (!canManage) {
@@ -383,7 +387,7 @@ export function CashBankEmptyAccountsCta({ canManage }: CashBankEmptyAccountsCta
         onClose={() => setOpen(false)}
         mode="create"
         canManage={canManage}
-        onSuccess={() => router.refresh()}
+        onSuccess={() => notifyTenantCacheSync()}
       />
     </>
   );

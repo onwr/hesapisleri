@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 import {
   Plus,
   Search,
@@ -126,9 +127,7 @@ export function DirectoryPageClient({
   }
 
   function refreshPage() {
-    startTransition(() => {
-      router.refresh();
-    });
+    notifyTenantCacheSync();
   }
 
   async function handleSync(endpoint: "customers" | "employees" | "suppliers") {

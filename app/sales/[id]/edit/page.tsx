@@ -59,6 +59,7 @@ export default async function EditSalePage({ params }: Props) {
     <EditSaleForm
       saleId={sale.id}
       saleNo={sale.saleNo}
+      revisionNumber={sale.revisionNumber}
       initialCustomerId={sale.customerId ?? ""}
       initialNote={sale.note ?? ""}
       initialSaleDate={formatDateInputValue(sale.saleDate ?? sale.createdAt)}

@@ -5,6 +5,7 @@ import {
   deleteCustomerGroup,
   updateCustomerGroup,
 } from "@/lib/customer-group-service";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 const groupColorSchema = z.enum([
   "slate",
   "blue",
@@ -51,11 +52,13 @@ export async function PATCH(req: Request, { params }: Props) {
 
     const group = await updateCustomerGroup(companyId, id, parsed.data);
 
-    return NextResponse.json({
-      success: true,
-      message: "Grup başarıyla güncellendi.",
-      data: group,
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(companyId, {
+        reason: "customer-group-change",
+        entity: group as Record<string, unknown>,
+        message: "Grup başarıyla güncellendi.",
+      }),
+    );
   } catch (error) {
     console.error("UPDATE_CUSTOMER_GROUP_ERROR", error);
 
@@ -82,10 +85,13 @@ export async function DELETE(_req: Request, { params }: Props) {
     const userId = auth.userId;
     await deleteCustomerGroup(companyId, id);
 
-    return NextResponse.json({
-      success: true,
-      message: "Grup silindi.",
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(companyId, {
+        reason: "customer-group-change",
+        entity: { id },
+        message: "Grup silindi.",
+      }),
+    );
   } catch (error) {
     console.error("DELETE_CUSTOMER_GROUP_ERROR", error);
 

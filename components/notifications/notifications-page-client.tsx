@@ -29,6 +29,10 @@ import {
   type NotificationSummary,
   type NotificationTab,
 } from "@/lib/notification-utils";
+import {
+  hasSafeTenantActionUrl,
+  resolveSafeTenantActionUrl,
+} from "@/lib/tenant-action-url";
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("tr-TR", {
@@ -282,8 +286,9 @@ export function NotificationsPageClient() {
     if (!notification.isRead) {
       await handleMarkRead(notification.id);
     }
-    if (notification.actionUrl) {
-      router.push(notification.actionUrl);
+    const target = resolveSafeTenantActionUrl(notification.actionUrl);
+    if (target) {
+      router.push(target);
     }
   }
 

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  countLowStockActiveProducts,
   filterMovementsByTab,
   getMovementText,
   isLowStock,
@@ -92,6 +93,16 @@ describe("stocks-page-utils", () => {
     assert.equal(isLowStock(4, 5), true);
     assert.equal(isLowStock(0, 5), true);
     assert.equal(isLowStock(-2, 5), true);
+  });
+
+  it("countLowStockActiveProducts yalnız aktif ve eşik altı ürünleri sayar", () => {
+    const count = countLowStockActiveProducts([
+      { stock: 4, minStock: 5, status: "ACTIVE" },
+      { stock: 10, minStock: 5, status: "ACTIVE" },
+      { stock: 0, minStock: 5, status: "ACTIVE" },
+      { stock: 2, minStock: 5, status: "PASSIVE" },
+    ]);
+    assert.equal(count, 2);
   });
 
   it("mapProductToStockRow minStock kullanır", () => {

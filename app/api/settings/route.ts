@@ -7,11 +7,13 @@ import {
   updateCashBankSettings,
   updateInvoiceSettings,
   updateNotificationSettings,
+  updateSalesSettings,
 } from "@/lib/settings-service";
 import {
   updateCashBankSettingsSchema,
   updateInvoiceSettingsSchema,
   updateNotificationSettingsSchema,
+  updateSalesSettingsSchema,
 } from "@/lib/settings-utils";
 
 export async function GET() {
@@ -133,6 +135,33 @@ export async function PATCH(req: Request) {
       return NextResponse.json({
         success: true,
         message: "Bildirim ayarları kaydedildi.",
+        data: { settings: serializeCompanySettings(settings) },
+      });
+    }
+
+    if (section === "sales") {
+      const parsed = updateSalesSettingsSchema.safeParse(body.data ?? body);
+
+      if (!parsed.success) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Satış ayarlarını kontrol edin.",
+            errors: parsed.error.flatten().fieldErrors,
+          },
+          { status: 400 }
+        );
+      }
+
+      const settings = await updateSalesSettings({
+        companyId: companyId,
+        userId: userId,
+        data: parsed.data,
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: "Satış ayarları kaydedildi.",
         data: { settings: serializeCompanySettings(settings) },
       });
     }

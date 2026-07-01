@@ -3,6 +3,7 @@ import { requireApiModuleAccess } from "@/lib/module-access";
 import { z } from "zod";
 import { createNotification } from "@/lib/notification-service";
 import { db } from "@/lib/prisma";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 import {
   applyCustomerDebtFromDocument,
 } from "@/lib/customer-balance-utils";
@@ -117,6 +118,12 @@ export async function POST(req: Request, { params }: Props) {
 
     const { warehouseId } = parsed.data;
 
+    const companySettings = await db.companySettings.findUnique({
+      where: { companyId: companyId! },
+      select: { allowNegativeStockSales: true },
+    });
+    const allowNegativeStock = companySettings?.allowNegativeStockSales ?? false;
+
     let stockWarnings: Awaited<ReturnType<typeof validateSaleItemsStock>> = [];
 
     const updatedSale = await db.$transaction(async (tx) => {
@@ -130,7 +137,8 @@ export async function POST(req: Request, { params }: Props) {
         tx,
         companyId!,
         stockItems,
-        resolvedWarehouseId
+        resolvedWarehouseId,
+        allowNegativeStock
       );
 
       const newSaleNo = generateSaleNo();
@@ -162,7 +170,8 @@ export async function POST(req: Request, { params }: Props) {
         companyId!,
         newSaleNo,
         sale.items,
-        resolvedWarehouseId
+        resolvedWarehouseId,
+        allowNegativeStock
       );
 
       if (payment.paidAmount > 0) {
@@ -215,17 +224,21 @@ export async function POST(req: Request, { params }: Props) {
       return converted;
     });
 
-    return NextResponse.json({
-      success: true,
-      message: "Teklif başarıyla satışa dönüştürüldü.",
-      ...(stockWarnings.length > 0
-        ? {
-            warning: stockWarnings[0]?.message,
-            negativeStockItems: stockWarnings,
-          }
-        : {}),
-      data: { id: updatedSale.id, saleNo: updatedSale.saleNo },
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(companyId, {
+        reason: "quote-convert",
+        entity: { id: updatedSale.id, saleNo: updatedSale.saleNo },
+        message: "Teklif başarıyla satışa dönüştürüldü.",
+        entityIds: { saleId: updatedSale.id },
+        extra:
+          stockWarnings.length > 0
+            ? {
+                warning: stockWarnings[0]?.message,
+                negativeStockItems: stockWarnings,
+              }
+            : {},
+      }),
+    );
   } catch (error) {
     console.error("CONVERT_QUOTE_ERROR", error);
 

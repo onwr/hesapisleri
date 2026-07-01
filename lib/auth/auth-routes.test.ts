@@ -31,4 +31,13 @@ describe("auth routes", () => {
     assert.equal(isProtectedRoute("/api/auth/login"), false);
     assert.equal(isProtectedRoute("/api/auth/clear-session"), false);
   });
+
+  it("bilinmeyen public route korunmaz (404 için)", () => {
+    assert.equal(isProtectedRoute("/this-route-does-not-exist-qa"), false);
+  });
+
+  it("bilinen tenant route korunur", () => {
+    assert.equal(isProtectedRoute("/cash-bank"), true);
+    assert.equal(isProtectedRoute("/cash-bank/accounts"), true);
+  });
 });

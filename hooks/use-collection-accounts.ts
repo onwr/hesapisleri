@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { subscribeTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 import {
   resolveDefaultCollectionAccountId,
   type CollectionAccountOption,
@@ -11,53 +12,59 @@ export function useCollectionAccounts(preferredAccountId?: string | null) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  const load = useCallback(async (signal?: AbortSignal) => {
+    setLoading(true);
+    setError(null);
 
-    async function load() {
-      setLoading(true);
-      setError(null);
+    try {
+      const response = await fetch("/api/cash-bank/accounts/collection-options", {
+        signal,
+      });
+      const result = (await response.json()) as {
+        success?: boolean;
+        data?: CollectionAccountOption[];
+        message?: string;
+      };
 
-      try {
-        const response = await fetch("/api/cash-bank/accounts/collection-options");
-        const result = (await response.json()) as {
-          success?: boolean;
-          data?: CollectionAccountOption[];
-          message?: string;
-        };
+      if (signal?.aborted) return;
 
-        if (cancelled) return;
+      if (!response.ok || !result.success) {
+        setAccounts([]);
+        setError(result.message ?? "Tahsilat hesapları yüklenemedi.");
+        return;
+      }
 
-        if (!response.ok || !result.success) {
-          setAccounts([]);
-          setError(result.message ?? "Tahsilat hesapları yüklenemedi.");
-          return;
-        }
-
-        setAccounts(result.data ?? []);
-      } catch {
-        if (!cancelled) {
-          setAccounts([]);
-          setError("Tahsilat hesapları yüklenemedi.");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+      setAccounts(result.data ?? []);
+    } catch (loadError) {
+      if (signal?.aborted) return;
+      if (loadError instanceof DOMException && loadError.name === "AbortError") {
+        return;
+      }
+      setAccounts([]);
+      setError("Tahsilat hesapları yüklenemedi.");
+    } finally {
+      if (!signal?.aborted) {
+        setLoading(false);
       }
     }
-
-    void load();
-
-    return () => {
-      cancelled = true;
-    };
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void load(controller.signal);
+    const unsubscribe = subscribeTenantCacheSync(() => {
+      void load();
+    });
+    return () => {
+      controller.abort();
+      unsubscribe();
+    };
+  }, [load]);
 
   const defaultAccountId = useMemo(
     () => resolveDefaultCollectionAccountId(accounts, preferredAccountId),
-    [accounts, preferredAccountId]
+    [accounts, preferredAccountId],
   );
 
-  return { accounts, loading, error, defaultAccountId };
+  return { accounts, loading, error, defaultAccountId, refetch: load };
 }

@@ -9,6 +9,7 @@ import {
 } from "@/lib/permission-utils";
 import { getStockFormOptions } from "@/lib/stocks-page-data";
 import { getWarehousesPageData } from "@/lib/warehouse-page-data";
+import { getCachedWarehousesPageData } from "@/lib/tenant-cache/cached-tenant-page-data";
 
 export default async function WarehousesPage() {
   const session = await guardPageModule("products");
@@ -21,7 +22,7 @@ export default async function WarehousesPage() {
   const canSyncStock = canManageProducts(effectiveRole, membership?.isOwner ?? false);
 
   const [{ warehouses, stats, recentTransfers }, transferOptions] = await Promise.all([
-    getWarehousesPageData(company.id),
+    getCachedWarehousesPageData({ companyId: company.id }),
     canManage ? getStockFormOptions(company.id) : Promise.resolve(null),
   ]);
 

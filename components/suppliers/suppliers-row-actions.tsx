@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { MoreVertical, ReceiptText, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
@@ -11,6 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 
 type SuppliersRowActionsProps = {
   supplierId: string;
@@ -23,8 +23,7 @@ export function SuppliersRowActions({
   supplierName,
   canManage,
 }: SuppliersRowActionsProps) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const { mutate, isSubmitting } = useTenantMutation({ refresh: false });
   const [message, setMessage] = useState<string | null>(null);
 
   async function handleDelete() {
@@ -36,26 +35,13 @@ export function SuppliersRowActions({
 
     setMessage(null);
 
-    startTransition(async () => {
-      try {
-        const response = await fetch(`/api/suppliers/${supplierId}`, {
-          method: "DELETE",
-        });
-        const result = (await response.json()) as {
-          success?: boolean;
-          message?: string;
-        };
-
-        if (!response.ok || !result.success) {
-          setMessage(result.message ?? "Tedarikçi silinemedi.");
-          return;
-        }
-
-        router.refresh();
-      } catch {
-        setMessage("Tedarikçi silinirken bir hata oluştu.");
-      }
+    const result = await mutate(`/api/suppliers/${supplierId}`, {
+      method: "DELETE",
     });
+
+    if (!result.ok) {
+      setMessage(result.error ?? "Tedarikçi silinemedi.");
+    }
   }
 
   return (
@@ -64,7 +50,7 @@ export function SuppliersRowActions({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            disabled={isPending}
+            disabled={isSubmitting}
             className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-[#24345f] transition hover:bg-slate-50 disabled:opacity-60"
             title="Diğer işlemler"
           >
@@ -84,7 +70,7 @@ export function SuppliersRowActions({
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 variant="destructive"
-                disabled={isPending}
+                disabled={isSubmitting}
                 onClick={() => void handleDelete()}
               >
                 <Trash2 size={14} />

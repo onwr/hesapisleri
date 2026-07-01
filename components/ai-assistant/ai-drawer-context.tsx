@@ -20,6 +20,7 @@ type AiDrawerContextValue = {
   state: AiDrawerState;
   openChat: () => void;
   openInsight: (moduleKey: AiInsightModuleKey) => void;
+  openFinance: () => void;
   close: () => void;
   setTab: (tab: AiDrawerTab) => void;
 };
@@ -49,6 +50,10 @@ export function AiDrawerProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const openFinance = useCallback(() => {
+    setState((current) => ({ ...current, open: true, tab: "finance" }));
+  }, []);
+
   const close = useCallback(() => {
     setState((current) => ({ ...current, open: false }));
   }, []);
@@ -58,8 +63,8 @@ export function AiDrawerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ state, openChat, openInsight, close, setTab }),
-    [state, openChat, openInsight, close, setTab]
+    () => ({ state, openChat, openInsight, openFinance, close, setTab }),
+    [state, openChat, openInsight, openFinance, close, setTab]
   );
 
   return (

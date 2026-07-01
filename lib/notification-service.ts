@@ -194,11 +194,15 @@ export async function listNotifications(input: {
       where: {
         id: input.cursor,
         companyId: input.companyId,
+        ...buildNotificationUserScope(input.userId),
       },
     });
 
-    if (cursorNotification) {
-      where.AND = [
+    if (!cursorNotification) {
+      throw new NotificationServiceError("Geçersiz sayfalama imleci.", 400);
+    }
+
+    where.AND = [
         ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
         {
           OR: [
@@ -210,7 +214,6 @@ export async function listNotifications(input: {
           ],
         },
       ];
-    }
   }
 
   const rows = await db.notification.findMany({
@@ -391,7 +394,7 @@ export async function deleteNotification(input: {
   });
 
   if (!existing) {
-    throw new NotificationServiceError("Bildirim bulunamadı.", 404);
+    return;
   }
 
   await db.notification.delete({ where: { id: existing.id } });

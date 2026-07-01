@@ -5,7 +5,7 @@ import {
 } from "@/lib/collection-account-utils";
 import {
   FINANCE_OUTFLOW_ACCOUNT_TYPES,
-  isFinanceOutflowEligibleAccount,
+  isFinanceOutflowAccountType,
 } from "@/lib/finance-account-utils";
 import {
   serializeManagedAccount,
@@ -56,7 +56,7 @@ export async function getFinanceAccountOptions(companyId: string) {
   });
 
   return accounts
-    .filter((account) => isFinanceOutflowEligibleAccount(account))
+    .filter((account) => isFinanceOutflowAccountType(account.type))
     .map(serializeAccountOption);
 }
 

@@ -1,8 +1,10 @@
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/prisma";
 import { buildTransferActivityMessage } from "@/lib/activity-log-utils";
 import { invalidateDashboardCache } from "@/lib/dashboard-cache-invalidation";
 import { getActiveAccountOptions } from "@/lib/account-read-service";
+import { runTransactionWithRetry } from "@/lib/prisma-transaction-utils";
 import {
   attachRunningBalances,
   computeAccountMetrics,
@@ -32,6 +34,29 @@ export const transferSchema = z.object({
 export type ManualTransactionInput = z.infer<typeof manualTransactionSchema>;
 export type TransferInput = z.infer<typeof transferSchema>;
 
+/** Kaynak/hedef hesapları company scope ile deterministik sırada kilitle. */
+async function lockCompanyAccountsForUpdate(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  accountIdA: string,
+  accountIdB: string,
+) {
+  const orderedIds = [accountIdA, accountIdB].sort((a, b) => a.localeCompare(b));
+
+  for (const accountId of orderedIds) {
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM "Account"
+      WHERE id = ${accountId} AND "companyId" = ${companyId}
+      FOR UPDATE
+    `;
+    if (rows.length === 0) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export type AccountTransactionDetailRow = {
   id: string;
   date: Date;
@@ -56,6 +81,7 @@ export type SerializedAccount = {
   balance: number;
   currency: string;
   status: string;
+  isDefault: boolean;
 };
 
 function mapTransactionRow(
@@ -138,6 +164,7 @@ export async function getAccountDetailData(companyId: string, accountId: string)
       balance: currentBalance,
       currency: account.currency,
       status: account.status,
+      isDefault: account.isDefault,
     } satisfies SerializedAccount,
     transactions,
     metrics,
@@ -275,7 +302,22 @@ export async function applyAccountTransfer(input: {
   const note = input.data.note?.trim() || null;
   const transferDate = new Date();
 
-  const result = await db.$transaction(async (tx) => {
+  const result = await runTransactionWithRetry(async (tx) => {
+    const locked = await lockCompanyAccountsForUpdate(
+      tx,
+      input.companyId,
+      input.data.fromAccountId,
+      input.data.toAccountId,
+    );
+
+    if (!locked) {
+      return {
+        ok: false as const,
+        status: 404,
+        message: "Hesap bulunamadı.",
+      };
+    }
+
     const [fromAccount, toAccount] = await Promise.all([
       tx.account.findFirst({
         where: {
@@ -296,6 +338,14 @@ export async function applyAccountTransfer(input: {
         ok: false as const,
         status: 404,
         message: "Hesap bulunamadı.",
+      };
+    }
+
+    if (roundCashMoney(Number(fromAccount.balance)) < amount) {
+      return {
+        ok: false as const,
+        status: 400,
+        message: "Kaynak hesapta yetersiz bakiye.",
       };
     }
 

@@ -13,6 +13,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { AppLoadingScreen } from "@/components/layout/app-loading-screen";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 import { ProductFormFields } from "@/components/products/product-form-fields";
 import { ProductImageUpload } from "@/components/products/product-image-upload";
 import { ProductPreviewPanel } from "@/components/products/product-preview-panel";
@@ -52,7 +53,7 @@ type EditProductFormProps = {
 
 export function EditProductForm({ companyId, product }: EditProductFormProps) {
   const router = useRouter();
-  const [saving, setSaving] = useState(false);
+  const { mutate, isSubmitting } = useTenantMutation({ refresh: false });
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [form, setForm] = useState<ProductFormValues>(() =>
@@ -69,7 +70,6 @@ export function EditProductForm({ companyId, product }: EditProductFormProps) {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSaving(true);
     setError("");
     setFieldErrors({});
 
@@ -81,36 +81,32 @@ export function EditProductForm({ companyId, product }: EditProductFormProps) {
           Object.entries(updatePayload).filter(([key]) => key !== "barcode")
         );
 
-    try {
-      const response = await fetch(`/api/products/${product.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-      });
+    const result = await mutate(`/api/products/${product.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        setFieldErrors(mapProductFieldErrors(data.errors));
-        setError(
-          getFirstProductErrorMessage(data.message, data.errors) ||
-            "Ürün güncellenemedi."
-        );
-        return;
+    if (!result.ok) {
+      if (result.error === "duplicate_submit") return;
+      if ("errors" in result && result.errors) {
+        setFieldErrors(mapProductFieldErrors(result.errors));
       }
-
-      router.push(`/products/${product.id}?updated=1`);
-      router.refresh();
-    } catch {
-      setError("Sunucuya bağlanırken bir hata oluştu.");
-    } finally {
-      setSaving(false);
+      setError(
+        getFirstProductErrorMessage(
+          result.error === "duplicate_submit" ? undefined : result.error,
+          "errors" in result ? result.errors : undefined
+        ) || "Ürün güncellenemedi."
+      );
+      return;
     }
+
+    router.push(`/products/${product.id}?updated=1`);
   }
 
   return (
     <main className="min-h-screen bg-[#f7f8ff] px-5 py-6">
-      {saving ? (
+      {isSubmitting ? (
         <AppLoadingScreen
           preset="products"
           title="Ürün güncelleniyor"
@@ -187,15 +183,15 @@ export function EditProductForm({ companyId, product }: EditProductFormProps) {
             <div className="flex flex-col gap-3 sm:flex-row">
               <button
                 type="submit"
-                disabled={saving}
+                disabled={isSubmitting}
                 className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-linear-to-r from-blue-600 to-violet-600 text-[13px] font-black text-white shadow-lg shadow-blue-100 transition hover:opacity-95 disabled:opacity-60"
               >
-                {saving ? (
+                {isSubmitting ? (
                   <Loader2 className="animate-spin" size={20} />
                 ) : (
                   <Save size={19} />
                 )}
-                {saving ? "Kaydediliyor..." : "Değişiklikleri Kaydet"}
+                {isSubmitting ? "Kaydediliyor..." : "Değişiklikleri Kaydet"}
               </button>
 
               <Link

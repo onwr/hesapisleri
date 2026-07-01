@@ -7,6 +7,7 @@ import {
   getProductCategoriesWithStats,
 } from "@/lib/product-category-service";
 import { PRODUCT_CATEGORY_COLORS } from "@/lib/product-category-utils";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 const categoryColorSchema = z.enum(PRODUCT_CATEGORY_COLORS);
 
@@ -80,11 +81,13 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      message: "Kategori başarıyla oluşturuldu.",
-      data: category,
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(companyId, {
+        reason: "product-category-change",
+        entity: category as Record<string, unknown>,
+        message: "Kategori başarıyla oluşturuldu.",
+      }),
+    );
   } catch (error) {
     console.error("CREATE_PRODUCT_CATEGORY_ERROR", error);
 

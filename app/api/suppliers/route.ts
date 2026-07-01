@@ -5,6 +5,7 @@ import {
 } from "@/lib/module-access";
 import { getSuppliers, createSupplier, SupplierServiceError } from "@/lib/supplier-service";
 import { parseSupplierBalanceStatus, parseSupplierSort } from "@/lib/supplier-utils";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 export async function GET(req: Request) {
   try {
@@ -50,9 +51,12 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({
-      success: true,
-      message: "Tedarikçi oluşturuldu.",
-      data: result.supplier,
+      ...buildTenantMutationSuccess(auth.companyId, {
+        reason: "supplier-create",
+        entityIds: { supplierId: result.supplier.id },
+        entity: result.supplier as Record<string, unknown>,
+        message: "Tedarikçi oluşturuldu.",
+      }),
       warning: result.taxNumberWarning,
     });
   } catch (error) {

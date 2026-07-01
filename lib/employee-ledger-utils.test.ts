@@ -47,7 +47,7 @@ describe("employee ledger utils", () => {
     assert.equal(balance, 4000);
   });
 
-  it("avans bakiye azaltır", () => {
+  it("ödenen avans maaş borcundan mahsup edilir", () => {
     const balance = calculateEmployeeCurrentBalance([
       {
         amount: 5000,
@@ -63,6 +63,18 @@ describe("employee ledger utils", () => {
       },
     ]);
     assert.equal(balance, 3000);
+  });
+
+  it("yalnız avans çalışanın şirkete borcunu gösterir", () => {
+    const balance = calculateEmployeeCurrentBalance([
+      {
+        amount: 2000,
+        status: "PAID",
+        direction: "PAID",
+        type: "ADVANCE",
+      },
+    ]);
+    assert.equal(balance, -2000);
   });
 
   it("kesinti bakiye azaltır", () => {

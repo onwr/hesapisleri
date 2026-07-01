@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import Image from "next/image";
@@ -118,11 +118,11 @@ export type DashboardContentProps = {
 };
 
 const tagColorMap: Record<ActivityTagColor, string> = {
-  green: "bg-emerald-100 text-emerald-700",
-  blue: "bg-blue-100 text-blue-700",
-  orange: "bg-orange-100 text-orange-700",
-  purple: "bg-violet-100 text-violet-700",
-  slate: "bg-slate-100 text-slate-600",
+  green: "bg-emerald-100 text-emerald-800",
+  blue: "bg-blue-100 text-blue-800",
+  orange: "bg-orange-100 text-orange-800",
+  purple: "bg-violet-100 text-violet-800",
+  slate: "bg-slate-100 text-slate-700",
 };
 
 const cardClassName =
@@ -132,7 +132,7 @@ const listRowClassName =
   "flex items-center justify-between gap-3 rounded-2xl border border-slate-200/60 bg-slate-50/70 px-4 py-3 transition hover:bg-slate-50";
 
 const emptyStateClassName =
-  "rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-[13px] font-medium text-slate-500";
+  "rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-[14px] font-medium text-slate-500";
 
 export function DashboardContent({
   onboardingChecklist = null,
@@ -161,6 +161,14 @@ export function DashboardContent({
   companyId,
 }: DashboardContentProps) {
   const links = resolveDashboardStatLinks(statLinks);
+  const hasSalesChartData = salesChartData.some((point) => point.amount > 0);
+  const hasIncomeChartData =
+    incomeExpense.income > 0 || incomeExpense.expense > 0;
+  const showCompactCharts = !hasSalesChartData && !hasIncomeChartData;
+  const showNotificationsPanel =
+    actionNotifications.length > 0 ||
+    notificationSummary.unread > 0 ||
+    notificationSummary.critical > 0;
 
   function getBankLogo(accountName: string) {
     const name = accountName.toLocaleLowerCase("tr-TR");
@@ -324,11 +332,21 @@ export function DashboardContent({
       <div className="grid gap-4 max-md:min-w-0 xl:grid-cols-[1fr_280px] 2xl:grid-cols-[1fr_300px]">
         <motion.div className="space-y-4" variants={dashboardStagger}>
           <motion.div
-            className="grid gap-4 lg:grid-cols-[1.08fr_0.92fr]"
+            className={[
+              "grid gap-4 max-md:min-w-0",
+              showCompactCharts ? "lg:grid-cols-2" : "lg:grid-cols-[1.08fr_0.92fr]",
+            ].join(" ")}
             variants={dashboardFadeUp}
           >
-            <DashboardSalesChart data={salesChartData} monthLabel={monthLabel} />
-            <DashboardIncomeChart data={incomeExpense} />
+            <DashboardSalesChart
+              data={salesChartData}
+              monthLabel={monthLabel}
+              compact={showCompactCharts}
+            />
+            <DashboardIncomeChart
+              data={incomeExpense}
+              compact={showCompactCharts}
+            />
           </motion.div>
 
           <motion.div
@@ -337,13 +355,13 @@ export function DashboardContent({
           >
             <motion.div variants={dashboardFadeUp} className={cardClassName}>
               <div className="mb-4 flex items-center justify-between gap-3">
-                <h3 className="text-[15px] font-extrabold tracking-[-0.02em] text-[#0f1f4d]">
+                <h3 className="text-[16px] font-extrabold tracking-[-0.02em] text-[#0f1f4d]">
                   Son İşlemler
                 </h3>
 
                 <Link
                   href="/sales"
-                  className="inline-flex items-center gap-1 text-[12px] font-extrabold text-blue-600 transition hover:text-blue-700"
+                  className="inline-flex items-center gap-1 text-[13px] font-extrabold text-blue-600 transition hover:text-blue-700"
                 >
                   Tümünü Gör
                   <ArrowRight size={14} />
@@ -353,10 +371,10 @@ export function DashboardContent({
               <div className="space-y-3 md:hidden">
                 {recentActivities.length === 0 ? (
                   <div className={emptyStateClassName}>
-                    <p className="text-[13px] font-extrabold text-[#0f1f4d]">
+                    <p className="text-[14px] font-extrabold text-[#0f1f4d]">
                       Henüz işlem yok
                     </p>
-                    <p className="mt-1 text-[12px] font-medium text-slate-500">
+                    <p className="mt-1 text-[13px] font-medium text-slate-500">
                       Satış, gider, ürün veya stok işlemleri yaptıkça burada görünecek.
                     </p>
                   </div>
@@ -367,14 +385,14 @@ export function DashboardContent({
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <p
-                              className="truncate text-[12px] font-extrabold text-[#0f1f4d]"
+                              className="truncate text-[13px] font-extrabold text-[#0f1f4d]"
                               title={activity.title}
                             >
                               {activity.title}
                             </p>
                             {activity.description ? (
                               <p
-                                className="mt-1 truncate text-[11px] font-medium text-slate-500"
+                                className="mt-1 truncate text-[13px] font-medium text-slate-600"
                                 title={activity.description}
                               >
                                 {activity.description}
@@ -382,18 +400,18 @@ export function DashboardContent({
                             ) : null}
                             <div className="mt-2 flex flex-wrap items-center gap-2">
                               <span
-                                className={`rounded-md px-2 py-1 text-[10px] font-extrabold ${tagColorMap[activity.tagColor]}`}
+                                className={`rounded-md px-2 py-1 text-[13px] font-extrabold ${tagColorMap[activity.tagColor]}`}
                               >
                                 {activity.tag}
                               </span>
-                              <span className="text-[10.5px] font-medium text-slate-400">
+                              <span className="text-[13px] font-medium text-slate-500">
                                 {activity.time}
                               </span>
                             </div>
                           </div>
 
                           {activity.amountLabel ? (
-                            <span className="shrink-0 whitespace-nowrap text-[12px] font-extrabold text-[#0f1f4d]">
+                            <span className="shrink-0 whitespace-nowrap text-[13px] font-extrabold text-[#0f1f4d]">
                               {activity.amountLabel}
                             </span>
                           ) : null}
@@ -415,10 +433,10 @@ export function DashboardContent({
               <motion.div className="hidden space-y-3 md:block" variants={listStagger}>
                 {recentActivities.length === 0 ? (
                   <div className={emptyStateClassName}>
-                    <p className="text-[13px] font-extrabold text-[#0f1f4d]">
+                    <p className="text-[14px] font-extrabold text-[#0f1f4d]">
                       Henüz işlem yok
                     </p>
-                    <p className="mt-1 text-[12px] font-medium text-slate-500">
+                    <p className="mt-1 text-[13px] font-medium text-slate-500">
                       Satış, gider, ürün veya stok işlemleri yaptıkça burada görünecek.
                     </p>
                   </div>
@@ -452,33 +470,33 @@ export function DashboardContent({
                         </div>
 
                         <div className="min-w-0">
-                          <p className="truncate text-[12px] font-extrabold leading-4 text-[#0f1f4d]">
+                          <p className="truncate text-[13px] font-extrabold leading-4 text-[#0f1f4d]">
                             {activity.title}
                           </p>
 
                           {activity.description ? (
-                            <p className="mt-0.5 truncate text-[10.5px] font-medium leading-4 text-slate-500">
+                            <p className="mt-0.5 truncate text-[13px] font-medium leading-4 text-slate-600">
                               {activity.description}
                             </p>
                           ) : null}
                         </div>
 
                         <span
-                          className={`justify-self-center rounded-md px-2 py-1 text-[10px] font-extrabold leading-none ${tagColorMap[activity.tagColor]}`}
+                          className={`justify-self-center rounded-md px-2 py-1 text-[13px] font-extrabold leading-none ${tagColorMap[activity.tagColor]}`}
                         >
                           {activity.tag}
                         </span>
 
                         <div className="min-w-[92px] text-right">
                           {activity.amountLabel ? (
-                            <p className="text-[12px] font-extrabold tracking-[-0.01em] text-[#0f1f4d]">
+                            <p className="text-[13px] font-extrabold tracking-[-0.01em] text-[#0f1f4d]">
                               {activity.amountLabel}
                             </p>
                           ) : null}
 
                           <p
                             className={[
-                              "text-[10.5px] font-medium text-slate-400",
+                              "text-[13px] font-medium text-slate-500",
                               activity.amountLabel ? "mt-0.5" : "",
                             ].join(" ")}
                           >
@@ -512,13 +530,13 @@ export function DashboardContent({
 
             <motion.div variants={dashboardFadeUp} className={cardClassName}>
               <div className="mb-4 flex items-center justify-between gap-3">
-                <h3 className="text-[15px] font-extrabold tracking-[-0.02em] text-[#0f1f4d]">
+                <h3 className="text-[16px] font-extrabold tracking-[-0.02em] text-[#0f1f4d]">
                   Banka Hesapları
                 </h3>
 
                 <Link
                   href="/cash-bank"
-                  className="inline-flex items-center gap-1 text-[12px] font-extrabold text-blue-600 transition hover:text-blue-700"
+                  className="inline-flex items-center gap-1 text-[13px] font-extrabold text-blue-600 transition hover:text-blue-700"
                 >
                   Tümünü Gör
                   <ArrowRight size={14} />
@@ -559,11 +577,11 @@ export function DashboardContent({
                           </div>
 
                           <div className="min-w-0">
-                            <p className="truncate text-[12.5px] font-extrabold leading-4 text-[#0f1f4d]">
+                            <p className="truncate text-[13.5px] font-extrabold leading-4 text-[#0f1f4d]">
                               {displayName}
                             </p>
 
-                            <p className="mt-1 truncate text-[10.5px] font-medium leading-4 text-slate-500">
+                            <p className="mt-1 truncate text-[13px] font-medium leading-4 text-slate-600">
                               {account.type === "CASH"
                                 ? "CASH"
                                 : account.iban
@@ -573,7 +591,7 @@ export function DashboardContent({
                           </div>
                         </div>
 
-                        <p className="shrink-0 text-[13px] font-extrabold tracking-[-0.02em] text-[#0f1f4d]">
+                        <p className="shrink-0 text-[14px] font-extrabold tracking-[-0.02em] text-[#0f1f4d]">
                           {account.balanceFormatted}
                         </p>
                       </Link>
@@ -584,12 +602,14 @@ export function DashboardContent({
             </motion.div>
           </motion.div>
 
-          <motion.div variants={dashboardFadeUp}>
-            <DashboardNotificationsPanel
-              items={actionNotifications}
-              summary={notificationSummary}
-            />
-          </motion.div>
+          {showNotificationsPanel ? (
+            <motion.div variants={dashboardFadeUp}>
+              <DashboardNotificationsPanel
+                items={actionNotifications}
+                summary={notificationSummary}
+              />
+            </motion.div>
+          ) : null}
         </motion.div>
 
         <motion.div className="space-y-4" variants={dashboardStagger}>
@@ -599,13 +619,13 @@ export function DashboardContent({
             className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]"
           >
             <div className="mb-4 flex items-center justify-between gap-3">
-              <h3 className="text-[15px] font-extrabold text-[#0f1f4d]">
+              <h3 className="text-[16px] font-extrabold text-[#0f1f4d]">
                 Yaklaşan Ödemeler
               </h3>
 
               <Link
                 href={links.pendingCollection}
-                className="text-[11px] font-bold text-blue-600 hover:text-blue-700"
+                className="text-[13px] font-bold text-blue-700 hover:text-blue-800"
               >
                 Tümünü Gör
               </Link>
@@ -647,23 +667,23 @@ export function DashboardContent({
                       </div>
 
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[12px] font-extrabold text-[#0f1f4d]">
+                        <p className="truncate text-[13px] font-extrabold text-[#0f1f4d]">
                           {payment.title}
                         </p>
 
-                        <p className="mt-1 text-[11px] font-medium text-slate-500">
+                        <p className="mt-1 text-[13px] font-medium text-slate-600">
                           Vade: {payment.dueDateFormatted}
                         </p>
                       </div>
 
                       <div className="shrink-0 text-right">
-                        <p className="text-[12px] font-extrabold text-rose-500">
+                        <p className="text-[13px] font-extrabold text-rose-600">
                           {payment.amountFormatted}
                         </p>
 
                         <span
                           className={[
-                            "mt-1 inline-flex rounded-full px-2 py-1 text-[10px] font-bold leading-none",
+                            "mt-1 inline-flex rounded-full px-2 py-1 text-[13px] font-bold leading-none",
                             badgeStyles,
                           ].join(" ")}
                         >
@@ -691,16 +711,18 @@ export function DashboardContent({
         </motion.div>
       </div>
 
-      <motion.section variants={dashboardFadeUp}>
-        <div className="flex items-start gap-3 rounded-2xl border border-amber-100 bg-amber-50/80 px-4 py-3">
-          <Lightbulb size={18} className="mt-0.5 shrink-0 text-amber-500" />
-          <p className="text-sm leading-6 text-amber-900/80">
-            İpucu: Hızlı işlem kartlarından satış, fatura ve tahsilat
-            işlemlerinizi tek tıkla başlatabilirsiniz. POS ekranından anlık
-            satış yaparak stok ve kasa hareketlerinizi otomatik güncelleyin.
-          </p>
-        </div>
-      </motion.section>
+      {!onboardingChecklist ? (
+        <motion.section variants={dashboardFadeUp}>
+          <div className="flex items-start gap-3 rounded-2xl border border-amber-100 bg-amber-50/80 px-4 py-3">
+            <Lightbulb size={18} className="mt-0.5 shrink-0 text-amber-600" aria-hidden="true" />
+            <p className="text-sm leading-6 text-amber-950/90">
+              İpucu: Hızlı işlem kartlarından satış, fatura ve tahsilat
+              işlemlerinizi tek tıkla başlatabilirsiniz. POS ekranından anlık
+              satış yaparak stok ve kasa hareketlerinizi otomatik güncelleyin.
+            </p>
+          </div>
+        </motion.section>
+      ) : null}
     </motion.div>
   );
 }

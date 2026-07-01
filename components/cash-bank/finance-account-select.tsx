@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {
+  formatFinanceAccountDisbursementLabel,
   formatFinanceAccountLabel,
   groupFinanceAccounts,
   type FinanceAccountOption,
@@ -19,6 +20,8 @@ type FinanceAccountSelectProps = {
   emptyMessage?: string;
   emptyHref?: string;
   emptyLinkLabel?: string;
+  showSetupLink?: boolean;
+  showBalance?: boolean;
 };
 
 export function FinanceAccountSelect({
@@ -30,23 +33,36 @@ export function FinanceAccountSelect({
   className,
   id,
   label = "Ödeme Hesabı",
-  emptyMessage = "Ödeme yapabilmek için önce aktif bir kasa veya banka hesabı oluşturun.",
+  emptyMessage = "Ödeme yapabilmek için aktif bir kasa veya banka hesabı oluşturun.",
   emptyHref = "/cash-bank",
   emptyLinkLabel = "Kasa ve Banka",
+  showSetupLink = true,
+  showBalance = false,
 }: FinanceAccountSelectProps) {
   if (accounts.length === 0) {
     return (
       <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-[12px] font-medium text-amber-900">
-        {emptyMessage}{" "}
-        <Link href={emptyHref} className="font-black underline">
-          {emptyLinkLabel}
-        </Link>
-        .
+        {emptyMessage}
+        {showSetupLink ? (
+          <>
+            {" "}
+            <Link href={emptyHref} className="font-black underline">
+              {emptyLinkLabel}
+            </Link>
+            .
+          </>
+        ) : (
+          "."
+        )}
       </div>
     );
   }
 
   const { cashAccounts, bankAccounts } = groupFinanceAccounts(accounts);
+  const formatLabel = (account: FinanceAccountOption) =>
+    showBalance
+      ? formatFinanceAccountDisbursementLabel(account)
+      : formatFinanceAccountLabel(account);
 
   return (
     <label className="block space-y-1">
@@ -64,7 +80,7 @@ export function FinanceAccountSelect({
           <optgroup label="Kasalar">
             {cashAccounts.map((account) => (
               <option key={account.id} value={account.id}>
-                {formatFinanceAccountLabel(account)}
+                {formatLabel(account)}
               </option>
             ))}
           </optgroup>
@@ -73,7 +89,7 @@ export function FinanceAccountSelect({
           <optgroup label="Bankalar">
             {bankAccounts.map((account) => (
               <option key={account.id} value={account.id}>
-                {formatFinanceAccountLabel(account)}
+                {formatLabel(account)}
               </option>
             ))}
           </optgroup>

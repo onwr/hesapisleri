@@ -6,6 +6,7 @@ import {
   bulkDeleteProducts,
   bulkSetProductStatus,
 } from "@/lib/product-bulk-service";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 const bulkSchema = z.discriminatedUnion("action", [
   z.object({
@@ -56,11 +57,15 @@ export async function POST(req: Request) {
         input.productIds
       );
 
-      return NextResponse.json({
-        success: true,
-        message: result.message,
-        data: result,
-      });
+      return NextResponse.json(
+        buildTenantMutationSuccess(companyId, {
+          reason: "product-update",
+          affectedIds: input.productIds,
+          entity: result as Record<string, unknown>,
+          message: result.message,
+          status: "bulk-deleted",
+        }),
+      );
     }
 
     if (input.action === "set-status") {
@@ -71,11 +76,15 @@ export async function POST(req: Request) {
         input.status
       );
 
-      return NextResponse.json({
-        success: true,
-        message: result.message,
-        data: result,
-      });
+      return NextResponse.json(
+        buildTenantMutationSuccess(companyId, {
+          reason: "product-update",
+          affectedIds: input.productIds,
+          entity: result as Record<string, unknown>,
+          message: result.message,
+          status: "bulk-status-updated",
+        }),
+      );
     }
 
     const result = await bulkAdjustProductPrices(
@@ -90,11 +99,15 @@ export async function POST(req: Request) {
       }
     );
 
-    return NextResponse.json({
-      success: true,
-      message: result.message,
-      data: result,
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(companyId, {
+        reason: "product-update",
+        affectedIds: input.productIds,
+        entity: result as Record<string, unknown>,
+        message: result.message,
+        status: "bulk-price-adjusted",
+      }),
+    );
   } catch (error) {
     console.error("PRODUCTS_BULK_ERROR", error);
 

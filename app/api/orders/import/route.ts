@@ -6,6 +6,7 @@ import {
   orderImportRowSchema,
   parseOrderImportCsv,
 } from "@/lib/order-import-service";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 const importSchema = z.object({
   rows: z.array(orderImportRowSchema).min(1),
@@ -33,11 +34,13 @@ export async function POST(req: Request) {
         rows: parsedCsv.rows,
       });
 
-      return NextResponse.json({
-        success: true,
-        message: `${result.createdCount} sipariş içe aktarıldı.`,
-        data: result,
-      });
+      return NextResponse.json(
+        buildTenantMutationSuccess(auth.companyId, {
+          reason: "order-import",
+          entity: result as Record<string, unknown>,
+          message: `${result.createdCount} sipariş içe aktarıldı.`,
+        }),
+      );
     }
 
     const parsed = importSchema.safeParse(body);
@@ -54,11 +57,13 @@ export async function POST(req: Request) {
       rows: parsed.data.rows,
     });
 
-    return NextResponse.json({
-      success: true,
-      message: `${result.createdCount} sipariş içe aktarıldı.`,
-      data: result,
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(auth.companyId, {
+        reason: "order-import",
+        entity: result as Record<string, unknown>,
+        message: `${result.createdCount} sipariş içe aktarıldı.`,
+      }),
+    );
   } catch {
     return NextResponse.json(
       { success: false, message: "İçe aktarım başarısız." },

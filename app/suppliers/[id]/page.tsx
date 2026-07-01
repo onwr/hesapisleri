@@ -3,7 +3,11 @@ import { AppShell } from "@/components/layout/app-shell";
 import { SupplierDetailClient } from "@/components/suppliers/supplier-detail-client";
 import { guardPageModule } from "@/lib/module-access";
 import { canManageSuppliers } from "@/lib/permission-utils";
-import { getSupplierDetailData } from "@/lib/supplier-detail-data";
+import { toIsoString } from "@/lib/format-utils";
+import {
+  getCachedSupplierDetailData,
+  getCachedSupplierLedgerData,
+} from "@/lib/tenant-cache/cached-tenant-page-data";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -14,10 +18,17 @@ export default async function SupplierDetailPage({ params }: Props) {
   const effectiveRole = session.effectiveRole;
   const { id } = await params;
 
-  const data = await getSupplierDetailData(company.id, id);
-  if (!data) notFound();
+  const [data, ledgerData] = await Promise.all([
+    getCachedSupplierDetailData({ companyId: company.id, supplierId: id }),
+    getCachedSupplierLedgerData({ companyId: company.id, supplierId: id }),
+  ]);
+
+  if (!data || !ledgerData) notFound();
 
   const { supplier, summary, expenses, payments, activityLogs } = data;
+  const canManage = canManageSuppliers(effectiveRole, companyUser.isOwner);
+  const canPay = canManage;
+  const canCollect = canManage;
 
   return (
     <AppShell>
@@ -48,7 +59,7 @@ export default async function SupplierDetailPage({ params }: Props) {
           paymentTermDays: supplier.paymentTermDays,
           isFavorite: supplier.isFavorite,
           isActive: supplier.isActive,
-          updatedAt: supplier.updatedAt.toISOString(),
+          updatedAt: toIsoString(supplier.updatedAt) ?? new Date(0).toISOString(),
           contacts: supplier.contacts.map((contact) => ({
             id: contact.id,
             name: contact.name,
@@ -78,24 +89,38 @@ export default async function SupplierDetailPage({ params }: Props) {
           })),
         }}
         summary={{
-          ...summary,
-          lastPayment: summary.lastPayment?.toISOString() ?? null,
+          currentBalance: ledgerData.summary.signedBalance,
+          payableAmount: ledgerData.summary.payableAmount,
+          receivableAmount: ledgerData.summary.receivableAmount,
+          directionLabel: ledgerData.summary.directionLabel,
+          netStatusLabel: ledgerData.summary.netStatusLabel,
+          unpaidTotal: summary.unpaidTotal,
+          thisMonthPurchases: summary.thisMonthPurchases,
+          productCount: summary.productCount,
+          lastPayment: toIsoString(summary.lastPayment),
+          lastMovementDate: ledgerData.summary.lastMovementDate,
+          overduePayable: ledgerData.summary.overduePayable,
+          totalPurchases: ledgerData.summary.totalPurchases,
         }}
+        ledger={ledgerData.ledger}
+        linkedCustomer={ledgerData.linkedCustomer}
         expenses={expenses.map((expense) => ({
           ...expense,
-          date: expense.date.toISOString(),
+          date: toIsoString(expense.date) ?? new Date(0).toISOString(),
         }))}
         payments={payments.map((payment) => ({
           ...payment,
-          date: payment.date.toISOString(),
+          date: toIsoString(payment.date) ?? new Date(0).toISOString(),
         }))}
         activityLogs={activityLogs.map((log) => ({
           id: log.id,
           action: log.action,
           message: log.message,
-          createdAt: log.createdAt.toISOString(),
+          createdAt: toIsoString(log.createdAt) ?? new Date(0).toISOString(),
         }))}
-        canManage={canManageSuppliers(effectiveRole, companyUser.isOwner)}
+        canManage={canManage}
+        canPay={canPay}
+        canCollect={canCollect}
       />
     </AppShell>
   );

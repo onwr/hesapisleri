@@ -136,6 +136,12 @@ export async function POST(req: Request) {
 
     await assertOptionalTenantCustomer(db, tenant.companyId, customerId);
 
+    const companySettings = await db.companySettings.findUnique({
+      where: { companyId: tenant.companyId },
+      select: { allowNegativeStockSales: true },
+    });
+    const allowNegativeStock = companySettings?.allowNegativeStockSales ?? false;
+
     const sale = await db.$transaction(async (tx) => {
       const resolvedWarehouseId = await resolveWarehouseId(
         tenant.companyId,
@@ -147,7 +153,8 @@ export async function POST(req: Request) {
         tx,
         tenant.companyId,
         items,
-        resolvedWarehouseId
+        resolvedWarehouseId,
+        allowNegativeStock
       );
 
       const createdSale = await tx.sale.create({
@@ -192,7 +199,8 @@ export async function POST(req: Request) {
         tenant.companyId,
         createdSale.saleNo,
         items,
-        resolvedWarehouseId
+        resolvedWarehouseId,
+        allowNegativeStock
       );
 
       if (payment.paidAmount > 0) {

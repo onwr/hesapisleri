@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Sale" ADD COLUMN "revisionNumber" INTEGER NOT NULL DEFAULT 0;

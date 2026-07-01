@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 import type { IntegrationSummary } from "@/lib/marketplace/marketplace-integration-service";
 import type { EDocumentIntegrationSummary } from "@/lib/e-document/e-document-integration-service";
 import { MarketplaceIntegrationCard } from "@/components/settings/integrations/marketplace-integration-card";
@@ -39,7 +39,6 @@ export function IntegrationsCenter({
   initialRuns,
   warehouses,
 }: IntegrationsCenterProps) {
-  const router = useRouter();
   const [trendyol, setTrendyol] = useState(initialTrendyol);
   const [hepsiburada, setHepsiburada] = useState(initialHepsiburada);
   const [eDocument, setEDocument] = useState(initialEDocument);
@@ -67,7 +66,7 @@ export function IntegrationsCenter({
     if (runsRes.ok && runsData.success) {
       setRuns(runsData.data as SyncRunRow[]);
     }
-    router.refresh();
+    notifyTenantCacheSync();
   }
 
   return (

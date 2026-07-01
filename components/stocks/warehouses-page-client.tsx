@@ -2,6 +2,8 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTenantCacheSync } from "@/hooks/use-tenant-cache-sync";
+import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 import { Warehouse } from "lucide-react";
 import {
   WarehouseFormDialog,
@@ -79,6 +81,8 @@ export function WarehousesPageClient({
     onConfirm: () => void;
   } | null>(null);
 
+  useTenantCacheSync(() => {}, { refresh: true });
+
   const filteredRows = useMemo(() => {
     const normalizedQuery = filters.query.trim().toLowerCase();
 
@@ -139,9 +143,7 @@ export function WarehousesPageClient({
       setBanner({ tone: "success", text: message });
     }
 
-    startTransition(() => {
-      router.refresh();
-    });
+    notifyTenantCacheSync();
   }
 
   function openCreateDialog() {

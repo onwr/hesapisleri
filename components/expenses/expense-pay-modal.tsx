@@ -1,9 +1,9 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, Wallet, X } from "lucide-react";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 import { formatExpenseMoney } from "@/lib/expenses-page-utils";
 
 type AccountOption = {
@@ -30,8 +30,10 @@ export function ExpensePayModal({
   amount,
   accounts,
 }: ExpensePayModalProps) {
-  const router = useRouter();
-  const [saving, setSaving] = useState(false);
+  const { mutate, isSubmitting } = useTenantMutation({
+    refresh: false,
+    onSuccess: () => onClose(),
+  });
   const [error, setError] = useState("");
   const [accountId, setAccountId] = useState("");
   const [paidAt, setPaidAt] = useState(new Date().toISOString().split("T")[0]);
@@ -61,39 +63,25 @@ export function ExpensePayModal({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSaving(true);
     setError("");
 
     if (!accountId) {
       setError("Ödeme hesabı seçin.");
-      setSaving(false);
       return;
     }
 
-    try {
-      const response = await fetch(`/api/expenses/${expenseId}/pay`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          accountId,
-          paidAt,
-          note: note.trim() || undefined,
-        }),
-      });
+    const result = await mutate(`/api/expenses/${expenseId}/pay`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        accountId,
+        paidAt,
+        note: note.trim() || undefined,
+      }),
+    });
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        setError(data.message || "Gider ödenemedi.");
-        return;
-      }
-
-      onClose();
-      router.refresh();
-    } catch {
-      setError("Sunucuya bağlanırken bir hata oluştu.");
-    } finally {
-      setSaving(false);
+    if (!result.ok && result.error !== "duplicate_submit") {
+      setError(result.error || "Gider ödenemedi.");
     }
   }
 
@@ -105,11 +93,11 @@ export function ExpensePayModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4">
       <div
         className="absolute inset-0"
-        onClick={saving ? undefined : onClose}
+        onClick={isSubmitting ? undefined : onClose}
         aria-hidden="true"
       />
 
-      <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-2xl">
+      <div className="relative flex max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div>
             <h2 className="text-[16px] font-black text-[#0f1f4d]">Gideri Öde</h2>
@@ -119,14 +107,14 @@ export function ExpensePayModal({
           <button
             type="button"
             onClick={onClose}
-            disabled={saving}
+            disabled={isSubmitting}
             className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-60"
           >
             <X size={16} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 p-5">
+        <form onSubmit={handleSubmit} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
           <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
             <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
               Ödenecek Tutar
@@ -195,21 +183,21 @@ export function ExpensePayModal({
           <div className="flex gap-3 pt-1">
             <button
               type="submit"
-              disabled={saving || accounts.length === 0}
+              disabled={isSubmitting || accounts.length === 0}
               className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-linear-to-r from-emerald-500 to-teal-600 text-[13px] font-black text-white disabled:opacity-60"
             >
-              {saving ? (
+              {isSubmitting ? (
                 <Loader2 className="animate-spin" size={16} />
               ) : (
                 <Wallet size={16} />
               )}
-              {saving ? "Kaydediliyor..." : "Ödemeyi Kaydet"}
+              {isSubmitting ? "Kaydediliyor..." : "Ödemeyi Kaydet"}
             </button>
 
             <button
               type="button"
               onClick={onClose}
-              disabled={saving}
+              disabled={isSubmitting}
               className="inline-flex h-11 items-center rounded-xl border border-slate-200 px-4 text-[13px] font-black text-slate-600 hover:bg-slate-50 disabled:opacity-60"
             >
               Vazgeç

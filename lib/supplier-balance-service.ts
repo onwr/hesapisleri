@@ -1,5 +1,6 @@
 import { db } from "@/lib/prisma";
 import { roundCashMoney } from "@/lib/cash-bank-account-utils";
+import { summarizeSupplierBalances } from "@/lib/supplier-balance-utils";
 
 export async function calculateSupplierBalance(companyId: string, supplierId: string) {
   const supplier = await db.supplier.findFirst({
@@ -11,20 +12,31 @@ export async function calculateSupplierBalance(companyId: string, supplierId: st
     return null;
   }
 
-  const unpaid = await db.expense.aggregate({
-    where: {
-      companyId,
-      supplierId,
-      paymentStatus: "UNPAID",
-      status: { not: "CANCELLED" },
-    },
-    _sum: { amount: true },
-  });
+  const [unpaid, ledgerAgg] = await Promise.all([
+    db.expense.aggregate({
+      where: {
+        companyId,
+        supplierId,
+        paymentStatus: "UNPAID",
+        status: { not: "CANCELLED" },
+      },
+      _sum: { amount: true },
+    }),
+    db.supplierLedgerEntry.aggregate({
+      where: {
+        companyId,
+        supplierId,
+        type: { in: ["PAYMENT", "COLLECTION", "ADJUSTMENT"] },
+      },
+      _sum: { balanceEffect: true },
+    }),
+  ]);
 
   const opening = roundCashMoney(Number(supplier.openingBalance));
   const payable = roundCashMoney(Number(unpaid._sum.amount ?? 0));
+  const ledgerDelta = roundCashMoney(Number(ledgerAgg._sum.balanceEffect ?? 0));
 
-  return roundCashMoney(opening + payable);
+  return roundCashMoney(opening + payable + ledgerDelta);
 }
 
 export async function syncSupplierBalance(companyId: string, supplierId: string) {
@@ -57,7 +69,7 @@ export async function getSupplierSummary(companyId: string) {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const [suppliers, unpaidAgg, monthExpenses, monthPaidExpenses, linkedProducts] = await Promise.all([
+  const [suppliers, monthExpenses, monthPaidExpenses, linkedProducts] = await Promise.all([
     db.supplier.findMany({
       where: { companyId },
       select: {
@@ -66,15 +78,6 @@ export async function getSupplierSummary(companyId: string) {
         isFavorite: true,
         currentBalance: true,
       },
-    }),
-    db.expense.aggregate({
-      where: {
-        companyId,
-        supplierId: { not: null },
-        paymentStatus: "UNPAID",
-        status: { not: "CANCELLED" },
-      },
-      _sum: { amount: true },
     }),
     db.expense.aggregate({
       where: {
@@ -101,8 +104,11 @@ export async function getSupplierSummary(companyId: string) {
     }),
   ]);
 
-  const payableTotal = roundCashMoney(Number(unpaidAgg._sum.amount ?? 0));
-  const overduePayable = payableTotal;
+  const balanceTotals = summarizeSupplierBalances(
+    suppliers.map((item) => roundCashMoney(Number(item.currentBalance)))
+  );
+
+  const overduePayable = balanceTotals.totalPayable;
   const thisMonthPurchases = roundCashMoney(Number(monthExpenses._sum.amount ?? 0));
   const thisMonthPaid = roundCashMoney(Number(monthPaidExpenses._sum.amount ?? 0));
 
@@ -110,7 +116,8 @@ export async function getSupplierSummary(companyId: string) {
     total: suppliers.length,
     active: suppliers.filter((item) => item.isActive).length,
     favorite: suppliers.filter((item) => item.isFavorite).length,
-    payableTotal,
+    payableTotal: balanceTotals.totalPayable,
+    receivableTotal: balanceTotals.totalReceivable,
     overduePayable,
     thisMonthPurchases,
     thisMonthPaid,

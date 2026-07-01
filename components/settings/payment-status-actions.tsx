@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 import { Loader2 } from "lucide-react";
 
 type PaymentStatusActionsProps = {
@@ -16,7 +16,6 @@ export function PaymentStatusActions({
   initialStatus,
   autoSync = false,
 }: PaymentStatusActionsProps) {
-  const router = useRouter();
   const [status, setStatus] = useState(initialStatus);
   const [message, setMessage] = useState("");
   const [syncing, setSyncing] = useState(false);
@@ -41,14 +40,14 @@ export function PaymentStatusActions({
       setMessage(json.data.message || "");
 
       if (json.data.status === "PAID") {
-        router.refresh();
+        notifyTenantCacheSync();
       }
     } catch {
       setMessage("Ödeme durumu doğrulanamadı.");
     } finally {
       setSyncing(false);
     }
-  }, [paymentId, router]);
+  }, [paymentId]);
 
   useEffect(() => {
     if (!autoSync || autoSyncStarted.current) return;

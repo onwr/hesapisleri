@@ -19,6 +19,7 @@ import {
   PlugZap,
   Save,
   ShieldCheck,
+  ShoppingCart,
   Sparkles,
   Users,
   Wallet,
@@ -40,6 +41,7 @@ type SettingsSection =
   | "users"
   | "invoice"
   | "cash-bank"
+  | "sales"
   | "integrations"
   | "notifications"
   | "data"
@@ -74,6 +76,12 @@ const MENU_ITEMS: Array<{
     label: "Kasa & Banka",
     description: "Varsayılan hesaplar",
     icon: <Wallet size={18} />,
+  },
+  {
+    id: "sales",
+    label: "Satış Ayarları",
+    description: "Stok ve satış davranışı",
+    icon: <ShoppingCart size={18} />,
   },
   {
     id: "integrations",
@@ -175,6 +183,10 @@ export function SettingsCenter({
     notifyEmployeePayments: bundle.settings.notifyEmployeePayments ?? true,
   });
 
+  const [salesForm, setSalesForm] = useState({
+    allowNegativeStockSales: bundle.settings.allowNegativeStockSales ?? false,
+  });
+
   const visibleAccounts = useMemo(() => {
     if (!cashBankForm.hideInactiveAccounts) {
       return bundle.accounts;
@@ -269,7 +281,7 @@ export function SettingsCenter({
   }
 
   async function savePreferences(
-    section: "invoice" | "cash-bank" | "notifications",
+    section: "invoice" | "cash-bank" | "notifications" | "sales",
     payload: Record<string, unknown>
   ) {
     setSaving(true);
@@ -594,6 +606,28 @@ export function SettingsCenter({
                   cashBankForm.defaultExpenseAccountId || null,
               })
             }
+          />
+        </div>
+      );
+    }
+
+    if (activeSection === "sales") {
+      return (
+        <div className="space-y-4">
+          <ToggleRow
+            label="Eksi stokla satışa izin ver"
+            description="Etkinleştirildiğinde stok sıfırın altına düşse bile satış yapılabilir. Varsayılan: kapalı."
+            checked={salesForm.allowNegativeStockSales}
+            onChange={(checked) =>
+              setSalesForm((prev) => ({
+                ...prev,
+                allowNegativeStockSales: checked,
+              }))
+            }
+          />
+          <SaveButton
+            saving={saving}
+            onClick={() => savePreferences("sales", salesForm)}
           />
         </div>
       );

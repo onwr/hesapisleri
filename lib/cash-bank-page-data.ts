@@ -129,8 +129,8 @@ export async function getCashBankPageData(
     .flatMap((account) =>
       account.transactions.map((transaction) => ({
         id: transaction.id,
-        date: transaction.date,
-        createdAt: transaction.createdAt,
+        date: new Date(transaction.date),
+        createdAt: new Date(transaction.createdAt),
         title: transaction.title,
         type: transaction.type,
         amount: Number(transaction.amount),

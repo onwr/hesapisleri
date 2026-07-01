@@ -6,6 +6,7 @@ import { useState, useTransition } from "react";
 import { Download, FileSpreadsheet, Loader2, Upload } from "lucide-react";
 import { ORDER_IMPORT_TEMPLATE } from "@/lib/order-import-service";
 import { Button } from "@/components/ui/button";
+import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 
 export function OrdersImportForm() {
   const router = useRouter();
@@ -67,8 +68,8 @@ export function OrdersImportForm() {
       if (result.data?.errors?.length) {
         setImportErrors(result.data.errors);
       } else {
+        notifyTenantCacheSync();
         router.push("/orders");
-        router.refresh();
       }
     });
   }

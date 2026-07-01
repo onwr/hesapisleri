@@ -1,9 +1,9 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, Repeat, X } from "lucide-react";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 
 export type CashBankAccountOption = {
   id: string;
@@ -25,8 +25,7 @@ export function CashBankTransferModal({
   accounts,
   defaultFromAccountId,
 }: CashBankTransferModalProps) {
-  const router = useRouter();
-  const [saving, setSaving] = useState(false);
+  const { mutate, isSubmitting } = useTenantMutation({ refresh: false });
   const [error, setError] = useState("");
   const [warning, setWarning] = useState("");
   const [fromAccountId, setFromAccountId] = useState(defaultFromAccountId ?? "");
@@ -61,53 +60,44 @@ export function CashBankTransferModal({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSaving(true);
     setError("");
     setWarning("");
 
     const parsedAmount = Number(amount);
     if (!fromAccountId || !toAccountId) {
       setError("Kaynak ve hedef hesap seçin.");
-      setSaving(false);
       return;
     }
 
     if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
       setError("Geçerli bir transfer tutarı girin.");
-      setSaving(false);
       return;
     }
 
-    try {
-      const response = await fetch("/api/cash-bank/transfer", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fromAccountId,
-          toAccountId,
-          amount: parsedAmount,
-          note: note.trim() || undefined,
-        }),
-      });
+    const result = await mutate("/api/cash-bank/transfer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fromAccountId,
+        toAccountId,
+        amount: parsedAmount,
+        note: note.trim() || undefined,
+      }),
+    });
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        setError(data.message || "Transfer tamamlanamadı.");
-        return;
+    if (!result.ok) {
+      if (result.error !== "duplicate_submit") {
+        setError(result.error);
       }
-
-      if (data.data?.negativeBalanceWarning) {
-        setWarning("Kaynak hesap bakiyesi eksiye düştü.");
-      }
-
-      onClose();
-      router.refresh();
-    } catch {
-      setError("Sunucuya bağlanırken bir hata oluştu.");
-    } finally {
-      setSaving(false);
+      return;
     }
+
+    const payload = result.data as { negativeBalanceWarning?: boolean } | undefined;
+    if (payload?.negativeBalanceWarning) {
+      setWarning("Kaynak hesap bakiyesi eksiye düştü.");
+    }
+
+    onClose();
   }
 
   if (!open) {
@@ -141,7 +131,7 @@ export function CashBankTransferModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 p-5">
+        <form onSubmit={handleSubmit} noValidate className="space-y-4 p-5">
           <Field label="Kaynak Hesap" required>
             <select
               value={fromAccountId}
@@ -217,11 +207,11 @@ export function CashBankTransferModal({
           <div className="flex gap-3 pt-1">
             <button
               type="submit"
-              disabled={saving}
+              disabled={isSubmitting}
               className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-linear-to-r from-orange-500 to-amber-600 text-[13px] font-black text-white disabled:opacity-60"
             >
-              {saving ? <Loader2 className="animate-spin" size={18} /> : null}
-              {saving ? "Transfer ediliyor..." : "Transfer Et"}
+              {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : null}
+              {isSubmitting ? "Transfer ediliyor..." : "Transfer Et"}
             </button>
 
             <button

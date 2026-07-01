@@ -7,7 +7,6 @@ import {
   validateEmployeePaymentMarkPaidForm,
 } from "@/lib/employee-payment-finance-utils";
 import {
-  EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_LINK_LABEL,
   EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_MESSAGE,
   type FinanceAccountOption,
 } from "@/lib/finance-account-utils";
@@ -108,8 +107,10 @@ export function EmployeePaymentMarkPaidModal({
             onChange={onRelatedAccountIdChange}
             disabled={accountsLoading}
             required
+            showBalance
+            showSetupLink={false}
+            label="Ödeme Yapılacak Hesap"
             emptyMessage={EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_MESSAGE}
-            emptyLinkLabel={EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_LINK_LABEL}
             className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm disabled:opacity-50"
           />
 

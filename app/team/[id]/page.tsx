@@ -5,6 +5,7 @@ import { EmployeeDetailClient } from "@/components/employees/employee-detail-cli
 import { getAppSession } from "@/lib/app-session";
 import { getEmployeeModulePermissions } from "@/lib/employee-permission-utils";
 import { getEmployeeDetailPageData } from "@/lib/employee-page-data";
+import { getCachedEmployeeDetailPageData } from "@/lib/tenant-cache/cached-tenant-page-data";
 import { EmployeeServiceError } from "@/lib/employee-service";
 
 type EmployeeDetailPageProps = {
@@ -21,7 +22,7 @@ export default async function EmployeeDetailPage({
   const query = await searchParams;
 
   try {
-    const data = await getEmployeeDetailPageData({
+    const data = await getCachedEmployeeDetailPageData({
       companyId: session.company.id,
       employeeId: id,
       includeSensitive: true,

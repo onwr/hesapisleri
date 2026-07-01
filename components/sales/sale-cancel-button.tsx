@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { XCircle } from "lucide-react";
 import { SaleCancelDialog } from "@/components/sales/sale-cancel-dialog";
+import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 
 type SaleCancelButtonProps = {
   saleId: string;
@@ -30,7 +31,7 @@ export function SaleCancelButton({
     if (redirectTo) {
       router.push(redirectTo);
     }
-    router.refresh();
+    notifyTenantCacheSync();
   }
 
   return (

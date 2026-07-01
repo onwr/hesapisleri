@@ -168,7 +168,7 @@ async function recordInvoiceCollection(
     },
   });
 
-  await tx.accountTransaction.create({
+  const transaction = await tx.accountTransaction.create({
     data: {
       accountId: validation.account.id,
       type: "INCOME",
@@ -182,7 +182,155 @@ async function recordInvoiceCollection(
     },
   });
 
-  return { ok: true as const, account: validation.account };
+  return {
+    ok: true as const,
+    account: validation.account,
+    accountTransactionId: transaction.id,
+  };
+}
+
+export async function collectInvoicePaymentInTransaction(
+  tx: TransactionClient,
+  input: {
+    companyId: string;
+    userId: string;
+    invoiceId: string;
+    data: CollectInvoiceInput;
+    collectedAt: Date;
+  }
+) {
+  const collectAmount = roundMoney(input.data.amount);
+
+  const invoice = await tx.invoice.findFirst({
+    where: {
+      id: input.invoiceId,
+      companyId: input.companyId,
+    },
+    include: {
+      sale: true,
+    },
+  });
+
+  if (!invoice) {
+    return {
+      ok: false as const,
+      status: 404,
+      message: "Fatura bulunamadı.",
+    };
+  }
+
+  const eligibility = validateInvoiceCollectEligibility(invoice);
+  if (!eligibility.ok) {
+    return {
+      ok: false as const,
+      status: 400,
+      message: eligibility.message,
+    };
+  }
+
+  if (collectAmount > eligibility.remaining) {
+    return {
+      ok: false as const,
+      status: 400,
+      message: `En fazla ${eligibility.remaining.toFixed(2)} TL tahsil edebilirsiniz.`,
+    };
+  }
+
+  const collectionResult = await recordInvoiceCollection(tx, {
+    companyId: input.companyId,
+    accountId: input.data.accountId,
+    invoiceId: invoice.id,
+    invoiceNo: invoice.invoiceNo,
+    amount: collectAmount,
+    collectedAt: input.collectedAt,
+    note: input.data.note?.trim() || null,
+  });
+
+  if (!collectionResult.ok) {
+    return collectionResult;
+  }
+
+  const currentPaid = eligibility.effectivePaid;
+  const nextPaidState = resolveInvoicePaidState(
+    eligibility.total,
+    currentPaid + collectAmount
+  );
+
+  const updatedInvoice = await tx.invoice.update({
+    where: { id: invoice.id },
+    data: {
+      paidAmount: nextPaidState.paidAmount,
+      paymentStatus: nextPaidState.paymentStatus,
+    },
+  });
+
+  if (invoice.saleId && invoice.sale) {
+    const saleTotal = Number(invoice.sale.total);
+    const saleNextPaid = roundMoney(Number(invoice.sale.paidAmount) + collectAmount);
+    const cappedSalePaid = roundMoney(Math.min(saleTotal, saleNextPaid));
+
+    await tx.sale.update({
+      where: { id: invoice.sale.id },
+      data: {
+        paidAmount: cappedSalePaid,
+        paymentStatus: derivePaymentStatus(saleTotal, cappedSalePaid),
+      },
+    });
+  }
+
+  if (invoice.customerId) {
+    await applyCustomerCollection(
+      tx,
+      input.companyId,
+      invoice.customerId,
+      collectAmount
+    );
+  }
+
+  await tx.activityLog.create({
+    data: {
+      companyId: input.companyId,
+      userId: input.userId,
+      action: "UPDATE",
+      module: "invoices",
+      message: `${invoice.invoiceNo} numaralı faturadan ${collectAmount.toFixed(2)} TL tahsil edildi.`,
+    },
+  });
+
+  await createNotification(
+    {
+      companyId: input.companyId,
+      userId: input.userId,
+      type: nextPaidState.paymentStatus === "PAID" ? "SUCCESS" : "INFO",
+      category: "INVOICES",
+      module: "invoices",
+      entityType: "INVOICE",
+      entityId: invoice.id,
+      actionUrl: `/invoices/${invoice.id}`,
+      title:
+        nextPaidState.paymentStatus === "PAID"
+          ? "Fatura tahsilatı tamamlandı"
+          : "Kısmi fatura tahsilatı alındı",
+      message: `${invoice.invoiceNo} için ${collectAmount.toFixed(2)} TL tahsil edildi.`,
+    },
+    tx
+  );
+
+  return {
+    ok: true as const,
+    data: {
+      ...updatedInvoice,
+      total: Number(updatedInvoice.total),
+      paidAmount: Number(updatedInvoice.paidAmount),
+      remainingAmount: getInvoiceRemainingAmount(
+        Number(updatedInvoice.total),
+        Number(updatedInvoice.paidAmount)
+      ),
+      paymentStatus: nextPaidState.paymentStatus,
+      accountTransactionId: collectionResult.accountTransactionId,
+      collectedAmount: collectAmount,
+    },
+  };
 }
 
 export async function collectInvoicePayment(input: {
@@ -203,138 +351,15 @@ export async function collectInvoicePayment(input: {
     };
   }
 
-  const collectAmount = roundMoney(input.data.amount);
-
-  return db.$transaction(async (tx) => {
-    const invoice = await tx.invoice.findFirst({
-      where: {
-        id: input.invoiceId,
-        companyId: input.companyId,
-      },
-      include: {
-        sale: true,
-      },
-    });
-
-    if (!invoice) {
-      return {
-        ok: false as const,
-        status: 404,
-        message: "Fatura bulunamadı.",
-      };
-    }
-
-    const eligibility = validateInvoiceCollectEligibility(invoice);
-    if (!eligibility.ok) {
-      return {
-        ok: false as const,
-        status: 400,
-        message: eligibility.message,
-      };
-    }
-
-    if (collectAmount > eligibility.remaining) {
-      return {
-        ok: false as const,
-        status: 400,
-        message: `En fazla ${eligibility.remaining.toFixed(2)} TL tahsil edebilirsiniz.`,
-      };
-    }
-
-    const collectionResult = await recordInvoiceCollection(tx, {
+  return db.$transaction(async (tx) =>
+    collectInvoicePaymentInTransaction(tx, {
       companyId: input.companyId,
-      accountId: input.data.accountId,
-      invoiceId: invoice.id,
-      invoiceNo: invoice.invoiceNo,
-      amount: collectAmount,
+      userId: input.userId,
+      invoiceId: input.invoiceId,
+      data: input.data,
       collectedAt: collectedAt!,
-      note: input.data.note?.trim() || null,
-    });
-
-    if (!collectionResult.ok) {
-      return collectionResult;
-    }
-
-    const currentPaid = eligibility.effectivePaid;
-    const nextPaidState = resolveInvoicePaidState(
-      eligibility.total,
-      currentPaid + collectAmount
-    );
-
-    const updatedInvoice = await tx.invoice.update({
-      where: { id: invoice.id },
-      data: {
-        paidAmount: nextPaidState.paidAmount,
-        paymentStatus: nextPaidState.paymentStatus,
-      },
-    });
-
-    if (invoice.saleId && invoice.sale) {
-      const saleTotal = Number(invoice.sale.total);
-      const saleNextPaid = roundMoney(Number(invoice.sale.paidAmount) + collectAmount);
-      const cappedSalePaid = roundMoney(Math.min(saleTotal, saleNextPaid));
-
-      await tx.sale.update({
-        where: { id: invoice.sale.id },
-        data: {
-          paidAmount: cappedSalePaid,
-          paymentStatus: derivePaymentStatus(saleTotal, cappedSalePaid),
-        },
-      });
-    }
-
-    if (invoice.customerId) {
-      await applyCustomerCollection(
-        tx,
-        input.companyId,
-        invoice.customerId,
-        collectAmount
-      );
-    }
-
-    await tx.activityLog.create({
-      data: {
-        companyId: input.companyId,
-        userId: input.userId,
-        action: "UPDATE",
-        module: "invoices",
-        message: `${invoice.invoiceNo} numaralı faturadan ${collectAmount.toFixed(2)} TL tahsil edildi.`,
-      },
-    });
-
-    await createNotification(
-      {
-        companyId: input.companyId,
-        userId: input.userId,
-        type: nextPaidState.paymentStatus === "PAID" ? "SUCCESS" : "INFO",
-        category: "INVOICES",
-        module: "invoices",
-        entityType: "INVOICE",
-        entityId: invoice.id,
-        actionUrl: `/invoices/${invoice.id}`,
-        title:
-          nextPaidState.paymentStatus === "PAID"
-            ? "Fatura tahsilatı tamamlandı"
-            : "Kısmi fatura tahsilatı alındı",
-        message: `${invoice.invoiceNo} için ${collectAmount.toFixed(2)} TL tahsil edildi.`,
-      },
-      tx
-    );
-
-    return {
-      ok: true as const,
-      data: {
-        ...updatedInvoice,
-        total: Number(updatedInvoice.total),
-        paidAmount: Number(updatedInvoice.paidAmount),
-        remainingAmount: getInvoiceRemainingAmount(
-          Number(updatedInvoice.total),
-          Number(updatedInvoice.paidAmount)
-        ),
-        paymentStatus: nextPaidState.paymentStatus,
-      },
-    };
-  });
+    })
+  );
 }
 
 export { validateInvoiceCancelEligibility };

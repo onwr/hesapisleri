@@ -147,6 +147,17 @@ export function isSufficientStock(stock: number, minStock: number) {
   return stock > minStock;
 }
 
+/** Aktif stoklu ürünlerde düşük stok sayısı — cron ve mobil dashboard ile uyumlu */
+export function countLowStockActiveProducts(
+  products: Array<{ stock: number; minStock: number | null; status: string }>
+) {
+  return products.filter(
+    (product) =>
+      product.status === "ACTIVE" &&
+      isLowStock(product.stock, resolveProductMinStock(product.minStock))
+  ).length;
+}
+
 export const STOCK_CHART_COLORS = {
   sufficient: "#22c55e",
   low: "#f97316",

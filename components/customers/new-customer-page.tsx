@@ -22,6 +22,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { AppLoadingScreen } from "@/components/layout/app-loading-screen";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 import { CustomerGroupSelect } from "@/components/customers/customer-group-select";
 import {
   CustomerTaxCertificateField,
@@ -42,8 +43,10 @@ export function NewCustomerPageClient({
   returnTo?: string | null;
 }) {
   const router = useRouter();
+  const { mutate, isSubmitting } = useTenantMutation<{ id: string }>({
+    refresh: false,
+  });
 
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -74,7 +77,6 @@ export function NewCustomerPageClient({
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setSaving(true);
     setError("");
     setFieldErrors({});
 
@@ -83,53 +85,48 @@ export function NewCustomerPageClient({
     if (payload.name.length < 2) {
       setFieldErrors({ name: "Müşteri adı en az 2 karakter olmalıdır." });
       setError("Müşteri adı en az 2 karakter olmalıdır.");
-      setSaving(false);
       return;
     }
 
-    try {
-      const res = await fetch("/api/customers/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+    const result = await mutate("/api/customers/create", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
 
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        setFieldErrors(mapCustomerFieldErrors(data.errors));
-        setError(
-          getFirstCustomerErrorMessage(data.message, data.errors) ||
-            "Müşteri oluşturulamadı."
-        );
-        return;
+    if (!result.ok) {
+      if (result.error === "duplicate_submit") return;
+      if ("errors" in result && result.errors) {
+        setFieldErrors(mapCustomerFieldErrors(result.errors));
       }
-
-      const customerId = data.data?.id as string | undefined;
-      const defaultDestination = customerId
-        ? `/customers/${customerId}?created=1`
-        : "/customers";
-      router.push(
-        resolvePostCreateRedirect({
-          returnTo,
-          defaultDestination,
-        })
+      setError(
+        getFirstCustomerErrorMessage(
+          result.error === "duplicate_submit" ? undefined : result.error,
+          "errors" in result ? result.errors : undefined
+        ) || "Müşteri oluşturulamadı."
       );
-      router.refresh();
-    } catch {
-      setError("Sunucuya bağlanırken bir hata oluştu.");
-    } finally {
-      setSaving(false);
+      return;
     }
+
+    const customerId = result.data?.id;
+    const defaultDestination = customerId
+      ? `/customers/${customerId}?created=1`
+      : "/customers";
+    router.push(
+      resolvePostCreateRedirect({
+        returnTo,
+        defaultDestination,
+      })
+    );
   }
 
   const filledFields = Object.values(form).filter(Boolean).length;
 
   return (
     <main className="min-h-screen bg-[#f7f8ff] px-5 py-6">
-      {saving ? (
+      {isSubmitting ? (
         <AppLoadingScreen
           preset="customers"
           title="Müşteri kaydediliyor"
@@ -382,15 +379,15 @@ export function NewCustomerPageClient({
             <div className="flex flex-col gap-3 sm:flex-row">
               <button
                 type="submit"
-                disabled={saving}
+                disabled={isSubmitting}
                 className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-linear-to-br from-blue-600 to-violet-600 text-[13px] font-black text-white shadow-lg shadow-blue-100 transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {saving ? (
+                {isSubmitting ? (
                   <Loader2 className="animate-spin" size={18} />
                 ) : (
                   <Save size={18} />
                 )}
-                {saving ? "Kaydediliyor..." : "Müşteriyi Kaydet"}
+                {isSubmitting ? "Kaydediliyor..." : "Müşteriyi Kaydet"}
               </button>
 
               <Link

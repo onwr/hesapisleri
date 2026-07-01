@@ -6,6 +6,7 @@ import {
   customerFormSchema,
   normalizeCustomerInput,
 } from "@/lib/customer-form-utils";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 export async function POST(req: Request) {
   try {
@@ -67,11 +68,14 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      message: "Müşteri başarıyla oluşturuldu.",
-      data: customer,
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(companyId, {
+        reason: "customer-create",
+        entityIds: { customerId: customer.id },
+        entity: customer as Record<string, unknown>,
+        message: "Müşteri başarıyla oluşturuldu.",
+      }),
+    );
   } catch (error) {
     console.error("CREATE_CUSTOMER_ERROR", error);
 

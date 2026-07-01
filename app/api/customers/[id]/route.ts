@@ -6,6 +6,7 @@ import {
   customerFormSchema,
   normalizeCustomerInput,
 } from "@/lib/customer-form-utils";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 type Props = {
   params: Promise<{
@@ -143,11 +144,14 @@ export async function PATCH(req: Request, { params }: Props) {
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      message: "Müşteri başarıyla güncellendi.",
-      data: customer,
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(auth.companyId, {
+        reason: "customer-update",
+        entityIds: { customerId: customer.id },
+        entity: customer as Record<string, unknown>,
+        message: "Müşteri başarıyla güncellendi.",
+      }),
+    );
   } catch (error) {
     console.error("UPDATE_CUSTOMER_ERROR", error);
 

@@ -462,11 +462,15 @@ export async function cancelExpenseRecord(input: {
     return {
       ok: true as const,
       data: cancelled,
+      supplierId: expense.supplierId,
     };
   });
 
   if (result.ok) {
     invalidateDashboardCache(input.companyId, "expense-cancel");
+    if (result.supplierId) {
+      await syncSupplierBalance(input.companyId, result.supplierId);
+    }
   }
 
   return result;
@@ -581,6 +585,16 @@ export async function payExpenseRecord(input: {
 
   if (result.ok) {
     invalidateDashboardCache(input.companyId, "expense-pay");
+    const paid = result.data;
+    if (paid.supplierId) {
+      const { syncSupplierBalanceAfterExpenseChange } = await import(
+        "@/lib/supplier-finance-service"
+      );
+      await syncSupplierBalanceAfterExpenseChange(
+        input.companyId,
+        paid.supplierId
+      );
+    }
   }
 
   return result;

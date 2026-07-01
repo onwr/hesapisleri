@@ -49,6 +49,19 @@
 }
 
 :root {
+  /* ─── Z-index katmanları — merkezi token ──────────────────────────────────
+     Tüm bileşenler bu token'ları kullanmalı (magic number kullanma).
+     z-[var(--z-floating)] gibi Tailwind arbitrary value ile erişilir.
+  */
+  --z-sidebar: 30;       /* App sidebar */
+  --z-topbar: 20;        /* Sticky topbar */
+  --z-floating: 30;      /* Floating action button (AI launcher) */
+  --z-dropdown: 40;      /* Dropdown menüler, popovers */
+  --z-sheet: 50;         /* Sheet / drawer overlay (Radix) */
+  --z-modal: 60;         /* Dialog / modal */
+  --z-toast: 70;         /* Toast bildirimleri */
+  --z-chat-panel: 80;    /* AI chat modal (drawer içindeki tam panel) */
+
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);

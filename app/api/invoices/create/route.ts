@@ -16,7 +16,7 @@ import {
 } from "@/lib/invoices/mock-gib";
 import { persistInvoiceFinancialSnapshot } from "@/lib/invoice-snapshot-service";
 import { calculateInvoiceLineSnapshots } from "@/lib/invoice-tax-calculation-utils";
-import { invalidateDashboardCache } from "@/lib/dashboard-cache-invalidation";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 const invoiceItemSchema = z.object({
   name: z.string().min(1, "Ürün / hizmet adı zorunludur."),
@@ -288,15 +288,19 @@ export async function POST(req: Request) {
     });
 
     if (action !== "DRAFT") {
-      invalidateDashboardCache(companyId!, "invoice-create");
+      return NextResponse.json(
+        buildTenantMutationSuccess(companyId!, {
+          reason: "invoice-create",
+          entity: invoice,
+          message: "Fatura başarıyla oluşturuldu.",
+          entityIds: { invoiceId: invoice.id },
+        }),
+      );
     }
 
     return NextResponse.json({
       success: true,
-      message:
-        action === "DRAFT"
-          ? "Fatura taslak olarak kaydedildi."
-          : "Fatura başarıyla oluşturuldu.",
+      message: "Fatura taslak olarak kaydedildi.",
       data: invoice,
     });
   } catch (error) {

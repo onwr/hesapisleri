@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { guardPageModule } from "@/lib/module-access";
+import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
 
 import { MarketplaceLogo } from "@/components/orders/marketplace-logo";
 import { OrdersRowActions } from "@/components/orders/orders-row-actions";
@@ -119,6 +120,7 @@ const now = new Date();
 
   return (
     <AppShell>
+      <TenantPageSync />
       <div className="space-y-5">
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           {actionCards.map((card) => {

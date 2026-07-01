@@ -20,7 +20,9 @@ import {
   SalesTableToolbar,
 } from "@/components/sales/sales-table-controls";
 import { endOfMonth, startOfMonth } from "@/lib/dashboard-metrics";
-import { formatShortDateTime, getSalesPageData } from "@/lib/sales-page-data";
+import { formatShortDateTime } from "@/lib/sales-page-data";
+import { getCachedSalesPageData } from "@/lib/tenant-cache/cached-tenant-page-data";
+import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
 import {
   normalizeDateRange,
   parseDateParam,
@@ -142,7 +144,8 @@ const now = new Date();
   );
 
   const { statCards, rows, totalRecords, totalPages, currentPage: page, exportHref } =
-    await getSalesPageData(company.id, {
+    await getCachedSalesPageData({
+      companyId: company.id,
       tab: activeTab,
       page: currentPage,
       from,
@@ -156,6 +159,7 @@ const now = new Date();
 
   return (
     <AppShell>
+      <TenantPageSync />
       <div className="space-y-5">
         <div className="flex justify-end">
           <AiPageTriggerButton moduleKey="sales" />

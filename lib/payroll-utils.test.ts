@@ -71,6 +71,26 @@ describe("payroll utils", () => {
     assert.equal(getPayrollRunActions("APPROVED").canEditItems, false);
   });
 
+  it("isPaymentInPayrollPeriod paid advance", () => {
+    const periodStart = new Date(2026, 5, 1);
+    const periodEnd = new Date(2026, 5, 30, 23, 59, 59);
+
+    assert.equal(
+      isPaymentInPayrollPeriod(
+        {
+          type: "ADVANCE",
+          status: "PAID",
+          dueDate: new Date(2026, 4, 1),
+          paidAt: new Date(2026, 5, 10),
+          createdAt: new Date(2026, 4, 1),
+        },
+        periodStart,
+        periodEnd
+      ),
+      true
+    );
+  });
+
   it("isPaymentInPayrollPeriod pending bonus", () => {
     const periodStart = new Date(2026, 5, 1);
     const periodEnd = new Date(2026, 5, 30, 23, 59, 59);

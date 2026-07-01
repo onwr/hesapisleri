@@ -1,4 +1,5 @@
 import { roundCashMoney } from "@/lib/cash-bank-account-utils";
+import { syncSupplierBalance } from "@/lib/supplier-balance-service";
 import {
   buildExpensePaymentTransactionTitle,
   isCancelledExpense,
@@ -318,6 +319,7 @@ export async function bulkCancelExpenses(input: {
 
     let cancelledCount = 0;
     let skippedCount = 0;
+    const supplierIds = new Set<string>();
 
     for (const expense of expenses) {
       if (isCancelledExpense(expense.status)) {
@@ -352,6 +354,10 @@ export async function bulkCancelExpenses(input: {
         },
       });
 
+      if (expense.supplierId) {
+        supplierIds.add(expense.supplierId);
+      }
+
       cancelledCount += 1;
     }
 
@@ -374,8 +380,16 @@ export async function bulkCancelExpenses(input: {
       data: {
         cancelledCount,
         skippedCount,
+        supplierIds: [...supplierIds],
       },
     };
+  }).then(async (result) => {
+    if (result.ok && result.data.supplierIds.length > 0) {
+      for (const supplierId of result.data.supplierIds) {
+        await syncSupplierBalance(input.companyId, supplierId);
+      }
+    }
+    return result;
   });
 }
 
@@ -487,6 +501,7 @@ export async function bulkPayExpenses(input: {
     let skippedCount = 0;
     let totalPaid = 0;
     let runningBalance = Number(account.balance);
+    const supplierIds = new Set<string>();
 
     for (const expense of expenses) {
       const eligibility = validateExpensePayEligibility(expense);
@@ -521,6 +536,10 @@ export async function bulkPayExpenses(input: {
         },
       });
 
+      if (expense.supplierId) {
+        supplierIds.add(expense.supplierId);
+      }
+
       paidCount += 1;
     }
 
@@ -549,8 +568,16 @@ export async function bulkPayExpenses(input: {
         paidCount,
         skippedCount,
         totalPaid,
+        supplierIds: [...supplierIds],
       },
     };
+  }).then(async (result) => {
+    if (result.ok && result.data.supplierIds.length > 0) {
+      for (const supplierId of result.data.supplierIds) {
+        await syncSupplierBalance(input.companyId, supplierId);
+      }
+    }
+    return result;
   });
 }
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cancelExpenseRecord } from "@/lib/expense-service";
 import { requireApiModuleAccess } from "@/lib/module-access";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -27,11 +28,14 @@ export async function POST(_req: Request, { params }: Props) {
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "Gider iptal edildi.",
-      data: result.data,
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(companyId, {
+        reason: "expense-cancel",
+        entityIds: { expenseId: id },
+        entity: result.data as Record<string, unknown>,
+        message: "Gider iptal edildi.",
+      }),
+    );
   } catch (error) {
     console.error("CANCEL_EXPENSE_ERROR", error);
 

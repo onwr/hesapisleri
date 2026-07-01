@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useTenantCacheSync } from "@/hooks/use-tenant-cache-sync";
+import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 import { ProductsSubNav } from "@/components/products/products-sub-nav";
 import { PRODUCT_CARD_CLASS } from "@/components/products/product-ui-tokens";
 import {
@@ -84,6 +86,8 @@ export function WarehouseDetailClient({
     onConfirm: () => void;
   } | null>(null);
 
+  useTenantCacheSync(() => {}, { refresh: true });
+
   useEffect(() => {
     setActiveTab(parseTab(searchParams.get("tab")));
   }, [searchParams]);
@@ -118,7 +122,7 @@ export function WarehouseDetailClient({
     }
 
     setBanner({ tone: "success", text: data.message });
-    startTransition(() => router.refresh());
+    notifyTenantCacheSync();
   }
 
   function handleToggleStatus() {
@@ -191,7 +195,7 @@ export function WarehouseDetailClient({
         onClose={() => setDialogOpen(false)}
         onSuccess={(message) => {
           setBanner({ tone: "success", text: message });
-          startTransition(() => router.refresh());
+          notifyTenantCacheSync();
         }}
         mode="edit"
         warehouse={warehouse}

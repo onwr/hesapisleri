@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -17,6 +17,10 @@ import {
   formatUnreadBadge,
   type NormalizedNotification,
 } from "@/lib/notification-utils";
+import {
+  hasSafeTenantActionUrl,
+  resolveSafeTenantActionUrl,
+} from "@/lib/tenant-action-url";
 
 function formatRelativeTime(value: string) {
   const date = new Date(value);
@@ -66,7 +70,7 @@ function DropdownItem({
         className="min-w-0 flex-1 text-left"
       >
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="truncate text-xs font-black text-[#0f1f4d]">
+          <span className="truncate text-[13px] font-black text-[#0f1f4d]">
             {notification.title}
           </span>
           <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-600">
@@ -79,16 +83,16 @@ function DropdownItem({
             </span>
           ) : null}
         </div>
-        <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-slate-500">
+        <p className="mt-1 line-clamp-2 text-[12px] leading-5 text-slate-500">
           {notification.message}
         </p>
-        <p className="mt-1 text-[10px] font-semibold text-slate-400">
+        <p className="mt-1 text-[11px] font-semibold text-slate-400">
           {formatRelativeTime(notification.createdAt)}
         </p>
       </button>
 
       <div className="flex shrink-0 flex-col gap-1 opacity-0 transition group-hover:opacity-100">
-        {notification.actionUrl ? (
+        {hasSafeTenantActionUrl(notification.actionUrl) ? (
           <button
             type="button"
             onClick={() => onOpen(notification)}
@@ -209,8 +213,9 @@ export function NotificationTopbarButton() {
 
     setOpen(false);
 
-    if (notification.actionUrl) {
-      router.push(notification.actionUrl);
+    const target = resolveSafeTenantActionUrl(notification.actionUrl);
+    if (target) {
+      router.push(target);
     }
   }
 
@@ -261,7 +266,7 @@ export function NotificationTopbarButton() {
       >
         <Bell size={18} />
         {!loadingCount && badge ? (
-          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-black text-white ring-2 ring-white">
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-black text-white ring-2 ring-white">
             {badge}
           </span>
         ) : null}
@@ -273,7 +278,7 @@ export function NotificationTopbarButton() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-base font-black">Bildirimler</h2>
-                <p className="mt-0.5 text-xs text-blue-100/85">
+                <p className="mt-0.5 text-[13px] text-blue-100/85">
                   {unreadCount > 0
                     ? `${unreadCount} okunmamış bildirim`
                     : "Tüm bildirimler okundu"}
@@ -283,7 +288,7 @@ export function NotificationTopbarButton() {
                 type="button"
                 onClick={() => void handleMarkAllRead()}
                 disabled={markingAll || unreadCount === 0}
-                className="inline-flex items-center gap-1 rounded-xl border border-white/15 bg-white/10 px-3 py-1.5 text-[11px] font-bold transition hover:bg-white/15 disabled:opacity-50"
+                className="inline-flex items-center gap-1 rounded-xl border border-white/15 bg-white/10 px-3 py-1.5 text-[12px] font-bold transition hover:bg-white/15 disabled:opacity-50"
               >
                 {markingAll ? (
                   <Loader2 size={12} className="animate-spin" />
@@ -306,7 +311,7 @@ export function NotificationTopbarButton() {
                 <p className="mt-3 text-sm font-bold text-[#0f1f4d]">
                   Yeni bildiriminiz yok.
                 </p>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-[13px] text-slate-500">
                   Satış, fatura ve sistem bildirimleri burada görünür.
                 </p>
               </div>

@@ -2,6 +2,10 @@ import {
   formatSupplierMoney,
   getSupplierDisplayName,
   getSupplierPrimaryLine,
+  parseSupplierCustomerRoleFilter,
+  parseSupplierLastActivityFrom,
+  parseSupplierListBalanceDirection,
+  type SupplierListBalanceDirection,
 } from "@/lib/supplier-utils";
 import type { SupplierRow } from "@/lib/supplier-utils";
 
@@ -18,6 +22,13 @@ export type SupplierTableRow = {
   category: string | null;
   city: string | null;
   balance: number;
+  payableAmount: number;
+  receivableAmount: number;
+  netStatusLabel: string;
+  totalPurchases: number;
+  hasCustomerRole: boolean;
+  lastActivityAt: Date | null;
+  lastActivityType: string | null;
   overdueAmount: number;
   productCount: number;
   isActive: boolean;
@@ -86,12 +97,28 @@ export function parseFavoriteFilter(value?: string | null) {
   return value === "1";
 }
 
+export function parseSupplierStatusFilter(value?: string | null) {
+  if (value === "active" || value === "passive") return value;
+  return "all" as const;
+}
+
+export {
+  parseSupplierCustomerRoleFilter,
+  parseSupplierLastActivityFrom,
+  parseSupplierListBalanceDirection,
+  type SupplierListBalanceDirection,
+};
+
 export function buildSuppliersQuery(params: {
   tab?: SupplierTabKey;
   page?: number;
   category?: string | null;
   q?: string | null;
   favorite?: boolean;
+  balanceDirection?: SupplierListBalanceDirection;
+  customerRole?: ReturnType<typeof parseSupplierCustomerRoleFilter>;
+  lastActivityFrom?: string | null;
+  status?: ReturnType<typeof parseSupplierStatusFilter>;
 }) {
   const search = new URLSearchParams();
 
@@ -113,6 +140,22 @@ export function buildSuppliersQuery(params: {
 
   if (params.favorite) {
     search.set("favorite", "1");
+  }
+
+  if (params.balanceDirection && params.balanceDirection !== "all") {
+    search.set("balanceDirection", params.balanceDirection);
+  }
+
+  if (params.customerRole && params.customerRole !== "all") {
+    search.set("customerRole", params.customerRole);
+  }
+
+  if (params.lastActivityFrom) {
+    search.set("lastActivityFrom", params.lastActivityFrom);
+  }
+
+  if (params.status && params.status !== "all") {
+    search.set("status", params.status);
   }
 
   const query = search.toString();
@@ -147,6 +190,31 @@ export function buildSuppliersExportQuery(params: {
   return query ? `/api/suppliers/export?${query}` : "/api/suppliers/export";
 }
 
+export function buildSuppliersLedgerExportQuery(params: {
+  supplierId?: string | null;
+  from?: string | null;
+  to?: string | null;
+  type?: string | null;
+  accountId?: string | null;
+  balanceDirection?: SupplierListBalanceDirection;
+}) {
+  const search = new URLSearchParams();
+
+  if (params.supplierId) search.set("supplierId", params.supplierId);
+  if (params.from) search.set("from", params.from);
+  if (params.to) search.set("to", params.to);
+  if (params.type && params.type !== "all") search.set("type", params.type);
+  if (params.accountId) search.set("accountId", params.accountId);
+  if (params.balanceDirection && params.balanceDirection !== "all") {
+    search.set("balanceDirection", params.balanceDirection);
+  }
+
+  const query = search.toString();
+  return query
+    ? `/api/suppliers/ledger-export?${query}`
+    : "/api/suppliers/ledger-export";
+}
+
 export function getInitials(name: string) {
   return name
     .split(" ")
@@ -159,24 +227,30 @@ export function getInitials(name: string) {
 export function getSupplierBalanceStatus(balance: number) {
   if (balance > 0) {
     return {
-      label: "Borçlu",
+      label: "Tedarikçiye Borcumuz",
       amountClass: "text-rose-500",
-      subLabel: "Borçlu",
+      subLabel: "Borç",
+      payableAmount: balance,
+      receivableAmount: 0,
     };
   }
 
   if (balance < 0) {
     return {
-      label: "Alacaklı",
+      label: "Tedarikçiden Alacağımız",
       amountClass: "text-emerald-600",
-      subLabel: "Alacaklı",
+      subLabel: "Alacak",
+      payableAmount: 0,
+      receivableAmount: Math.abs(balance),
     };
   }
 
   return {
-    label: "Borç Yok",
+    label: "Hesap Kapalı",
     amountClass: "text-[#0f1f4d]",
-    subLabel: "Borç Yok",
+    subLabel: "Kapalı",
+    payableAmount: 0,
+    receivableAmount: 0,
   };
 }
 
@@ -223,6 +297,13 @@ export function toSupplierTableRow(row: SupplierRow, index: number): SupplierTab
     category: row.category,
     city: row.city,
     balance: row.currentBalance,
+    payableAmount: row.payableAmount,
+    receivableAmount: row.receivableAmount,
+    netStatusLabel: row.netStatusLabel,
+    totalPurchases: row.totalPurchases,
+    hasCustomerRole: row.hasCustomerRole,
+    lastActivityAt: row.lastActivityAt,
+    lastActivityType: row.lastActivityType,
     overdueAmount: row.overdueAmount,
     productCount: row.productCount,
     isActive: row.isActive,

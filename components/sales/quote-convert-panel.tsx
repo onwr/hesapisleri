@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
+import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 import {
   ArrowRightLeft,
   CheckCircle2,
@@ -154,8 +155,8 @@ export function QuoteConvertPanel({
           return;
         }
 
+        notifyTenantCacheSync();
         router.push(`/sales/${result.data?.id ?? saleId}`);
-        router.refresh();
       } catch {
         setError("Dönüşüm sırasında bir hata oluştu.");
       }

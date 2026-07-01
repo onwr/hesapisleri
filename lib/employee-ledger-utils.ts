@@ -46,7 +46,7 @@ export type EmployeeLedgerRow = {
 const LEDGER_TYPE_LABELS: Record<EmployeeLedgerEntryType, string> = {
   SALARY_ACCRUAL: "Maaş Tahakkuku",
   SALARY_PAYMENT: "Maaş Ödemesi",
-  ADVANCE: "Avans",
+  ADVANCE: "Çalışana Avans",
   DEDUCTION: "Kesinti",
   BONUS: "Prim / Ek Ödeme",
   ADJUSTMENT: "Düzeltme",
@@ -110,6 +110,13 @@ export function resolveLedgerDebitCredit(
     return { debit: 0, credit: 0 };
   }
 
+  if (payment.type === "ADVANCE") {
+    if (payment.status === "PAID" || payment.direction === "PAID") {
+      return { debit: 0, credit: amount };
+    }
+    return { debit: 0, credit: 0 };
+  }
+
   if (payment.type === "DEDUCTION" || payment.direction === "DEDUCTED") {
     return { debit: 0, credit: amount };
   }
@@ -119,6 +126,27 @@ export function resolveLedgerDebitCredit(
   }
 
   return { debit: amount, credit: 0 };
+}
+
+export function calculateEmployeeAdvanceDebt(
+  payments: Array<
+    Pick<EmployeeLedgerSource, "amount" | "status" | "type" | "direction">
+  >
+) {
+  let debt = 0;
+
+  for (const payment of payments) {
+    if (payment.status === "CANCELLED" || payment.type !== "ADVANCE") continue;
+    if (payment.status === "PAID" || payment.direction === "PAID") {
+      debt = roundLedgerMoney(debt + toAmount(payment.amount));
+    }
+  }
+
+  return debt;
+}
+
+function roundLedgerMoney(value: number) {
+  return Math.round(value * 100) / 100;
 }
 
 export function calculateEmployeeCurrentBalance(
@@ -181,10 +209,10 @@ export function formatEmployeeLedgerBalanceLabel(balance: number) {
   }
 
   if (balance > 0) {
-    return `${balance.toLocaleString("tr-TR")} ₺ Borç`;
+    return `${balance.toLocaleString("tr-TR")} ₺ Şirketin Borcu`;
   }
 
-  return `${Math.abs(balance).toLocaleString("tr-TR")} ₺ Alacak`;
+  return `${Math.abs(balance).toLocaleString("tr-TR")} ₺ Çalışanın Şirkete Borcu`;
 }
 
 export function getEmployeeLedgerBalanceTone(balance: number) {

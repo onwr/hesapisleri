@@ -24,6 +24,7 @@ import { CollectionAccountSelect } from "@/components/cash-bank/collection-accou
 import { SaleLineEditFields } from "@/components/sales/sale-line-edit-fields";
 import { WarehouseSelectField } from "@/components/shared/warehouse-select-field";
 import { useCollectionAccounts } from "@/hooks/use-collection-accounts";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 import { formatMoney } from "@/lib/format-utils";
 import { parseTurkishMoneyInput } from "@/lib/money-input-utils";
 import {
@@ -50,6 +51,7 @@ type Product = {
   id: string;
   name: string;
   stock: number;
+  warehouseStock?: number;
   sellPrice: string | number;
   vatRate: number;
   category?: { name: string } | null;
@@ -77,6 +79,7 @@ type CartItem = {
 type EditSaleFormProps = {
   saleId: string;
   saleNo: string;
+  revisionNumber: number;
   initialCustomerId: string;
   initialNote: string;
   initialSaleDate: string;
@@ -108,6 +111,7 @@ function buildInitialCart(items: InitialItem[]): CartItem[] {
 export function EditSaleForm({
   saleId,
   saleNo,
+  revisionNumber,
   initialCustomerId,
   initialNote,
   initialSaleDate,
@@ -145,7 +149,7 @@ export function EditSaleForm({
   const [productSearch, setProductSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>(() => buildInitialCart(initialItems));
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const { mutate, isSubmitting } = useTenantMutation({ refresh: false });
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -157,9 +161,12 @@ export function EditSaleForm({
   useEffect(() => {
     async function loadData() {
       try {
+        const productUrl = selectedWarehouseId
+          ? `/api/products/list?warehouseId=${encodeURIComponent(selectedWarehouseId)}`
+          : "/api/products/list";
         const [customersRes, productsRes, warehousesRes] = await Promise.all([
           fetch("/api/customers/list"),
-          fetch("/api/products/list"),
+          fetch(productUrl),
           fetch("/api/stocks/warehouses/options"),
         ]);
 
@@ -179,7 +186,9 @@ export function EditSaleForm({
               const product = productsData.data.find(
                 (entry: Product) => entry.id === item.productId
               );
-              return product ? { ...item, stock: product.stock } : item;
+              if (!product) return item;
+              const effectiveStock = product.warehouseStock ?? product.stock;
+              return { ...item, stock: effectiveStock };
             })
           );
         }
@@ -257,7 +266,7 @@ export function EditSaleForm({
           quantity: 1,
           unitPrice: price,
           vatRate: product.vatRate,
-          stock: product.stock,
+          stock: product.warehouseStock ?? product.stock,
         },
       ];
     });
@@ -290,38 +299,32 @@ export function EditSaleForm({
   }
 
   async function handleUpdateSale() {
-    setSaving(true);
     setError("");
 
     if (cart.length === 0) {
       setError("Satış güncellemek için en az bir ürün ekleyin.");
-      setSaving(false);
       return;
     }
 
     const lineError = validateSaleLineItems(cart);
     if (lineError) {
       setError(lineError);
-      setSaving(false);
       return;
     }
 
     if (paymentStatus === "PARTIAL") {
       if (paidAmount <= 0) {
         setError("Kısmi ödeme için tahsil edilen tutarı girin.");
-        setSaving(false);
         return;
       }
       if (paidAmount >= total) {
         setError("Tahsil edilen tutar genel toplamdan küçük olmalıdır.");
-        setSaving(false);
         return;
       }
     }
 
     if (paymentStatus !== "UNPAID" && !accountId) {
       setError("Tahsilat hesabı seçin.");
-      setSaving(false);
       return;
     }
 
@@ -331,55 +334,49 @@ export function EditSaleForm({
     });
     if (discountError) {
       setError(discountError);
-      setSaving(false);
       return;
     }
 
-    try {
-      const res = await fetch(`/api/sales/${saleId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customerId: selectedCustomerId || null,
-          saleDate,
-          note,
-          warehouseId:
-            warehouseEnabled && selectedWarehouseId
-              ? selectedWarehouseId
-              : null,
-          paymentStatus,
-          collectedAmount:
-            paymentStatus === "PAID"
-              ? total
-              : paymentStatus === "UNPAID"
-                ? 0
-                : paidAmount,
-          accountId: paymentStatus === "UNPAID" ? undefined : accountId,
-          discountType: "AMOUNT",
-          discountValue,
-          items: cart.map((item) => ({
-            productId: item.productId,
-            name: item.name,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            vatRate: item.vatRate,
-          })),
-        }),
-      });
+    const result = await mutate(`/api/sales/${saleId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        revisionNumber,
+        customerId: selectedCustomerId || null,
+        saleDate,
+        note,
+        warehouseId:
+          warehouseEnabled && selectedWarehouseId
+            ? selectedWarehouseId
+            : null,
+        paymentStatus,
+        collectedAmount:
+          paymentStatus === "PAID"
+            ? total
+            : paymentStatus === "UNPAID"
+              ? 0
+              : paidAmount,
+        accountId: paymentStatus === "UNPAID" ? undefined : accountId,
+        discountType: "AMOUNT",
+        discountValue,
+        items: cart.map((item) => ({
+          productId: item.productId,
+          name: item.name,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          vatRate: item.vatRate,
+        })),
+      }),
+    });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setError(data.message || "Satış güncellenemedi.");
-        return;
+    if (!result.ok) {
+      if (result.error !== "duplicate_submit") {
+        setError(result.error || "Satış güncellenemedi.");
       }
-
-      router.push(`/sales/${saleId}`);
-      router.refresh();
-    } catch {
-      setError("Sunucuya bağlanırken bir hata oluştu.");
-    } finally {
-      setSaving(false);
+      return;
     }
+
+    router.push(`/sales/${saleId}`);
   }
 
   if (loading) {
@@ -394,7 +391,7 @@ export function EditSaleForm({
 
   return (
     <main className="min-h-screen bg-[#f7f8ff] px-5 py-6">
-      {saving ? (
+      {isSubmitting ? (
         <AppLoadingScreen
           preset="sales"
           title="Satış güncelleniyor"
@@ -506,8 +503,8 @@ export function EditSaleForm({
                       <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
                         <Package size={18} />
                       </div>
-                      <span className={`rounded-md px-2 py-1 text-[10px] font-black ${getStockClass(product.stock)}`}>
-                        Stok: {product.stock}
+                      <span className={`rounded-md px-2 py-1 text-[10px] font-black ${getStockClass(product.warehouseStock ?? product.stock)}`}>
+                        Stok: {product.warehouseStock ?? product.stock}
                       </span>
                     </div>
                     <p className="text-[13px] font-black text-[#0f1f4d]">{product.name}</p>
@@ -618,7 +615,7 @@ export function EditSaleForm({
                       loading={accountsLoading}
                       value={accountId}
                       onChange={setAccountId}
-                      disabled={saving || accountsLoading}
+                      disabled={isSubmitting || accountsLoading}
                       required
                     />
                   ) : null}
@@ -633,11 +630,11 @@ export function EditSaleForm({
                 <button
                   type="button"
                   onClick={() => void handleUpdateSale()}
-                  disabled={saving || cart.length === 0}
+                  disabled={isSubmitting || cart.length === 0}
                   className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-linear-to-br from-blue-600 to-violet-600 text-[13px] font-black text-white disabled:opacity-50"
                 >
-                  {saving ? <Loader2 className="animate-spin" size={18} /> : <ShoppingCart size={18} />}
-                  {saving ? "Satış güncelleniyor..." : "Satışı Güncelle"}
+                  {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : <ShoppingCart size={18} />}
+                  {isSubmitting ? "Satış güncelleniyor..." : "Satışı Güncelle"}
                 </button>
 
                 <div className="space-y-2">

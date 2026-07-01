@@ -1,6 +1,7 @@
 import type { EmployeePaymentStatus } from "@prisma/client";
+import { EMPLOYEE_PAYMENT_VALIDATION_MESSAGES } from "@/lib/employee-payment-validation";
 
-export const EMPLOYEE_EXPENSE_CATEGORY = "Personel Giderleri";
+export { EMPLOYEE_EXPENSE_CATEGORY } from "@/lib/employee-payment-type-mapping";
 
 export type MarkPaymentPaidFinanceResult = {
   expenseCreated: boolean;
@@ -106,7 +107,7 @@ export function validateMarkEmployeePaymentPaidInput(input: {
   if (needsAccount && !input.relatedAccountId?.trim()) {
     return {
       ok: false,
-      message: "Ödeme hesabı seçilmelidir.",
+      message: EMPLOYEE_PAYMENT_VALIDATION_MESSAGES.accountRequired,
       status: 400,
     };
   }
@@ -118,7 +119,7 @@ export function validateEmployeePaymentMarkPaidForm(input: {
   relatedAccountId: string;
 }): string | null {
   if (!input.relatedAccountId.trim()) {
-    return "Ödeme hesabı seçilmelidir.";
+    return EMPLOYEE_PAYMENT_VALIDATION_MESSAGES.accountRequired;
   }
 
   return null;

@@ -1,12 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { AdminPageContainer } from "@/components/admin/layout/admin-page-container";
 import { AdminPageHeader } from "@/components/admin/layout/admin-page-header";
 import { AdminPlanOverviewTab } from "@/components/admin/plans/admin-plan-overview-tab";
-import { AdminPlanPricingTab } from "@/components/admin/plans/admin-plan-pricing-tab";
+import {
+  AdminPlanPricingTab,
+  toWizardInitial,
+  type PriceRow,
+} from "@/components/admin/plans/admin-plan-pricing-tab";
 import { AdminPlanFeaturesTab } from "@/components/admin/plans/admin-plan-features-tab";
 import { AdminPlanEntitlementsTab } from "@/components/admin/plans/admin-plan-entitlements-tab";
 import { AdminPlanSubscriptionsTab } from "@/components/admin/plans/admin-plan-subscriptions-tab";
@@ -15,12 +19,12 @@ import { AdminPlanActivityTab } from "@/components/admin/plans/admin-plan-activi
 import { AdminPlanNotesTab } from "@/components/admin/plans/admin-plan-notes-tab";
 import { AdminPlanPlaceholderTab } from "@/components/admin/plans/admin-plan-placeholder-tab";
 import { AdminPlanEditModal } from "@/components/admin/plans/admin-plan-edit-modal";
-import { AdminPlanPriceWizard } from "@/components/admin/plans/admin-plan-price-wizard";
+import { AdminPlanPriceWizard, type AdminPlanPriceWizardMode } from "@/components/admin/plans/admin-plan-price-wizard";
 import { AdminPlanActivateModal, AdminPlanArchiveModal } from "@/components/admin/plans/admin-plan-lifecycle-modals";
 import { AdminPlanCloneModal } from "@/components/admin/plans/admin-plan-clone-modal";
 import { appOutlineButtonClass, appPanelClass, appPrimaryButtonClass } from "@/lib/admin-ui";
 import { formatAdminDate } from "@/lib/admin-utils";
-import type { AdminPlanTab } from "@/lib/admin/plans/admin-plan-schemas";
+import { resolvePlanTab, type AdminPlanTab } from "@/lib/admin/plans/admin-plan-schemas";
 
 type Header = {
   id: string;
@@ -76,11 +80,18 @@ export function AdminPlanDetailShell({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState<AdminPlanTab>(activeTab);
+  const tab = resolvePlanTab(searchParams.get("tab") ?? undefined);
   const [tabData, setTabData] = useState(initialTabData);
+  const [dataTab, setDataTab] = useState<AdminPlanTab>(activeTab);
   const [loading, setLoading] = useState(false);
+  const skipTabFetchRef = useRef(true);
   const [editOpen, setEditOpen] = useState(false);
-  const [priceOpen, setPriceOpen] = useState(false);
+  const [priceWizard, setPriceWizard] = useState<{
+    mode: AdminPlanPriceWizardMode;
+    priceId?: string;
+    initialPrice?: ReturnType<typeof toWizardInitial>;
+  } | null>(null);
+  const [publishingPriceId, setPublishingPriceId] = useState<string | null>(null);
   const [activateOpen, setActivateOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [cloneOpen, setCloneOpen] = useState(false);
@@ -88,6 +99,7 @@ export function AdminPlanDetailShell({
 
   const loadTab = useCallback(async () => {
     setLoading(true);
+    setMessage(null);
     try {
       const p = new URLSearchParams(searchParams.toString());
       p.set("tab", tab);
@@ -95,6 +107,7 @@ export function AdminPlanDetailShell({
       const json = await res.json();
       if (!json.success) throw new Error(json.message);
       setTabData(json.data.tabData);
+      setDataTab(tab);
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Yüklenemedi");
     } finally {
@@ -103,20 +116,60 @@ export function AdminPlanDetailShell({
   }, [planId, tab, searchParams]);
 
   useEffect(() => {
-    if (tab !== activeTab) void loadTab();
+    if (skipTabFetchRef.current && tab === activeTab) {
+      skipTabFetchRef.current = false;
+      setDataTab(activeTab);
+      return;
+    }
+    void loadTab();
   }, [tab, activeTab, loadTab]);
 
   function navigateTab(next: AdminPlanTab) {
-    setTab(next);
+    if (next === tab) return;
     const p = new URLSearchParams(searchParams.toString());
     p.set("tab", next);
     router.push(`${pathname}?${p.toString()}`);
   }
 
+  const tabContentReady = !loading && dataTab === tab && tabData != null;
+
   function onMutationSuccess(msg: string) {
     setMessage(msg);
+    setPriceWizard(null);
     void loadTab();
     router.refresh();
+  }
+
+  function openCreatePriceWizard() {
+    setPriceWizard({ mode: "create" });
+  }
+
+  function openEditPriceWizard(row: PriceRow, mode: "edit-draft" | "revise") {
+    setPriceWizard({
+      mode,
+      priceId: mode === "edit-draft" ? row.id : undefined,
+      initialPrice: toWizardInitial(row),
+    });
+  }
+
+  async function publishPriceRow(row: PriceRow) {
+    setPublishingPriceId(row.id);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/admin/plans/${planId}/prices/${row.id}/publish`, {
+        method: "POST",
+      });
+      const json = await res.json();
+      if (!json.success) {
+        setMessage(json.message ?? "Yayınlama başarısız.");
+        return;
+      }
+      onMutationSuccess(json.message ?? "Fiyat yayınlandı.");
+    } catch {
+      setMessage("Yayınlama başarısız.");
+    } finally {
+      setPublishingPriceId(null);
+    }
   }
 
   return (
@@ -170,7 +223,7 @@ export function AdminPlanDetailShell({
             <button
               type="button"
               className={appOutlineButtonClass}
-              onClick={() => setPriceOpen(true)}
+              onClick={() => openCreatePriceWizard()}
               disabled={header.planStatus === "ARCHIVED"}
             >
               Yeni fiyat
@@ -206,15 +259,20 @@ export function AdminPlanDetailShell({
         ))}
       </div>
 
-      {loading ? (
-        <p className="text-[12px] text-slate-500">Yükleniyor…</p>
+      {!tabContentReady ? (
+        <p className="text-[12px] text-slate-500">
+          {loading ? "Yükleniyor…" : message ?? "Sekme verisi yüklenemedi."}
+        </p>
       ) : tab === "overview" ? (
         <AdminPlanOverviewTab data={tabData as Parameters<typeof AdminPlanOverviewTab>[0]["data"]} planId={planId} />
       ) : tab === "pricing" ? (
         <AdminPlanPricingTab
           data={tabData as Parameters<typeof AdminPlanPricingTab>[0]["data"]}
           planId={planId}
-          onCreatePrice={() => setPriceOpen(true)}
+          onCreatePrice={openCreatePriceWizard}
+          onEditPrice={openEditPriceWizard}
+          onPublishPrice={publishPriceRow}
+          publishingPriceId={publishingPriceId}
         />
       ) : tab === "features" ? (
         <AdminPlanFeaturesTab
@@ -264,12 +322,15 @@ export function AdminPlanDetailShell({
         }}
       />
       <AdminPlanPriceWizard
-        open={priceOpen}
-        onClose={() => setPriceOpen(false)}
+        open={priceWizard != null}
+        onClose={() => setPriceWizard(null)}
         planId={planId}
         defaultCurrency={(planBasics.defaultCurrency as string) ?? "TRY"}
+        mode={priceWizard?.mode ?? "create"}
+        priceId={priceWizard?.priceId}
+        initialPrice={priceWizard?.initialPrice ?? null}
         onSuccess={(msg) => {
-          setPriceOpen(false);
+          setPriceWizard(null);
           onMutationSuccess(msg);
         }}
       />

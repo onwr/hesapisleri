@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { verifyApiMutationOrigin } from "@/lib/api-origin-guard";
 import {
   requireApiCashBankManage,
   requireApiCashBankRead,
@@ -109,6 +110,9 @@ export async function accountOptionsHandler() {
 
 export async function accountCreateHandler(req: Request) {
   try {
+    const originError = verifyApiMutationOrigin(req);
+    if (originError) return originError;
+
     const auth = await requireApiCashBankManage();
     if ("error" in auth) return auth.error;
 
@@ -159,6 +163,9 @@ export async function accountDetailHandler(accountId: string) {
 
 export async function accountUpdateHandler(req: Request, accountId: string) {
   try {
+    const originError = verifyApiMutationOrigin(req);
+    if (originError) return originError;
+
     const auth = await requireApiCashBankManage();
     if ("error" in auth) return auth.error;
 
@@ -190,8 +197,11 @@ export async function accountUpdateHandler(req: Request, accountId: string) {
   }
 }
 
-export async function accountDeactivateHandler(accountId: string) {
+export async function accountDeactivateHandler(req: Request, accountId: string) {
   try {
+    const originError = verifyApiMutationOrigin(req);
+    if (originError) return originError;
+
     const auth = await requireApiCashBankManage();
     if ("error" in auth) return auth.error;
 
@@ -211,8 +221,11 @@ export async function accountDeactivateHandler(accountId: string) {
   }
 }
 
-export async function accountSetDefaultHandler(accountId: string) {
+export async function accountSetDefaultHandler(req: Request, accountId: string) {
   try {
+    const originError = verifyApiMutationOrigin(req);
+    if (originError) return originError;
+
     const auth = await requireApiCashBankManage();
     if ("error" in auth) return auth.error;
 

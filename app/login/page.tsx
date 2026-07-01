@@ -9,6 +9,7 @@ import {
 } from "@/lib/auth/auth-dal";
 import { buildClearSessionUrl } from "@/lib/auth/auth-redirect";
 import { sanitizeAuthRedirectPath } from "@/lib/auth/auth-redirect";
+import { isDemoLoginEnabled } from "@/lib/demo-login-service";
 
 type LoginPageProps = {
   searchParams: Promise<{
@@ -41,7 +42,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   return (
     <AuthShell variant="login">
       <Suspense fallback={<AppLoadingScreen preset="login" />}>
-        <LoginForm sessionExpired={params.reason === "session-expired"} />
+        <LoginForm
+          sessionExpired={params.reason === "session-expired"}
+          demoLoginEnabled={isDemoLoginEnabled()}
+        />
       </Suspense>
     </AuthShell>
   );

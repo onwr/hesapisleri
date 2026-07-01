@@ -149,7 +149,7 @@ describe("warehouse transfer architecture", () => {
     assert.match(source, /status:\s*"COMPLETED"/);
     assert.match(source, /TRANSFER_OUT/);
     assert.match(source, /TRANSFER_IN/);
-    assert.match(read("app/api/stocks/transfers/route.ts"), /invalidateDashboardCache/);
+    assert.match(read("app/api/stocks/transfers/route.ts"), /invalidateTenantCaches|invalidateDashboardCache/);
   });
 
   it("warehouse-service legacy transfer kodu içermez", () => {
@@ -169,7 +169,8 @@ describe("warehouse transfer architecture", () => {
   it("client idempotencyKey gönderir", () => {
     const source = read("components/stocks/warehouse-transfer-modal.tsx");
     assert.match(source, /idempotencyKey/);
-    assert.match(source, /disabled=\{saving\}/);
+    assert.match(source, /useTenantMutation/);
+    assert.match(source, /disabled=\{isSubmitting\}/);
   });
 });
 

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Loader2, Save } from "lucide-react";
 import { AppLoadingScreen } from "@/components/layout/app-loading-screen";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 
 type EditExpenseFormProps = {
   expense: {
@@ -24,7 +25,7 @@ type EditExpenseFormProps = {
 
 export function EditExpenseForm({ expense, categories }: EditExpenseFormProps) {
   const router = useRouter();
-  const [saving, setSaving] = useState(false);
+  const { mutate, isSubmitting } = useTenantMutation({ refresh: false });
   const [error, setError] = useState("");
 
   const [form, setForm] = useState({
@@ -50,53 +51,44 @@ export function EditExpenseForm({ expense, categories }: EditExpenseFormProps) {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSaving(true);
     setError("");
 
-    try {
-      const payload: Record<string, unknown> = {
-        title: form.title.trim(),
-        category: form.category.trim() || undefined,
-        supplier: form.supplier.trim() || undefined,
-        date: form.date,
-        note: form.note.trim() || undefined,
-      };
+    const payload: Record<string, unknown> = {
+      title: form.title.trim(),
+      category: form.category.trim() || undefined,
+      supplier: form.supplier.trim() || undefined,
+      date: form.date,
+      note: form.note.trim() || undefined,
+    };
 
-      if (!isPaid) {
-        const parsedAmount = Number(form.amount);
-        if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
-          setError("Geçerli bir tutar girin.");
-          setSaving(false);
-          return;
-        }
-        payload.amount = parsedAmount;
-      }
-
-      const response = await fetch(`/api/expenses/${expense.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        setError(data.message || "Gider güncellenemedi.");
+    if (!isPaid) {
+      const parsedAmount = Number(form.amount);
+      if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
+        setError("Geçerli bir tutar girin.");
         return;
       }
-
-      router.push(`/expenses/${expense.id}`);
-      router.refresh();
-    } catch {
-      setError("Sunucuya bağlanırken bir hata oluştu.");
-    } finally {
-      setSaving(false);
+      payload.amount = parsedAmount;
     }
+
+    const result = await mutate(`/api/expenses/${expense.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!result.ok) {
+      if (result.error !== "duplicate_submit") {
+        setError(result.error || "Gider güncellenemedi.");
+      }
+      return;
+    }
+
+    router.push(`/expenses/${expense.id}`);
   }
 
   return (
     <>
-      {saving ? (
+      {isSubmitting ? (
         <AppLoadingScreen
           preset="expenses"
           title="Gider güncelleniyor"
@@ -220,10 +212,10 @@ export function EditExpenseForm({ expense, categories }: EditExpenseFormProps) {
         <div className="flex gap-3">
           <button
             type="submit"
-            disabled={saving}
+            disabled={isSubmitting}
             className="inline-flex h-11 items-center gap-2 rounded-xl bg-linear-to-r from-orange-500 to-amber-600 px-5 text-[13px] font-black text-white disabled:opacity-60"
           >
-            {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+            {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
             Kaydet
           </button>
 

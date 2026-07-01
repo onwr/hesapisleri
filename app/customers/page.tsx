@@ -20,7 +20,8 @@ import {
   CustomersTablePagination,
   CustomersTableToolbar,
 } from "@/components/customers/customers-table-controls";
-import { getCustomersPageData } from "@/lib/customers-page-data";
+import { getCachedCustomersPageData } from "@/lib/tenant-cache/cached-tenant-page-data";
+import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
 import {
   buildCustomersExportQuery,
   formatCustomerMoney,
@@ -116,7 +117,8 @@ const activeTab = parseCustomerTab(params.tab);
     totalRecords,
     totalPages,
     currentPage: page,
-  } = await getCustomersPageData(company.id, {
+  } = await getCachedCustomersPageData({
+    companyId: company.id,
     tab: activeTab,
     page: currentPage,
     group: activeGroup,
@@ -133,6 +135,7 @@ const activeTab = parseCustomerTab(params.tab);
 
   return (
     <AppShell>
+      <TenantPageSync />
       <div className="space-y-5">
         <div className="flex justify-end">
           <AiPageTriggerButton moduleKey="customers" />

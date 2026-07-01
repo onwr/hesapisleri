@@ -5,7 +5,8 @@ import { AppShell } from "@/components/layout/app-shell";
 import { guardPageModule } from "@/lib/module-access";
 
 import { ProductDetailView } from "@/components/products/product-detail-view";
-import { getProductDetailData } from "@/lib/product-detail-data";
+import { getCachedProductDetailData } from "@/lib/tenant-cache/cached-tenant-page-data";
+import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
 import {
   PRODUCT_UNIT_LABELS,
   type ProductUnitType,
@@ -21,7 +22,10 @@ export default async function ProductDetailPage({ params, searchParams }: Props)
 const { id } = await params;
   const query = await searchParams;
 
-  const detail = await getProductDetailData(company.id, id);
+  const detail = await getCachedProductDetailData({
+    companyId: company.id,
+    productId: id,
+  });
   if (!detail) notFound();
 
   const {
@@ -44,6 +48,7 @@ const { id } = await params;
 
   return (
     <AppShell>
+      <TenantPageSync />
       <div className="space-y-4">
         <div className="flex items-center gap-3">
           <Link

@@ -175,7 +175,7 @@ export async function cancelSaleById(
   saleId: string,
   companyId: string,
   userId: string,
-  input?: { reason?: string; note?: string | null }
+  input?: { reason?: string; note?: string | null; revisionNumber?: number }
 ) {
   const reason = input?.reason?.trim();
   if (!reason) {
@@ -212,6 +212,17 @@ export async function cancelSaleById(
       ok: false as const,
       status: 400,
       message: eligibility.message,
+    };
+  }
+
+  if (
+    input?.revisionNumber !== undefined &&
+    sale.revisionNumber !== input.revisionNumber
+  ) {
+    return {
+      ok: false as const,
+      status: 409,
+      message: "SALE_VERSION_CONFLICT: Bu satış başka bir işlem tarafından güncellenmiş. Sayfayı yenileyip tekrar deneyin.",
     };
   }
 

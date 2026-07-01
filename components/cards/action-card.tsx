@@ -20,7 +20,7 @@ export function ActionCard({
   return (
     <Link
       href={href}
-      className={`group flex h-[86px] items-center justify-between rounded-2xl p-4 text-white shadow-[0_14px_30px_rgba(15,23,42,0.12)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgba(15,23,42,0.16)] ${gradient}`}
+      className={`group flex h-[86px] items-center justify-between rounded-2xl p-4 text-white shadow-[0_14px_30px_rgba(15,23,42,0.12)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgba(15,23,42,0.16)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 ${gradient}`}
     >
       <div className="flex min-w-0 items-center gap-3">
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/15 shadow-inner">
@@ -31,7 +31,7 @@ export function ActionCard({
           <p className="truncate text-[15px] font-extrabold leading-tight">
             {title}
           </p>
-          <p className="mt-1 truncate text-[11px] font-medium text-white/85">
+          <p className="mt-1 truncate text-xs font-medium text-white">
             {description}
           </p>
         </div>

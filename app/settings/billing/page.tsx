@@ -3,6 +3,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { MembershipBillingPanel } from "@/components/settings/membership-billing-panel";
 import { getAppSession } from "@/lib/app-session";
 import { canManageMembership } from "@/lib/permission-utils";
+import { getBillingPaymentProvider } from "@/lib/payments/billing-provider-resolver";
 
 export default async function SettingsBillingPage() {
   const session = await getAppSession();
@@ -13,9 +14,11 @@ export default async function SettingsBillingPage() {
     redirect("/unauthorized");
   }
 
+  const checkoutProvider = getBillingPaymentProvider();
+
   return (
     <AppShell>
-      <MembershipBillingPanel />
+      <MembershipBillingPanel checkoutProvider={checkoutProvider} />
     </AppShell>
   );
 }

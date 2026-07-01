@@ -86,9 +86,10 @@ async function executePosCheckoutInTransaction(
     userId: string;
     data: PosCheckoutInput;
     payloadHash: string;
+    allowNegativeStock: boolean;
   }
 ): Promise<{ sale: SaleWithRelations; stockWarnings: StockWarningItem[]; replayed: boolean }> {
-  const { companyId, userId, data, payloadHash } = input;
+  const { companyId, userId, data, payloadHash, allowNegativeStock } = input;
 
   const existing = await findCompletedPosSaleByIdempotencyKey(
     tx,
@@ -122,7 +123,8 @@ async function executePosCheckoutInTransaction(
     tx,
     companyId,
     data.items,
-    resolvedWarehouseId
+    resolvedWarehouseId,
+    allowNegativeStock
   );
 
   const createdSale = await tx.sale.create({
@@ -169,7 +171,8 @@ async function executePosCheckoutInTransaction(
     companyId,
     createdSale.saleNo,
     data.items,
-    resolvedWarehouseId
+    resolvedWarehouseId,
+    allowNegativeStock
   );
 
   if (payment.paidAmount > 0) {
@@ -288,6 +291,12 @@ export async function executePosCheckout(input: {
 
   await assertOptionalTenantCustomer(db, companyId, data.customerId);
 
+  const companySettings = await db.companySettings.findUnique({
+    where: { companyId },
+    select: { allowNegativeStockSales: true },
+  });
+  const allowNegativeStock = companySettings?.allowNegativeStockSales ?? false;
+
   const payloadHash = buildPosCheckoutPayloadHash(data);
 
   try {
@@ -297,6 +306,7 @@ export async function executePosCheckout(input: {
         userId,
         data,
         payloadHash,
+        allowNegativeStock,
       })
     );
 

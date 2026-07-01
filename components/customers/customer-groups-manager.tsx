@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
+import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 import {
   Edit3,
   Loader2,
@@ -47,7 +47,7 @@ export function CustomerGroupsManager({
   groups,
   summary,
 }: CustomerGroupsManagerProps) {
-  const router = useRouter();
+
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [modalMode, setModalMode] = useState<"create" | "edit" | "delete" | null>(
@@ -115,7 +115,7 @@ export function CustomerGroupsManager({
         }
 
         closeModal();
-        router.refresh();
+        notifyTenantCacheSync();
       } catch {
         setError("Grup oluşturulurken bir hata oluştu.");
       }
@@ -146,7 +146,7 @@ export function CustomerGroupsManager({
         }
 
         closeModal();
-        router.refresh();
+        notifyTenantCacheSync();
       } catch {
         setError("Grup güncellenirken bir hata oluştu.");
       }
@@ -175,7 +175,7 @@ export function CustomerGroupsManager({
         }
 
         closeModal();
-        router.refresh();
+        notifyTenantCacheSync();
       } catch {
         setError("Grup silinirken bir hata oluştu.");
       }

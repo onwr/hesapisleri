@@ -1,7 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import { Percent, Power, Printer, Trash2, X } from "lucide-react";
 import { ProductDeleteFeedbackDialog } from "@/components/products/product-delete-feedback-dialog";
 import { ProductEmptyState } from "@/components/products/product-empty-state";
@@ -9,6 +8,7 @@ import { ProductListRow } from "@/components/products/product-list-row";
 import { ProductTableDesktopRow } from "@/components/products/product-table-desktop-row";
 import { ProductsBulkResultDialog } from "@/components/products/products-bulk-result-dialog";
 import { ProductsPriceBulkDialog } from "@/components/products/products-price-bulk-dialog";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 import type { ProductDeleteBlockCode } from "@/lib/product-delete-utils";
 import { printProductBarcodesBulk } from "@/lib/product-ui-utils";
 import { formatProductMoney, type ProductTableRow } from "@/lib/products-page-utils";
@@ -24,9 +24,8 @@ export function ProductsSelectableTable({
   exportHref,
   hasFilters,
 }: ProductsSelectableTableProps) {
-  const router = useRouter();
+  const { mutate, isSubmitting } = useTenantMutation({ refresh: false });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [isPending, startTransition] = useTransition();
   const [priceDialogOpen, setPriceDialogOpen] = useState(false);
   const [deleteFeedback, setDeleteFeedback] = useState<{
     open: boolean;
@@ -74,73 +73,55 @@ export function ProductsSelectableTable({
     payload: Record<string, unknown>,
     options?: { clearSelection?: boolean }
   ) {
-    startTransition(async () => {
-      try {
-        const response = await fetch("/api/products/bulk", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-
-        const result = (await response.json()) as {
-          success?: boolean;
-          message?: string;
-          data?: {
-            deleted?: number;
-            updated?: number;
-            failed?: Array<{
-              productId: string;
-              message: string;
-              code?: string;
-            }>;
-          };
-        };
-
-        if (!response.ok || !result.success) {
-          setBulkResult({
-            open: true,
-            title: "Toplu işlem başarısız",
-            summary: result.message ?? "İşlem tamamlanamadı.",
-            successCount: 0,
-            failed: [],
-          });
-          return;
-        }
-
-        const rawFailed = result.data?.failed ?? [];
-        const failed = rawFailed.map((item) => ({
-          productId: item.productId,
-          message: item.message,
-          code: item.code,
-        }));
-        const successCount =
-          result.data?.deleted ?? result.data?.updated ?? selectedIds.size;
-
-        if (failed.length > 0) {
-          setBulkResult({
-            open: true,
-            title: "Toplu işlem tamamlandı",
-            summary: result.message ?? "",
-            successCount,
-            failed,
-          });
-        }
-
-        if (options?.clearSelection !== false) {
-          setSelectedIds(new Set());
-        }
-
-        router.refresh();
-      } catch {
-        setBulkResult({
-          open: true,
-          title: "Hata",
-          summary: "Toplu işlem sırasında bir hata oluştu.",
-          successCount: 0,
-          failed: [],
-        });
-      }
+    const result = await mutate("/api/products/bulk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
+
+    if (!result.ok) {
+      setBulkResult({
+        open: true,
+        title: "Toplu işlem başarısız",
+        summary: result.error ?? "İşlem tamamlanamadı.",
+        successCount: 0,
+        failed: [],
+      });
+      return;
+    }
+
+    const data = result.data as {
+      deleted?: number;
+      updated?: number;
+      failed?: Array<{
+        productId: string;
+        message: string;
+        code?: string;
+      }>;
+    } | undefined;
+
+    const rawFailed = data?.failed ?? [];
+    const failed = rawFailed.map((item) => ({
+      productId: item.productId,
+      message: item.message,
+      code: item.code,
+    }));
+    const successCount =
+      data?.deleted ?? data?.updated ?? selectedIds.size;
+
+    if (failed.length > 0) {
+      setBulkResult({
+        open: true,
+        title: "Toplu işlem tamamlandı",
+        summary: result.message ?? "",
+        successCount,
+        failed,
+      });
+    }
+
+    if (options?.clearSelection !== false) {
+      setSelectedIds(new Set());
+    }
   }
 
   function handleBulkDelete() {
@@ -200,28 +181,16 @@ export function ProductsSelectableTable({
     });
   }
 
-  function handleSetPassive(productId: string) {
-    startTransition(async () => {
-      try {
-        const response = await fetch(`/api/products/${productId}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "set-status", status: "PASSIVE" }),
-        });
-
-        const result = (await response.json()) as {
-          success?: boolean;
-          message?: string;
-        };
-
-        if (!response.ok || !result.success) return;
-
-        setDeleteFeedback(null);
-        router.refresh();
-      } catch {
-        // ignore
-      }
+  async function handleSetPassive(productId: string) {
+    const result = await mutate(`/api/products/${productId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "set-status", status: "PASSIVE" }),
     });
+
+    if (result.ok) {
+      setDeleteFeedback(null);
+    }
   }
 
   function handleBulkPrintBarcodes() {
@@ -257,7 +226,7 @@ export function ProductsSelectableTable({
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              disabled={isPending}
+              disabled={isSubmitting}
               onClick={handleBulkPrintBarcodes}
               className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-black text-[#0f1f4d] hover:bg-slate-50 disabled:opacity-60"
             >
@@ -266,7 +235,7 @@ export function ProductsSelectableTable({
             </button>
             <button
               type="button"
-              disabled={isPending}
+              disabled={isSubmitting}
               onClick={() => setPriceDialogOpen(true)}
               className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-black text-[#0f1f4d] hover:bg-slate-50 disabled:opacity-60"
             >
@@ -275,7 +244,7 @@ export function ProductsSelectableTable({
             </button>
             <button
               type="button"
-              disabled={isPending}
+              disabled={isSubmitting}
               onClick={() => handleBulkStatus("PASSIVE")}
               className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-black text-[#0f1f4d] hover:bg-slate-50 disabled:opacity-60"
             >
@@ -284,7 +253,7 @@ export function ProductsSelectableTable({
             </button>
             <button
               type="button"
-              disabled={isPending}
+              disabled={isSubmitting}
               onClick={() => handleBulkStatus("ACTIVE")}
               className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-[12px] font-black text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
             >
@@ -293,7 +262,7 @@ export function ProductsSelectableTable({
             </button>
             <button
               type="button"
-              disabled={isPending}
+              disabled={isSubmitting}
               onClick={handleBulkDelete}
               className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 text-[12px] font-black text-rose-700 hover:bg-rose-100 disabled:opacity-60"
             >
@@ -379,14 +348,14 @@ export function ProductsSelectableTable({
         onClose={() => setPriceDialogOpen(false)}
         selectedCount={selectedIds.size}
         onApply={handleBulkPrice}
-        isPending={isPending}
+        isPending={isSubmitting}
       />
 
       <ProductDeleteFeedbackDialog
         state={deleteFeedback}
         onClose={() => setDeleteFeedback(null)}
         onSetPassive={handleSetPassive}
-        isPending={isPending}
+        isPending={isSubmitting}
       />
 
       <ProductsBulkResultDialog

@@ -1,7 +1,6 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDownLeft,
@@ -17,6 +16,7 @@ import {
   CashBankTransferModal,
   type CashBankAccountOption,
 } from "@/components/cash-bank/cash-bank-transfer-modal";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 import { toDateTimeLocalValue } from "@/lib/cash-bank-account-utils";
 
 type AccountDetailActionsProps = {
@@ -36,11 +36,24 @@ export function AccountDetailActions({
   companyAccounts,
   openMovementOnMount = false,
 }: AccountDetailActionsProps) {
-  const router = useRouter();
+  const { mutate, isSubmitting } = useTenantMutation<{
+    negativeBalanceWarning?: boolean;
+  }>({
+    refresh: false,
+    onSuccess: (data) => {
+      if (data?.negativeBalanceWarning) {
+        setWarning("Hesap bakiyesi eksiye düştü.");
+      }
+      setMovementOpen(false);
+      setTitle("");
+      setAmount("");
+      setNote("");
+      setMovementDate(toDateTimeLocalValue());
+    },
+  });
   const [movementOpen, setMovementOpen] = useState(openMovementOnMount);
   const [transferOpen, setTransferOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [warning, setWarning] = useState("");
   const [movementType, setMovementType] = useState<MovementType>("INCOME");
@@ -98,60 +111,37 @@ export function AccountDetailActions({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSaving(true);
     setError("");
     setWarning("");
 
     const parsedAmount = Number(amount);
     if (!title.trim()) {
       setError("Başlık girin.");
-      setSaving(false);
       return;
     }
 
     if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
       setError("Geçerli bir tutar girin.");
-      setSaving(false);
       return;
     }
 
-    try {
-      const response = await fetch(
-        `/api/cash-bank/accounts/${accountId}/transactions`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            type: movementType,
-            title: title.trim(),
-            amount: parsedAmount,
-            date: movementDate,
-            note: note.trim() || undefined,
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        setError(data.message || "Hareket kaydedilemedi.");
-        return;
+    const result = await mutate(
+      `/api/cash-bank/accounts/${accountId}/transactions`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: movementType,
+          title: title.trim(),
+          amount: parsedAmount,
+          date: movementDate,
+          note: note.trim() || undefined,
+        }),
       }
+    );
 
-      if (data.data?.negativeBalanceWarning) {
-        setWarning("Hesap bakiyesi eksiye düştü.");
-      }
-
-      setMovementOpen(false);
-      setTitle("");
-      setAmount("");
-      setNote("");
-      setMovementDate(toDateTimeLocalValue());
-      router.refresh();
-    } catch {
-      setError("Sunucuya bağlanırken bir hata oluştu.");
-    } finally {
-      setSaving(false);
+    if (!result.ok && result.error !== "duplicate_submit") {
+      setError(result.error || "Hareket kaydedilemedi.");
     }
   }
 
@@ -219,7 +209,7 @@ export function AccountDetailActions({
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4 p-5">
+            <form onSubmit={handleSubmit} noValidate className="space-y-4 p-5">
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
@@ -317,15 +307,15 @@ export function AccountDetailActions({
               <div className="flex gap-3">
                 <button
                   type="submit"
-                  disabled={saving}
+                  disabled={isSubmitting}
                   className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-linear-to-r from-violet-500 to-purple-600 text-[13px] font-black text-white disabled:opacity-60"
                 >
-                  {saving ? (
+                  {isSubmitting ? (
                     <Loader2 className="animate-spin" size={18} />
                   ) : (
                     <Save size={18} />
                   )}
-                  {saving ? "Kaydediliyor..." : "Kaydet"}
+                  {isSubmitting ? "Kaydediliyor..." : "Kaydet"}
                 </button>
 
                 <button

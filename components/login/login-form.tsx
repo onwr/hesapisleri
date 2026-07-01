@@ -9,7 +9,6 @@ import {
   ArrowRight,
   Eye,
   EyeOff,
-  KeyRound,
   Loader2,
   Lock,
   Mail,
@@ -30,14 +29,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 const REDIRECT_TIMEOUT_MS = 12_000;
-const DEMO_EMAIL = "owner@demo.com";
-const DEMO_PASSWORD = "123456";
 
 type LoginFormProps = {
   sessionExpired?: boolean;
+  demoLoginEnabled?: boolean;
 };
 
-export function LoginForm({ sessionExpired = false }: LoginFormProps) {
+export function LoginForm({
+  sessionExpired = false,
+  demoLoginEnabled = false,
+}: LoginFormProps) {
   const searchParams = useSearchParams();
   const nextParam = searchParams.get("next") ?? searchParams.get("redirect");
   const redirectPath = nextParam
@@ -91,10 +92,37 @@ export function LoginForm({ sessionExpired = false }: LoginFormProps) {
     window.location.replace(redirectTo);
   }
 
-  function fillDemoCredentials() {
-    setEmail(DEMO_EMAIL);
-    setPassword(DEMO_PASSWORD);
+  async function handleDemoLogin() {
+    if (isSubmitting) return;
+
+    setIsSubmitting(true);
     setError("");
+    setRedirectTimedOut(false);
+    setTransitioning(true);
+    setLoaderPreset("login");
+
+    try {
+      const res = await fetch("/api/auth/demo-login", { method: "POST" });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setTransitioning(false);
+        setError(data.message || "Demo giriş yapılamadı.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      const destination =
+        redirectPath ??
+        data.redirectTo ??
+        data.data?.redirectTo ??
+        "/dashboard";
+      startRedirect(destination);
+    } catch {
+      setTransitioning(false);
+      setError("Demo giriş tamamlanamadı. Lütfen tekrar deneyin.");
+      setIsSubmitting(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -168,29 +196,19 @@ export function LoginForm({ sessionExpired = false }: LoginFormProps) {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={fillDemoCredentials}
-          className="mb-6 flex w-full items-start gap-3 rounded-2xl border border-blue-100 bg-blue-50/80 p-4 text-left transition hover:bg-blue-50"
-        >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-blue-600 shadow-sm">
+        {demoLoginEnabled ? (
+          <button
+            type="button"
+            onClick={() => void handleDemoLogin()}
+            disabled={isSubmitting}
+            className="mb-6 flex w-full items-center justify-center gap-2 rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-3 text-sm font-black text-blue-700 transition hover:bg-blue-50 disabled:opacity-60"
+          >
             <Sparkles size={18} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[12px] font-black uppercase tracking-wide text-blue-700">
-              Demo giriş
-            </p>
-            <p className="mt-1 text-sm font-bold text-[#0f1f4d]">
-              {DEMO_EMAIL}
-            </p>
-            <p className="mt-0.5 flex items-center gap-1.5 text-xs font-semibold text-slate-500">
-              <KeyRound size={12} />
-              Şifre: {DEMO_PASSWORD}
-            </p>
-          </div>
-        </button>
+            Demo Hesaba Gir
+          </button>
+        ) : null}
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} noValidate className="space-y-5">
           <div className="space-y-2">
             <Label htmlFor="email" className="text-sm font-bold text-[#24345f]">
               E-posta
@@ -206,7 +224,6 @@ export function LoginForm({ sessionExpired = false }: LoginFormProps) {
                 onChange={(e) => setEmail(e.target.value)}
                 className={authInputWithIconClassName}
                 disabled={isSubmitting}
-                required
               />
             </div>
           </div>
@@ -229,7 +246,6 @@ export function LoginForm({ sessionExpired = false }: LoginFormProps) {
                 onChange={(e) => setPassword(e.target.value)}
                 className={authInputWithToggleClassName}
                 disabled={isSubmitting}
-                required
               />
               <button
                 type="button"

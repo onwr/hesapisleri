@@ -31,6 +31,13 @@ describe("exchange rate infrastructure", () => {
     assert.doesNotMatch(fnBody, /open\.er-api\.com/);
   });
 
+  it("fetch timeout ve fallback mevcut", () => {
+    const source = read("lib/exchange-rate-service.ts");
+    assert.match(source, /FETCH_TIMEOUT_MS/);
+    assert.match(source, /AbortController/);
+    assert.match(source, /getLatestSuccessfulSnapshot/);
+  });
+
   it("dashboard widget does not poll externally", () => {
     const source = read("components/dashboard/dashboard-exchange-rates.tsx");
     assert.doesNotMatch(source, /fetch\(/);

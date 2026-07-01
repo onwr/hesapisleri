@@ -231,8 +231,17 @@ async function buildPayrollItemsForPeriod(input: {
       },
       payments: {
         where: {
-          status: { in: ["PENDING", "OVERDUE"] },
-          type: { in: ["BONUS", "DEDUCTION", "ADVANCE"] },
+          status: { not: "CANCELLED" },
+          OR: [
+            {
+              type: { in: ["BONUS", "DEDUCTION"] },
+              status: { in: ["PENDING", "OVERDUE"] },
+            },
+            {
+              type: "ADVANCE",
+              status: { in: ["PENDING", "OVERDUE", "PAID"] },
+            },
+          ],
         },
       },
     },
@@ -972,8 +981,17 @@ export async function getPayrollRunPeriodPayments(input: {
     where: {
       companyId: input.companyId,
       employeeId: { in: employeeIds },
-      type: { in: ["BONUS", "DEDUCTION", "ADVANCE"] },
-      status: { in: ["PENDING", "OVERDUE"] },
+      status: { not: "CANCELLED" },
+      OR: [
+        {
+          type: { in: ["BONUS", "DEDUCTION"] },
+          status: { in: ["PENDING", "OVERDUE"] },
+        },
+        {
+          type: "ADVANCE",
+          status: { in: ["PENDING", "OVERDUE", "PAID"] },
+        },
+      ],
     },
     include: {
       employee: {

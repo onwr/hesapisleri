@@ -363,6 +363,14 @@ export async function requireApiSupplierManage() {
   return auth;
 }
 
+export async function requireApiSupplierFinance() {
+  return requireApiSupplierManage();
+}
+
+export async function requireApiCustomerFinance() {
+  return requireApiModuleAccess("customers");
+}
+
 export async function requireApiDirectoryManage() {
   const auth = await requireApiModuleAccess("directory");
   if ("error" in auth) return auth;
@@ -384,7 +392,7 @@ export async function requireApiDirectoryManage() {
   return auth;
 }
 
-export async function requireApiCashBankRead() {
+export async function requireApiFinanceAccountRead() {
   return requireAnyApiModuleAccess([
     "cash-bank",
     "pos",
@@ -392,7 +400,14 @@ export async function requireApiCashBankRead() {
     "settings",
     "sales",
     "invoices",
+    "employees",
+    "customers",
+    "suppliers",
   ]);
+}
+
+export async function requireApiCashBankRead() {
+  return requireApiFinanceAccountRead();
 }
 
 export async function requireApiCashBankManage() {

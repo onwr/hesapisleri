@@ -4,6 +4,7 @@ import type {
   PayrollRunStatus,
 } from "@prisma/client";
 import { roundCashMoney } from "@/lib/cash-bank-account-utils";
+import { getEmployeePaymentTypeBehavior } from "@/lib/employee-payment-type-mapping";
 
 export const PAYROLL_RUN_STATUS_LABELS: Record<PayrollRunStatus, string> = {
   DRAFT: "Taslak",
@@ -129,16 +130,42 @@ export function buildPayrollPaymentDescription(
   return `${formatPayrollPeriodLabel(periodStart, periodEnd)} maaş ödemesi`;
 }
 
-export function getPaymentEffectiveDate(payment: Pick<EmployeePayment, "dueDate" | "createdAt">) {
+export function getPaymentEffectiveDate(
+  payment: Pick<
+    EmployeePayment,
+    "dueDate" | "createdAt" | "status" | "type"
+  > & {
+    paidAt?: EmployeePayment["paidAt"];
+  }
+) {
+  if (payment.type === "ADVANCE" && payment.status === "PAID") {
+    return payment.paidAt ?? payment.dueDate ?? payment.createdAt;
+  }
+
   return payment.dueDate ?? payment.createdAt;
 }
 
 export function isPaymentInPayrollPeriod(
-  payment: Pick<EmployeePayment, "dueDate" | "createdAt" | "status" | "type">,
+  payment: Pick<
+    EmployeePayment,
+    "dueDate" | "createdAt" | "status" | "type"
+  > & {
+    paidAt?: EmployeePayment["paidAt"];
+  },
   periodStart: Date,
   periodEnd: Date
 ) {
-  if (payment.status !== "PENDING" && payment.status !== "OVERDUE") {
+  if (payment.status === "CANCELLED") {
+    return false;
+  }
+
+  const behavior = getEmployeePaymentTypeBehavior(payment.type);
+
+  if (behavior.countsTowardPayrollAdvance && payment.type === "ADVANCE") {
+    if (payment.status !== "PAID" && payment.status !== "PENDING" && payment.status !== "OVERDUE") {
+      return false;
+    }
+  } else if (payment.status !== "PENDING" && payment.status !== "OVERDUE") {
     return false;
   }
 
@@ -147,7 +174,11 @@ export function isPaymentInPayrollPeriod(
 }
 
 export function sumPaymentsByType(
-  payments: Pick<EmployeePayment, "type" | "amount" | "dueDate" | "createdAt" | "status">[],
+  payments: Array<
+    Pick<EmployeePayment, "type" | "amount" | "dueDate" | "createdAt" | "status"> & {
+      paidAt?: EmployeePayment["paidAt"];
+    }
+  >,
   type: EmployeePayment["type"],
   periodStart: Date,
   periodEnd: Date

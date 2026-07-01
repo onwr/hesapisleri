@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { payExpenseRecord, payExpenseSchema } from "@/lib/expense-service";
 import { requireApiModuleAccess } from "@/lib/module-access";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -46,11 +47,15 @@ export async function POST(req: Request, { params }: Props) {
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "Gider ödemesi kaydedildi.",
-      data: result.data,
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(companyId, {
+        reason: "expense-pay",
+        entityIds: { expenseId: id },
+        entity: result.data as Record<string, unknown>,
+        message: "Gider ödemesi kaydedildi.",
+        balances: undefined,
+      }),
+    );
   } catch (error) {
     console.error("PAY_EXPENSE_ERROR", error);
 

@@ -3,16 +3,28 @@ import { db } from "@/lib/prisma";
 import { roundCashMoney } from "@/lib/cash-bank-account-utils";
 import { syncSupplierBalance } from "@/lib/supplier-balance-service";
 import {
+  parseSupplierOpeningDirection,
+  signedBalanceFromOpeningInput,
+} from "@/lib/supplier-balance-utils";
+import { createSupplierOpeningLedgerEntry } from "@/lib/supplier-finance-service";
+import {
   getSupplierDisplayName,
   matchesSupplierSearch,
   normalizeSupplierTags,
   parseSupplierBalanceStatus,
   parseSupplierSort,
+  resolveOpeningBalanceAmountInput,
+  resolveOpeningBalanceDescription,
   supplierFormSchema,
   type SupplierFormInput,
   type SupplierRow,
   type SupplierSortOption,
 } from "@/lib/supplier-utils";
+import { resolveSupplierBalanceView } from "@/lib/supplier-balance-utils";
+import {
+  getExistingCreateSupplierId,
+  recordCreateSupplierIdempotency,
+} from "@/lib/supplier-create-idempotency";
 
 export class SupplierServiceError extends Error {
   status: number;
@@ -25,14 +37,18 @@ export class SupplierServiceError extends Error {
 }
 
 function serializeSupplier(
-  supplier: Prisma.SupplierGetPayload<{ include: { _count: { select: { supplierProducts: true } } } }>,
+  supplier: Prisma.SupplierGetPayload<{ include: { _count: { select: { supplierProducts: true } } } }> & {
+    linkedCustomerId?: string | null;
+  },
   metrics: {
     lastActivityAt?: Date | null;
     lastActivityType?: string | null;
     overdueAmount?: number;
     overdueCount?: number;
+    totalPurchases?: number;
   } = {}
 ): SupplierRow {
+  const balanceView = resolveSupplierBalanceView(Number(supplier.currentBalance));
   return {
     id: supplier.id,
     code: supplier.code,
@@ -46,7 +62,13 @@ function serializeSupplier(
     category: supplier.category,
     city: supplier.city,
     district: supplier.district,
-    currentBalance: roundCashMoney(Number(supplier.currentBalance)),
+    currentBalance: balanceView.signedBalance,
+    payableAmount: balanceView.payableAmount,
+    receivableAmount: balanceView.receivableAmount,
+    netStatusLabel: balanceView.netStatusLabel,
+    totalPurchases: roundCashMoney(metrics.totalPurchases ?? 0),
+    hasCustomerRole: Boolean(supplier.linkedCustomerId),
+    linkedCustomerId: supplier.linkedCustomerId ?? null,
     overdueAmount: roundCashMoney(metrics.overdueAmount ?? 0),
     overdueCount: metrics.overdueCount ?? 0,
     productCount: supplier._count.supplierProducts,
@@ -113,6 +135,19 @@ export async function createSupplier(input: {
   }
 
   const form = parsed.data;
+
+  if (form.clientRequestId) {
+    const existingId = getExistingCreateSupplierId(input.companyId, form.clientRequestId);
+    if (existingId) {
+      const existing = await db.supplier.findFirst({
+        where: { id: existingId, companyId: input.companyId },
+      });
+      if (existing) {
+        return { supplier: existing, taxNumberWarning: null, replay: true as const };
+      }
+    }
+  }
+
   const names = resolveSupplierName(form);
   if (!names.name) {
     throw new SupplierServiceError("Tedarikçi adı veya firma adı zorunludur.", 400);
@@ -130,37 +165,73 @@ export async function createSupplier(input: {
     form.taxNumber
   );
 
-  const supplier = await db.supplier.create({
-    data: {
-      companyId: input.companyId,
-      createdByUserId: input.userId,
-      code: form.code?.trim() || null,
-      name: names.name,
-      companyName: names.companyName,
-      contactName: form.contactName?.trim() || null,
-      phone: form.phone?.trim() || null,
-      mobilePhone: form.mobilePhone?.trim() || null,
-      email: form.email?.trim() || null,
-      website: form.website?.trim() || null,
-      taxOffice: form.taxOffice?.trim() || null,
-      taxNumber: form.taxNumber?.trim() || null,
-      iban: form.iban?.trim() || null,
-      address: form.address?.trim() || null,
-      city: form.city?.trim() || null,
-      district: form.district?.trim() || null,
-      country: form.country?.trim() || "Türkiye",
-      category: form.category?.trim() || null,
-      tags: normalizeSupplierTags(form.tags),
-      notes: form.notes?.trim() || null,
-      openingBalance: roundCashMoney(form.openingBalance ?? 0),
-      currency: form.currency?.trim() || "TRY",
-      paymentTermDays: form.paymentTermDays ?? null,
-      isFavorite: form.isFavorite ?? false,
-      isActive: form.isActive ?? true,
-    },
+  const openingAmount = resolveOpeningBalanceAmountInput(form);
+  const openingDirection = parseSupplierOpeningDirection(form.openingBalanceDirection);
+  const openingSigned = signedBalanceFromOpeningInput({
+    amount: openingAmount,
+    direction: openingDirection,
   });
 
-  await syncSupplierBalance(input.companyId, supplier.id);
+  if (!openingSigned.ok) {
+    throw new SupplierServiceError(openingSigned.message, 400);
+  }
+
+  const openingDate = form.openingBalanceDate
+    ? new Date(form.openingBalanceDate)
+    : new Date();
+
+  if (form.openingBalanceDate && Number.isNaN(openingDate.getTime())) {
+    throw new SupplierServiceError("Geçerli bir açılış tarihi girin.", 400);
+  }
+
+  const supplier = await db.$transaction(async (tx) => {
+    const created = await tx.supplier.create({
+      data: {
+        companyId: input.companyId,
+        createdByUserId: input.userId,
+        code: form.code?.trim() || null,
+        name: names.name,
+        companyName: names.companyName,
+        contactName: form.contactName?.trim() || null,
+        phone: form.phone?.trim() || null,
+        mobilePhone: form.mobilePhone?.trim() || null,
+        email: form.email?.trim() || null,
+        website: form.website?.trim() || null,
+        taxOffice: form.taxOffice?.trim() || null,
+        taxNumber: form.taxNumber?.trim() || null,
+        iban: form.iban?.trim() || null,
+        address: form.address?.trim() || null,
+        city: form.city?.trim() || null,
+        district: form.district?.trim() || null,
+        country: form.country?.trim() || "Türkiye",
+        category: form.category?.trim() || null,
+        tags: normalizeSupplierTags(form.tags),
+        notes: form.notes?.trim() || null,
+        openingBalance: openingSigned.signed,
+        openingBalanceDate: openingSigned.signed !== 0 ? openingDate : null,
+        openingBalanceNote: resolveOpeningBalanceDescription(form),
+        currentBalance: openingSigned.signed,
+        currency: form.currency?.trim() || "TRY",
+        paymentTermDays: form.paymentTermDays ?? null,
+        isFavorite: form.isFavorite ?? false,
+        isActive: form.isActive ?? true,
+      },
+    });
+
+    if (openingSigned.signed !== 0) {
+      await createSupplierOpeningLedgerEntry({
+        tx,
+        companyId: input.companyId,
+        supplierId: created.id,
+        userId: input.userId,
+        signedOpeningBalance: openingSigned.signed,
+        date: openingDate,
+        description: resolveOpeningBalanceDescription(form) || "Açılış bakiyesi",
+      });
+    }
+
+    return created;
+  });
 
   await db.activityLog.create({
     data: {
@@ -174,11 +245,16 @@ export async function createSupplier(input: {
 
   const refreshed = await db.supplier.findUniqueOrThrow({ where: { id: supplier.id } });
 
+  if (form.clientRequestId) {
+    recordCreateSupplierIdempotency(input.companyId, form.clientRequestId, refreshed.id);
+  }
+
   return {
     supplier: refreshed,
     taxNumberWarning: duplicateTax
       ? "Bu vergi numarası başka bir tedarikçide de kayıtlı."
       : null,
+    replay: false as const,
   };
 }
 
@@ -224,6 +300,56 @@ export async function updateSupplier(input: {
     input.supplierId
   );
 
+  const openingLedgerExists = await db.supplierLedgerEntry.findFirst({
+    where: {
+      companyId: input.companyId,
+      supplierId: input.supplierId,
+      type: "OPENING_BALANCE",
+    },
+    select: { id: true },
+  });
+
+  let openingPatch: {
+    openingBalance?: number;
+    openingBalanceDate?: Date | null;
+    openingBalanceNote?: string | null;
+  } = {};
+
+  if (
+    !openingLedgerExists &&
+    (form.openingBalance !== undefined || form.openingBalanceDirection !== undefined)
+  ) {
+    const openingAmount = roundCashMoney(form.openingBalance ?? Number(existing.openingBalance));
+    const openingDirection = parseSupplierOpeningDirection(
+      form.openingBalanceDirection ??
+        (Number(existing.openingBalance) > 0
+          ? "PAYABLE"
+          : Number(existing.openingBalance) < 0
+            ? "RECEIVABLE"
+            : "SETTLED")
+    );
+    const openingSigned = signedBalanceFromOpeningInput({
+      amount: Math.abs(openingAmount),
+      direction: openingDirection,
+    });
+    if (!openingSigned.ok) {
+      throw new SupplierServiceError(openingSigned.message, 400);
+    }
+    openingPatch = {
+      openingBalance: openingSigned.signed,
+      openingBalanceDate:
+        openingSigned.signed !== 0
+          ? form.openingBalanceDate
+            ? new Date(form.openingBalanceDate)
+            : existing.openingBalanceDate ?? new Date()
+          : null,
+      openingBalanceNote:
+        form.openingBalanceNote !== undefined
+          ? form.openingBalanceNote?.trim() || null
+          : undefined,
+    };
+  }
+
   const supplier = await db.supplier.update({
     where: { id: input.supplierId },
     data: {
@@ -256,9 +382,7 @@ export async function updateSupplier(input: {
       ...(form.category !== undefined ? { category: form.category?.trim() || null } : {}),
       ...(form.tags !== undefined ? { tags: normalizeSupplierTags(form.tags) } : {}),
       ...(form.notes !== undefined ? { notes: form.notes?.trim() || null } : {}),
-      ...(form.openingBalance !== undefined
-        ? { openingBalance: roundCashMoney(form.openingBalance) }
-        : {}),
+      ...openingPatch,
       ...(form.currency !== undefined
         ? { currency: form.currency?.trim() || "TRY" }
         : {}),
@@ -399,7 +523,10 @@ export type GetSuppliersOptions = {
   isActive?: boolean | null;
   isFavorite?: boolean | null;
   hasProducts?: boolean | null;
+  hasCustomerRole?: boolean | null;
   balanceStatus?: ReturnType<typeof parseSupplierBalanceStatus>;
+  balanceDirection?: "all" | "PAYABLE" | "RECEIVABLE" | "SETTLED";
+  lastActivityFrom?: Date | null;
   sort?: SupplierSortOption;
 };
 
@@ -421,7 +548,8 @@ export async function getSuppliers(options: GetSuppliersOptions) {
   });
 
   const now = new Date();
-  const [expenseDates, stockDates, unpaidExpenses] = await Promise.all([
+  const [expenseDates, stockDates, ledgerDates, unpaidExpenses, purchaseTotals] =
+    await Promise.all([
     db.expense.groupBy({
       by: ["supplierId"],
       where: {
@@ -438,6 +566,11 @@ export async function getSuppliers(options: GetSuppliersOptions) {
       },
       _max: { createdAt: true },
     }),
+    db.supplierLedgerEntry.groupBy({
+      by: ["supplierId"],
+      where: { companyId: options.companyId },
+      _max: { date: true },
+    }),
     db.expense.findMany({
       where: {
         companyId: options.companyId,
@@ -451,6 +584,15 @@ export async function getSuppliers(options: GetSuppliersOptions) {
         date: true,
         supplierRef: { select: { paymentTermDays: true } },
       },
+    }),
+    db.expense.groupBy({
+      by: ["supplierId"],
+      where: {
+        companyId: options.companyId,
+        supplierId: { not: null },
+        status: { not: "CANCELLED" },
+      },
+      _sum: { amount: true },
     }),
   ]);
 
@@ -470,6 +612,22 @@ export async function getSuppliers(options: GetSuppliersOptions) {
       });
     }
   }
+
+  for (const item of ledgerDates) {
+    const current = lastActivityMap.get(item.supplierId);
+    if (!current || item._max.date! > current.at) {
+      lastActivityMap.set(item.supplierId, {
+        at: item._max.date!,
+        type: "Cari Hareket",
+      });
+    }
+  }
+
+  const purchaseMap = new Map(
+    purchaseTotals
+      .filter((item) => item.supplierId)
+      .map((item) => [item.supplierId!, roundCashMoney(Number(item._sum.amount ?? 0))])
+  );
 
   const overdueMap = new Map<string, { amount: number; count: number }>();
   for (const expense of unpaidExpenses) {
@@ -493,8 +651,33 @@ export async function getSuppliers(options: GetSuppliersOptions) {
       lastActivityType: lastActivity?.type ?? null,
       overdueAmount: overdue?.amount ?? 0,
       overdueCount: overdue?.count ?? 0,
+      totalPurchases: purchaseMap.get(supplier.id) ?? 0,
     });
   });
+
+  if (options.hasCustomerRole === true) {
+    rows = rows.filter((row) => row.hasCustomerRole);
+  } else if (options.hasCustomerRole === false) {
+    rows = rows.filter((row) => !row.hasCustomerRole);
+  }
+
+  if (options.lastActivityFrom) {
+    rows = rows.filter(
+      (row) =>
+        row.lastActivityAt != null && row.lastActivityAt >= options.lastActivityFrom!
+    );
+  }
+
+  const balanceDirection = options.balanceDirection ?? "all";
+  if (balanceDirection === "PAYABLE") {
+    rows = rows.filter((row) => row.payableAmount > 0);
+  } else if (balanceDirection === "RECEIVABLE") {
+    rows = rows.filter((row) => row.receivableAmount > 0);
+  } else if (balanceDirection === "SETTLED") {
+    rows = rows.filter(
+      (row) => row.payableAmount === 0 && row.receivableAmount === 0
+    );
+  }
 
   rows = rows.filter((row) => matchesSupplierSearch(row, options.search));
 

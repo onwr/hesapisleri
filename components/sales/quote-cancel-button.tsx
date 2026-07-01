@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 import { Loader2, XCircle } from "lucide-react";
 
 type QuoteCancelButtonProps = {
@@ -44,8 +45,8 @@ export function QuoteCancelButton({
           return;
         }
 
+        notifyTenantCacheSync();
         router.push("/sales?tab=offers");
-        router.refresh();
       } catch {
         setMessage("İptal işlemi sırasında bir hata oluştu.");
       }

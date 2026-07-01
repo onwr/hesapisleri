@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import {
   Boxes,
   Download,
@@ -23,6 +22,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 import { printProductBarcode } from "@/lib/product-ui-utils";
 import type { ProductRowActionData } from "@/lib/products-page-utils";
 
@@ -48,40 +48,25 @@ export function ProductsRowActions({
   variant = "inline",
   onAction,
 }: ProductsRowActionsProps) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const { mutate, isSubmitting } = useTenantMutation({ refresh: false });
   const [message, setMessage] = useState<string | null>(null);
 
   const isActive = row.status === "ACTIVE";
-  const isBusy = isPending;
+  const isBusy = isSubmitting;
 
   async function handleToggleStatus() {
     setMessage(null);
     onAction?.();
 
-    startTransition(async () => {
-      try {
-        const response = await fetch(`/api/products/${row.id}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "toggle-status" }),
-        });
-
-        const result = (await response.json()) as {
-          success?: boolean;
-          message?: string;
-        };
-
-        if (!response.ok || !result.success) {
-          setMessage(result.message ?? "Durum güncellenemedi.");
-          return;
-        }
-
-        router.refresh();
-      } catch {
-        setMessage("Durum güncellenirken bir hata oluştu.");
-      }
+    const result = await mutate(`/api/products/${row.id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "toggle-status" }),
     });
+
+    if (!result.ok) {
+      setMessage(result.error ?? "Durum güncellenemedi.");
+    }
   }
 
   async function handleDelete() {
@@ -94,43 +79,23 @@ export function ProductsRowActions({
     setMessage(null);
     onAction?.();
 
-    startTransition(async () => {
-      try {
-        const response = await fetch(`/api/products/${row.id}`, {
-          method: "DELETE",
-        });
-
-        const result = (await response.json()) as {
-          success?: boolean;
-          message?: string;
-          code?: string;
-          saleItemCount?: number;
-          transferCount?: number;
-        };
-
-        if (!response.ok || !result.success) {
-          const payload: DeleteBlockedPayload = {
-            productId: row.id,
-            productName: row.name,
-            code: result.code,
-            message: result.message ?? "Ürün silinemedi.",
-            saleItemCount: result.saleItemCount,
-            transferCount: result.transferCount,
-          };
-
-          if (onDeleteBlocked) {
-            onDeleteBlocked(payload);
-          } else {
-            setMessage(payload.message);
-          }
-          return;
-        }
-
-        router.refresh();
-      } catch {
-        setMessage("Ürün silinirken bir hata oluştu.");
-      }
+    const result = await mutate(`/api/products/${row.id}`, {
+      method: "DELETE",
     });
+
+    if (!result.ok) {
+      const payload: DeleteBlockedPayload = {
+        productId: row.id,
+        productName: row.name,
+        message: result.error ?? "Ürün silinemedi.",
+      };
+
+      if (onDeleteBlocked) {
+        onDeleteBlocked(payload);
+      } else {
+        setMessage(payload.message);
+      }
+    }
   }
 
   function handlePrintBarcode() {

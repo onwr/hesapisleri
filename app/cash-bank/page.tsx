@@ -4,10 +4,7 @@ import {
   Banknote,
   Building2,
   Clock3,
-  Download,
-  Edit3,
   Eye,
-  MoreVertical,
   PieChart,
   Plus,
   RefreshCcw,
@@ -28,7 +25,8 @@ import {
 } from "@/components/cash-bank/cash-bank-table-controls";
 import { CashBankSidebarWidgets } from "@/components/cash-bank/cash-bank-sidebar-widgets";
 import { AiPageTriggerButton } from "@/components/ai-assistant/ai-page-trigger-button";
-import { getCashBankPageData } from "@/lib/cash-bank-page-data";
+import { getCachedCashBankPageData } from "@/lib/tenant-cache/cached-tenant-page-data";
+import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
 import {
   buildCashBankQuery,
   formatCashDate,
@@ -91,18 +89,21 @@ const canManage = canManageAccounts(effectiveRole, companyUser.isOwner);
     totalRecords,
     totalPages,
     currentPage: page,
-  } = await getCashBankPageData(company.id, {
+  } = await getCachedCashBankPageData({
+    companyId: company.id,
     tab: activeTab,
     page: currentPage,
     q: searchQuery,
   });
 
-  const actionAccountOptions = [...cashAccounts, ...bankAccounts].map((account) => ({
-    id: account.id,
-    name: account.name,
-    type: account.type,
-    balance: account.balance,
-  }));
+  const actionAccountOptions = [...cashAccounts, ...bankAccounts]
+    .filter((account) => account.status === "ACTIVE")
+    .map((account) => ({
+      id: account.id,
+      name: account.name,
+      type: account.type,
+      balance: account.balance,
+    }));
 
   const hasFilters = Boolean(searchQuery) || activeTab !== "accounts";
   const isAccountsTab = activeTab === "accounts";
@@ -127,7 +128,8 @@ const canManage = canManageAccounts(effectiveRole, companyUser.isOwner);
 
   return (
     <AppShell>
-      <div className="space-y-5">
+      <TenantPageSync />
+      <div className="min-w-0 space-y-5">
         <div className="flex justify-end">
           <AiPageTriggerButton moduleKey="cash-bank" />
         </div>
@@ -172,8 +174,8 @@ const canManage = canManageAccounts(effectiveRole, companyUser.isOwner);
           })}
         </section>
 
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-          <section className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+        <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,380px)]">
+          <section className="min-w-0 rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
             <CashBankTableToolbar
               activeTab={activeTab}
               searchQuery={searchQuery}
@@ -256,6 +258,8 @@ const canManage = canManageAccounts(effectiveRole, companyUser.isOwner);
                                   canManage={canManage}
                                   isDefault={account.isDefault}
                                   status={account.status}
+                                  balance={account.balance}
+                                  accountName={account.name}
                                   account={toAccountFormRecord(account)}
                                 />
                               </td>
@@ -369,6 +373,8 @@ const canManage = canManageAccounts(effectiveRole, companyUser.isOwner);
                                   canManage={canManage}
                                   isDefault={account.isDefault}
                                   status={account.status}
+                                  balance={account.balance}
+                                  accountName={account.name}
                                   account={toAccountFormRecord(account)}
                                 />
                               </td>
@@ -463,34 +469,13 @@ const canManage = canManageAccounts(effectiveRole, companyUser.isOwner);
                         </td>
 
                         <td className="px-2 py-2.5">
-                          <div className="mx-auto grid w-[62px] grid-cols-2 gap-1">
+                          <div className="flex justify-center">
                             <Link
                               href={`/cash-bank/transactions/${transaction.id}`}
                               className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-[#24345f] transition hover:border-blue-100 hover:bg-blue-50 hover:text-blue-600"
                               title="Detay"
                             >
                               <Eye size={13} />
-                            </Link>
-                            <Link
-                              href={`/cash-bank/transactions/${transaction.id}/edit`}
-                              className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-[#24345f] transition hover:border-blue-100 hover:bg-blue-50 hover:text-blue-600"
-                              title="Düzenle"
-                            >
-                              <Edit3 size={13} />
-                            </Link>
-                            <Link
-                              href={`/cash-bank/transactions/${transaction.id}`}
-                              className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-[#24345f] transition hover:bg-slate-50"
-                              title="Belge"
-                            >
-                              <Download size={13} />
-                            </Link>
-                            <Link
-                              href={`/cash-bank/transactions/${transaction.id}`}
-                              className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-[#24345f] transition hover:bg-slate-50"
-                              title="Diğer"
-                            >
-                              <MoreVertical size={13} />
                             </Link>
                           </div>
                         </td>

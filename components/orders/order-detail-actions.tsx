@@ -1,7 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import {
   Ban,
   CheckCircle2,
@@ -14,6 +13,7 @@ import type { OrderStatus } from "@prisma/client";
 import { getAllowedNextStatuses } from "@/lib/order-utils";
 import { Button } from "@/components/ui/button";
 import { OrderShippingModal } from "@/components/orders/order-shipping-modal";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 
 type OrderDetailActionsProps = {
   orderId: string;
@@ -69,8 +69,7 @@ export function OrderDetailActions({
   orderNo,
   orderStatus,
 }: OrderDetailActionsProps) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const { mutate, isSubmitting } = useTenantMutation({ refresh: false });
   const [shippingOpen, setShippingOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState("");
@@ -80,51 +79,41 @@ export function OrderDetailActions({
     orderStatus === "WAITING" || orderStatus === "APPROVED";
   const allowedNext = getAllowedNextStatuses(orderStatus);
 
-  function updateStatus(nextStatus: OrderStatus, extra?: Record<string, unknown>) {
+  async function updateStatus(nextStatus: OrderStatus, extra?: Record<string, unknown>) {
     setError(null);
 
-    startTransition(async () => {
-      const response = await fetch(`/api/orders/${orderId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderStatus: nextStatus,
-          orderNote: note.trim() || undefined,
-          ...extra,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
-        setError(result.message ?? "İşlem başarısız.");
-        return;
-      }
-
-      router.refresh();
+    const result = await mutate(`/api/orders/${orderId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        orderStatus: nextStatus,
+        orderNote: note.trim() || undefined,
+        ...extra,
+      }),
     });
+
+    if (!result.ok) {
+      setError(result.error ?? "İşlem başarısız.");
+    }
   }
 
-  function approveAndDecrementStock() {
+  async function approveAndDecrementStock() {
     setError(null);
-    startTransition(async () => {
-      const response = await fetch(`/api/orders/${orderId}/approve`, {
-        method: "POST",
-      });
-      const result = await response.json();
-      if (!response.ok || !result.success) {
-        setError(result.message ?? "Sipariş onaylanamadı.");
-        return;
-      }
-      router.refresh();
+
+    const result = await mutate(`/api/orders/${orderId}/approve`, {
+      method: "POST",
     });
+
+    if (!result.ok) {
+      setError(result.error ?? "Sipariş onaylanamadı.");
+    }
   }
 
   function handlePrimaryAction() {
     if (!primaryAction) return;
 
     if (orderStatus === "WAITING") {
-      approveAndDecrementStock();
+      void approveAndDecrementStock();
       return;
     }
 
@@ -133,12 +122,12 @@ export function OrderDetailActions({
       return;
     }
 
-    updateStatus(primaryAction.nextStatus);
+    void updateStatus(primaryAction.nextStatus);
   }
 
   function handleCancel() {
     if (!canCancel) return;
-    updateStatus("CANCELLED");
+    void updateStatus("CANCELLED");
   }
 
   if (allowedNext.length === 0 && !canCancel) {
@@ -168,13 +157,13 @@ export function OrderDetailActions({
         {primaryAction ? (
           <Button
             type="button"
-            disabled={isPending}
+            disabled={isSubmitting}
             onClick={handlePrimaryAction}
             className={["h-10 rounded-xl font-black text-white", primaryAction.tone].join(
               " "
             )}
           >
-            {isPending ? (
+            {isSubmitting ? (
               <Loader2 size={16} className="animate-spin" />
             ) : (
               <PrimaryIcon size={16} />
@@ -187,7 +176,7 @@ export function OrderDetailActions({
           <Button
             type="button"
             variant="outline"
-            disabled={isPending}
+            disabled={isSubmitting}
             onClick={handleCancel}
             className="h-10 rounded-xl border-rose-200 font-black text-rose-600 hover:bg-rose-50"
           >
@@ -211,7 +200,6 @@ export function OrderDetailActions({
         orderNo={orderNo}
         open={shippingOpen}
         onClose={() => setShippingOpen(false)}
-        onSuccess={() => router.refresh()}
       />
     </div>
   );

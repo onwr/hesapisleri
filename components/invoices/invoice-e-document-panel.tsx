@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Eye, Loader2, RefreshCw, Send, XCircle } from "lucide-react";
+import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 import {
   getGibStatusLabel,
   getProviderStatusLabel,
@@ -236,6 +237,7 @@ export function InvoiceEDocumentPanel({
         gibStatus: json.data.provider.gibStatus,
         targetAlias: documentType === "E_INVOICE" ? selectedAlias : null,
       });
+      notifyTenantCacheSync();
     } catch {
       setError("E-belge gönderimi sırasında hata oluştu.");
     } finally {
@@ -279,6 +281,7 @@ export function InvoiceEDocumentPanel({
       }
       setLocalSubmission(json.data.submission);
       setMessage(json.message || "E-Arşiv iptal edildi.");
+      notifyTenantCacheSync();
     } catch {
       setError("İptal sırasında hata oluştu.");
     } finally {
@@ -299,6 +302,7 @@ export function InvoiceEDocumentPanel({
         return;
       }
       setMessage(json.message || "E-Fatura yeniden gönderildi.");
+      notifyTenantCacheSync();
     } catch {
       setError("Yeniden gönderim sırasında hata oluştu.");
     } finally {

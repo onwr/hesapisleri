@@ -1,5 +1,8 @@
 export type AiProviderName = "openai" | "rules";
 
+/** Platform-level AI durumu — permission'dan bağımsız. */
+export type AiPlatformStatus = "enabled" | "disabled" | "config_missing";
+
 export type PlatformAiConfig = {
   apiKey: string;
   model: string;
@@ -29,6 +32,13 @@ export function getPlatformAiConfig(): PlatformAiConfig {
     requestTimeoutMs: Number(process.env.AI_REQUEST_TIMEOUT_MS || 30_000),
     storeResponses: false,
   };
+}
+
+export function getAiPlatformStatus(): AiPlatformStatus {
+  const cfg = getPlatformAiConfig();
+  if (!cfg.platformEnabled) return "disabled";
+  if (!cfg.apiKey) return "config_missing";
+  return "enabled";
 }
 
 export function resolveEffectiveModel(companyModel?: string | null) {

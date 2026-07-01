@@ -1,11 +1,11 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, Wallet, X } from "lucide-react";
 import { CollectionAccountSelect } from "@/components/cash-bank/collection-account-select";
 import { useCollectionAccounts } from "@/hooks/use-collection-accounts";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 import { resolveDefaultCollectionAccountId } from "@/lib/collection-account-utils";
 import { formatInvoiceMoney } from "@/lib/invoices-page-utils";
 import { previewInvoicePaymentStatus } from "@/lib/invoice-payment-utils";
@@ -29,9 +29,8 @@ export function InvoiceCollectModal({
   paidAmount,
   remainingAmount,
 }: InvoiceCollectModalProps) {
-  const router = useRouter();
+  const { mutate, isSubmitting } = useTenantMutation({ refresh: false });
   const { accounts, loading: accountsLoading } = useCollectionAccounts();
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [accountId, setAccountId] = useState("");
   const [amount, setAmount] = useState(remainingAmount.toFixed(2));
@@ -83,53 +82,40 @@ export function InvoiceCollectModal({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSaving(true);
     setError("");
 
     if (!accountId) {
       setError("Ödeme hesabı seçin.");
-      setSaving(false);
       return;
     }
 
     if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
       setError("Geçerli bir tahsilat tutarı girin.");
-      setSaving(false);
       return;
     }
 
     if (parsedAmount > remainingAmount) {
       setError(`En fazla ${formatInvoiceMoney(remainingAmount)} tahsil edebilirsiniz.`);
-      setSaving(false);
       return;
     }
 
-    try {
-      const response = await fetch(`/api/invoices/${invoiceId}/collect`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          accountId,
-          amount: parsedAmount,
-          collectedAt,
-          note: note.trim() || undefined,
-        }),
-      });
+    const result = await mutate(`/api/invoices/${invoiceId}/collect`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        accountId,
+        amount: parsedAmount,
+        collectedAt,
+        note: note.trim() || undefined,
+      }),
+    });
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        setError(data.message || "Tahsilat kaydedilemedi.");
-        return;
-      }
-
-      onClose();
-      router.refresh();
-    } catch {
-      setError("Sunucuya bağlanırken bir hata oluştu.");
-    } finally {
-      setSaving(false);
+    if (!result.ok) {
+      setError(result.error ?? "Tahsilat kaydedilemedi.");
+      return;
     }
+
+    onClose();
   }
 
   if (!open) {
@@ -137,7 +123,7 @@ export function InvoiceCollectModal({
   }
 
   const canSubmit =
-    !saving &&
+    !isSubmitting &&
     !accountsLoading &&
     accounts.length > 0 &&
     Boolean(accountId);
@@ -146,11 +132,11 @@ export function InvoiceCollectModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4">
       <div
         className="absolute inset-0"
-        onClick={saving ? undefined : onClose}
+        onClick={isSubmitting ? undefined : onClose}
         aria-hidden="true"
       />
 
-      <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-2xl">
+      <div className="relative flex max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div>
             <h2 className="text-[16px] font-black text-[#0f1f4d]">Tahsilat Al</h2>
@@ -160,14 +146,14 @@ export function InvoiceCollectModal({
           <button
             type="button"
             onClick={onClose}
-            disabled={saving}
+            disabled={isSubmitting}
             className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-60"
           >
             <X size={16} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 p-5">
+        <form onSubmit={handleSubmit} className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
           <div className="grid grid-cols-2 gap-3">
             <Metric label="Kalan Tutar" value={formatInvoiceMoney(remainingAmount)} />
             <Metric label="Toplam" value={formatInvoiceMoney(total)} />
@@ -193,7 +179,7 @@ export function InvoiceCollectModal({
               value={accountId}
               onChange={setAccountId}
               required
-              disabled={saving || accountsLoading}
+              disabled={isSubmitting || accountsLoading}
               className={inputClass}
             />
           </Field>
@@ -251,18 +237,18 @@ export function InvoiceCollectModal({
               disabled={!canSubmit}
               className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-linear-to-r from-blue-600 to-violet-600 text-[13px] font-black text-white disabled:opacity-60"
             >
-              {saving ? (
+              {isSubmitting ? (
                 <Loader2 className="animate-spin" size={16} />
               ) : (
                 <Wallet size={16} />
               )}
-              {saving ? "Kaydediliyor..." : "Tahsilatı Kaydet"}
+              {isSubmitting ? "Kaydediliyor..." : "Tahsilatı Kaydet"}
             </button>
 
             <button
               type="button"
               onClick={onClose}
-              disabled={saving}
+              disabled={isSubmitting}
               className="inline-flex h-11 items-center rounded-xl border border-slate-200 px-4 text-[13px] font-black text-slate-600 hover:bg-slate-50 disabled:opacity-60"
             >
               Vazgeç

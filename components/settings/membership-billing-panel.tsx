@@ -14,6 +14,9 @@ import {
 import { formatMoney, formatNumber } from "@/lib/format-utils";
 import { MEMBERSHIP_PERIOD_OPTIONS } from "@/lib/membership-utils";
 import type { MembershipPeriod } from "@prisma/client";
+import { SipayCheckoutButton } from "@/components/billing/sipay-checkout-button";
+
+import type { BillingCheckoutProviderInfo } from "@/lib/payments/billing-provider-resolver";
 
 type PaytrFormPayload = {
   paymentId: string;
@@ -85,6 +88,11 @@ type BillingData = {
       hasSavedCard: boolean;
     };
   };
+  checkout: {
+    provider: "SIPAY" | "PAYTR";
+    sipayEnabled: boolean;
+    paytrEnabled: boolean;
+  };
 };
 
 function formatDate(value: string | null) {
@@ -108,7 +116,16 @@ function getStatusBadgeClass(status: string) {
   return "bg-slate-50 text-slate-700 border-slate-200";
 }
 
-export function MembershipBillingPanel() {
+export function MembershipBillingPanel({
+  checkoutProvider,
+}: {
+  checkoutProvider: BillingCheckoutProviderInfo;
+}) {
+  const isSipayCheckout =
+    checkoutProvider.provider === "SIPAY" && checkoutProvider.sipayEnabled;
+  const isPaytrCheckout =
+    checkoutProvider.provider === "PAYTR" && checkoutProvider.paytrEnabled;
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -130,6 +147,7 @@ export function MembershipBillingPanel() {
   const [resuming, setResuming] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [sipayIdempotencyKey] = useState(() => crypto.randomUUID());
 
   const validateCoupon = useCallback(
     async (code: string, interval: MembershipPeriod) => {
@@ -616,8 +634,10 @@ export function MembershipBillingPanel() {
         <div className="border-b border-slate-100 px-4 py-3">
           <p className="text-[13px] font-black text-[#0f1f4d]">Paket Seçin</p>
           <p className="text-[11px] text-slate-500">
-            {data.subscription.plan.name} · PayTR{" "}
-            {paytrForm?.mode === "iframe" ? "iFrame" : "3D Secure"}
+            {data.subscription.plan.name} ·{" "}
+            {isSipayCheckout
+              ? "Sipay 3D Secure"
+              : `PayTR ${paytrForm?.mode === "iframe" ? "iFrame" : "3D Secure"}`}
           </p>
         </div>
 
@@ -702,11 +722,11 @@ export function MembershipBillingPanel() {
             </p>
           ) : null}
 
-          {data.paytr.capabilities.manualRenewalOnly ? (
+          {isPaytrCheckout && data.paytr.capabilities.manualRenewalOnly ? (
             <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-600">
               {data.paytr.capabilities.checkoutHint}
             </p>
-          ) : (
+          ) : isPaytrCheckout ? (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] font-semibold text-slate-600">
               <label className="inline-flex items-center gap-1.5">
                 <input
@@ -731,9 +751,35 @@ export function MembershipBillingPanel() {
                 Kartı sakla
               </label>
             </div>
-          )}
+          ) : isSipayCheckout ? (
+            <p className="rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2 text-[11px] font-semibold text-slate-600">
+              Kart bilgileriniz Sipay&apos;in güvenli ödeme sayfasında girilir. 3D Secure
+              doğrulaması uygulanır; kart numarası bu sitede toplanmaz.
+            </p>
+          ) : null}
 
-          {!paytrForm ? (
+          {isSipayCheckout && !paytrForm ? (
+            <SipayCheckoutButton
+              planId={data.plan.id}
+              billingPeriod={selectedBillingInterval}
+              idempotencyKey={sipayIdempotencyKey}
+              planName={data.plan.name}
+              periodLabel={selectedPeriodOption?.label ?? selectedBillingInterval}
+              amountLabel={checkoutTotalLabel}
+              disabled={
+                saving ||
+                resuming ||
+                Boolean(
+                  data.pendingPayment &&
+                    ["PENDING", "WAIT_CALLBACK", "UNKNOWN"].includes(
+                      data.pendingPayment.status,
+                    ),
+                )
+              }
+            />
+          ) : null}
+
+          {isPaytrCheckout && !paytrForm ? (
             <button
               type="button"
               disabled={
@@ -895,8 +941,11 @@ export function MembershipBillingPanel() {
 
       <p className="flex items-center gap-2 text-[11px] text-slate-500">
         <ShieldCheck size={14} className="shrink-0 text-emerald-600" />
-        Kart bilgileri doğrudan PayTR&apos;a gönderilir; callback sonrası üyelik
-        aktif edilir.
+        {isSipayCheckout
+          ? "Kart bilgileriniz Sipay güvenli ödeme sayfasında girilir; ödeme onaylandığında üyelik aktif edilir."
+          : isPaytrCheckout
+            ? "Kart bilgileri doğrudan PayTR'a gönderilir; callback sonrası üyelik aktif edilir."
+            : "Ödeme sağlayıcısı yapılandırılmamış."}
       </p>
     </div>
   );

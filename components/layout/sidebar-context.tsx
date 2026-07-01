@@ -13,12 +13,16 @@ const STORAGE_KEY = "hesapisleri_sidebar_collapsed";
 type SidebarContextValue = {
   collapsed: boolean;
   toggle: () => void;
+  mobileOpen: boolean;
+  openMobile: () => void;
+  closeMobile: () => void;
 };
 
 const SidebarContext = createContext<SidebarContextValue | null>(null);
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -37,9 +41,23 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     });
   }
 
+  function openMobile() {
+    setMobileOpen(true);
+  }
+
+  function closeMobile() {
+    setMobileOpen(false);
+  }
+
   return (
     <SidebarContext.Provider
-      value={{ collapsed: ready ? collapsed : false, toggle }}
+      value={{
+        collapsed: ready ? collapsed : false,
+        toggle,
+        mobileOpen,
+        openMobile,
+        closeMobile,
+      }}
     >
       {children}
     </SidebarContext.Provider>

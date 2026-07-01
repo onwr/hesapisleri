@@ -11,7 +11,7 @@ import {
   roundMoney,
 } from "@/lib/sale-payment-utils";
 import { applyCustomerCollection } from "@/lib/customer-balance-utils";
-import { invalidateDashboardCache } from "@/lib/dashboard-cache-invalidation";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -208,24 +208,29 @@ export async function POST(req: Request, { params }: Props) {
       return updated;
     });
 
-    invalidateDashboardCache(companyId, "sale-collect");
-
-    return NextResponse.json({
-      success: true,
-      message:
-        nextPaymentStatus === "PAID"
-          ? "Kalan tahsilat tamamlandı."
-          : "Kısmi tahsilat kaydedildi.",
-      data: {
-        ...updatedSale,
-        total: Number(updatedSale.total),
-        paidAmount: Number(updatedSale.paidAmount),
-        remainingAmount: getSaleRemainingAmount(
-          Number(updatedSale.total),
-          Number(updatedSale.paidAmount)
-        ),
-      },
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(companyId, {
+        reason: "sale-collect",
+        entityIds: {
+          saleId: updatedSale.id,
+          customerId: updatedSale.customerId ?? undefined,
+        },
+        entity: {
+          ...updatedSale,
+          total: Number(updatedSale.total),
+          paidAmount: Number(updatedSale.paidAmount),
+          remainingAmount: getSaleRemainingAmount(
+            Number(updatedSale.total),
+            Number(updatedSale.paidAmount),
+          ),
+        } as Record<string, unknown>,
+        message:
+          nextPaymentStatus === "PAID"
+            ? "Kalan tahsilat tamamlandı."
+            : "Kısmi tahsilat kaydedildi.",
+        status: nextPaymentStatus,
+      }),
+    );
   } catch (error) {
     console.error("SALE_COLLECT_API_ERROR", error);
 

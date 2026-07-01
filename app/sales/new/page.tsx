@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { AppLoadingScreen } from "@/components/layout/app-loading-screen";
 import { CollectionAccountSelect } from "@/components/cash-bank/collection-account-select";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 import { SaleLineEditFields } from "@/components/sales/sale-line-edit-fields";
 import { WarehouseSelectField } from "@/components/shared/warehouse-select-field";
 import {
@@ -114,7 +115,9 @@ export default function NewSalePage() {
   const [cart, setCart] = useState<CartItem[]>([]);
 
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const { mutate, isSubmitting } = useTenantMutation<{ id: string }>({
+    refresh: false,
+  });
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -365,39 +368,33 @@ export default function NewSalePage() {
   }
 
   async function handleSaveSale() {
-    setSaving(true);
     setError("");
 
     if (cart.length === 0) {
       setError("Satış oluşturmak için en az bir ürün ekleyin.");
-      setSaving(false);
       return;
     }
 
     const lineError = validateSaleLineItems(cart);
     if (lineError) {
       setError(lineError);
-      setSaving(false);
       return;
     }
 
     if (paymentStatus === "PARTIAL") {
       if (collectedAmount <= 0) {
         setError("Kısmi ödeme için tahsil edilen tutarı girin.");
-        setSaving(false);
         return;
       }
 
       if (collectedAmount >= total) {
         setError("Tahsil edilen tutar genel toplamdan küçük olmalıdır.");
-        setSaving(false);
         return;
       }
     }
 
     if (paymentStatus !== "UNPAID" && !accountId) {
       setError("Tahsilat hesabı seçin.");
-      setSaving(false);
       return;
     }
 
@@ -408,7 +405,6 @@ export default function NewSalePage() {
 
     if (discountError) {
       setError(discountError);
-      setSaving(false);
       return;
     }
 
@@ -417,58 +413,50 @@ export default function NewSalePage() {
       parseSaleDiscountValueInput(discountValueInput, discountType) === null
     ) {
       setError("İndirim tutarı geçersiz.");
-      setSaving(false);
       return;
     }
 
-    try {
-      const res = await fetch("/api/sales/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          customerId: selectedCustomerId || undefined,
-          warehouseId:
-            warehouseEnabled && selectedWarehouseId
-              ? selectedWarehouseId
-              : undefined,
-          paymentStatus,
-          collectedAmount:
-            paymentStatus === "PAID"
-              ? total
-              : paymentStatus === "UNPAID"
-                ? 0
-                : collectedAmount,
-          accountId: paymentStatus === "UNPAID" ? undefined : accountId,
-          note,
-          discountType,
-          discountValue: discountValue,
-          discountNote: discountNote.trim() || undefined,
-          items: cart.map((item) => ({
-            productId: item.productId,
-            name: item.name,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            vatRate: item.vatRate,
-          })),
-        }),
-      });
+    const result = await mutate("/api/sales/create", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        customerId: selectedCustomerId || undefined,
+        warehouseId:
+          warehouseEnabled && selectedWarehouseId
+            ? selectedWarehouseId
+            : undefined,
+        paymentStatus,
+        collectedAmount:
+          paymentStatus === "PAID"
+            ? total
+            : paymentStatus === "UNPAID"
+              ? 0
+              : collectedAmount,
+        accountId: paymentStatus === "UNPAID" ? undefined : accountId,
+        note,
+        discountType,
+        discountValue: discountValue,
+        discountNote: discountNote.trim() || undefined,
+        items: cart.map((item) => ({
+          productId: item.productId,
+          name: item.name,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          vatRate: item.vatRate,
+        })),
+      }),
+    });
 
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        setError(data.message || "Satış oluşturulamadı.");
-        return;
+    if (!result.ok) {
+      if (result.error !== "duplicate_submit") {
+        setError(result.error || "Satış oluşturulamadı.");
       }
-
-      router.push(`/sales/${data.data.id}`);
-      router.refresh();
-    } catch {
-      setError("Sunucuya bağlanırken bir hata oluştu.");
-    } finally {
-      setSaving(false);
+      return;
     }
+
+    router.push(`/sales/${result.data.id}`);
   }
 
   if (loading) {
@@ -483,7 +471,7 @@ export default function NewSalePage() {
 
   return (
     <main className="min-h-screen bg-[#f7f8ff] px-5 py-6">
-      {saving ? (
+      {isSubmitting ? (
         <AppLoadingScreen
           preset="sales"
           title="Satış kaydediliyor"
@@ -774,7 +762,7 @@ export default function NewSalePage() {
                         value={accountId}
                         onChange={setAccountId}
                         required
-                        disabled={saving || accountsLoading}
+                        disabled={isSubmitting || accountsLoading}
                         className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-[12px] font-bold text-[#0f1f4d] outline-none focus:border-blue-200 focus:ring-4 focus:ring-blue-50"
                       />
                     </div>
@@ -1066,11 +1054,11 @@ export default function NewSalePage() {
                 <button
                   type="button"
                   onClick={handleSaveSale}
-                  disabled={saving || cart.length === 0}
+                  disabled={isSubmitting || cart.length === 0}
                   className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-linear-to-br from-emerald-500 to-green-600 text-[13px] font-black text-white shadow-lg shadow-emerald-100 transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {saving ? <Loader2 className="animate-spin" size={18} /> : null}
-                  {saving ? "Satış kaydediliyor..." : "Satışı Tamamla"}
+                  {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : null}
+                  {isSubmitting ? "Satış kaydediliyor..." : "Satışı Tamamla"}
                 </button>
 
                 {cart.length > 0 ? (

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireApiModuleAccess } from "@/lib/module-access";
 import { createExpenseRecord } from "@/lib/expense-service";
 import { createExpenseSchema } from "@/lib/expense-utils";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 export async function POST(req: Request) {
   try {
@@ -43,11 +44,14 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "Gider başarıyla oluşturuldu.",
-      data: result.data,
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(companyId, {
+        reason: "expense-create",
+        entityIds: { expenseId: result.data.id },
+        entity: result.data as Record<string, unknown>,
+        message: "Gider başarıyla oluşturuldu.",
+      }),
+    );
   } catch (error) {
     console.error("CREATE_EXPENSE_ERROR", error);
 

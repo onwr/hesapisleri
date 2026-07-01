@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiModuleAccess } from "@/lib/module-access";
 import { bulkUpdateOrderShipping } from "@/lib/order-service";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 const schema = z.object({
   ids: z.array(z.string()).min(1),
@@ -39,11 +40,14 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      message: `${result.data.updatedCount} siparişe kargo bilgisi eklendi.`,
-      data: result.data,
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(auth.companyId, {
+        reason: "order-bulk-shipping",
+        entity: result.data as Record<string, unknown>,
+        message: `${result.data.updatedCount} siparişe kargo bilgisi eklendi.`,
+        affectedIds: parsed.data.ids,
+      }),
+    );
   } catch {
     return NextResponse.json(
       { success: false, message: "Toplu kargo güncellemesi başarısız." },

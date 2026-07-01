@@ -5,6 +5,7 @@ import {
   getFirstStockMovementErrorMessage,
   stockMovementRequestSchema,
 } from "@/lib/stock-movement-utils";
+import { invalidateTenantCaches } from "@/lib/tenant-cache/tenant-cache-invalidation";
 import { z } from "zod";
 
 const stockCenterMovementSchema = stockMovementRequestSchema.extend({
@@ -50,10 +51,23 @@ export async function POST(req: Request) {
       );
     }
 
+    invalidateTenantCaches(auth.companyId, {
+      reason: "stock-movement",
+      entityIds: {
+        productId,
+        warehouseId: parsed.data.warehouseId,
+      },
+    });
+
     return NextResponse.json({
       success: true,
       message: "Stok hareketi kaydedildi.",
-      data: result.data,
+      data: {
+        ...result.data,
+        affectedIds: [productId],
+        newStock: result.data?.newStock,
+        status: "recorded",
+      },
     });
   } catch (error) {
     console.error("STOCKS_MOVEMENT_ERROR", error);

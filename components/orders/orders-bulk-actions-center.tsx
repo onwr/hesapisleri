@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
+import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 import {
   Ban,
   CheckCheck,
@@ -111,7 +112,7 @@ export function OrdersBulkActionsCenter({
     }
 
     setMessage(result.message);
-    router.refresh();
+    notifyTenantCacheSync();
   }
 
   async function runBulkShipping() {
@@ -140,7 +141,7 @@ export function OrdersBulkActionsCenter({
     }
 
     setMessage(result.message);
-    router.refresh();
+    notifyTenantCacheSync();
   }
 
   return (

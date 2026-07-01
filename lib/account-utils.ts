@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  accountNameFieldSchema,
+  openingBalanceFieldSchema,
+} from "@/lib/account-validation";
 
 export const ACCOUNT_TYPES = [
   "CASH",
@@ -46,20 +50,20 @@ export function accountShowsBankFields(type: string) {
 const accountTypeSchema = z.enum(ACCOUNT_TYPES);
 
 export const createAccountSchema = z.object({
-  name: z.string().trim().min(1, "Hesap adı zorunludur."),
+  name: accountNameFieldSchema,
   type: accountTypeSchema,
   bankName: z.string().trim().optional().nullable(),
   branchName: z.string().trim().optional().nullable(),
   iban: z.string().trim().optional().nullable(),
   accountNumber: z.string().trim().optional().nullable(),
   currency: z.string().trim().min(1).default("TRY"),
-  openingBalance: z.number().finite().default(0),
+  openingBalance: openingBalanceFieldSchema.default(0),
   isDefault: z.boolean().optional().default(false),
   description: z.string().trim().optional().nullable(),
 });
 
 export const updateAccountSchema = z.object({
-  name: z.string().trim().min(1, "Hesap adı zorunludur.").optional(),
+  name: accountNameFieldSchema.optional(),
   type: accountTypeSchema.optional(),
   bankName: z.string().trim().optional().nullable(),
   branchName: z.string().trim().optional().nullable(),

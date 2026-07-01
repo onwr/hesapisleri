@@ -27,8 +27,9 @@ import { SaleCollectPayment } from "@/components/sales/sale-collect-payment";
 import { SalePrintOnLoad } from "@/components/sales/sale-print-on-load";
 import { AppShell } from "@/components/layout/app-shell";
 import { guardPageModule } from "@/lib/module-access";
+import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
 
-import { db } from "@/lib/prisma";
+import { getCachedSaleDetailData } from "@/lib/tenant-cache/cached-tenant-page-data";
 import { formatMoney } from "@/lib/format-utils";
 import { getSaleRemainingAmount } from "@/lib/sale-payment-utils";
 import { getPosPaymentMethodLabel } from "@/lib/pos-checkout-utils";
@@ -104,44 +105,14 @@ const { id } = await params;
   const shouldPrint = query.print === "1";
   const shouldOpenConvert = query.convert === "1";
 
-  const sale = await db.sale.findFirst({
-    where: {
-      id,
-      companyId: company.id,
-    },
-    include: {
-      customer: true,
-      payments: {
-        include: {
-          account: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-        orderBy: { createdAt: "asc" },
-      },
-      items: {
-        include: {
-          product: true,
-        },
-      },
-      invoice: {
-        include: {
-          documentSubmission: true,
-        },
-      },
-      cancelledByUser: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
-    },
+  const detail = await getCachedSaleDetailData({
+    companyId: company.id,
+    saleId: id,
   });
 
-  if (!sale) notFound();
+  if (!detail) notFound();
+
+  const { sale, stockMovements, accountTransactions } = detail;
 
   const isQuote = sale.status === "DRAFT";
   const isCancelled = sale.status === "CANCELLED";
@@ -164,49 +135,12 @@ const { id } = await params;
     canCancelSales(session.effectiveRole, session.companyUser.isOwner) &&
     validateSaleCancelEligibility(sale).ok;
 
-  const stockMovements = await db.stockMovement.findMany({
-    where: {
-      companyId: company.id,
-      note: {
-        contains: sale.saleNo,
-      },
-    },
-    include: {
-      product: true,
-      warehouse: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
-
-  const accountTransactions = await db.accountTransaction.findMany({
-    where: {
-      title: {
-        contains: sale.saleNo,
-      },
-      account: {
-        companyId: company.id,
-      },
-    },
-    include: {
-      account: true,
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
-
   const totalQuantity = sale.items.reduce((sum, item) => sum + item.quantity, 0);
   const customerBalance = Number(sale.customer?.balance ?? 0);
 
   return (
     <AppShell>
+      <TenantPageSync />
       <SalePrintOnLoad enabled={shouldPrint} />
 
       <div className="no-print space-y-5">
@@ -273,6 +207,14 @@ const { id } = await params;
                     value={formatShortDate(sale.createdAt)}
                     icon={<CalendarDays size={15} />}
                   />
+
+                  {sale.warehouse ? (
+                    <HeroBadge
+                      label="Depo"
+                      value={sale.warehouse.name}
+                      icon={<Package size={15} />}
+                    />
+                  ) : null}
 
                   <HeroBadge
                     label="Kalem"
@@ -684,6 +626,14 @@ const { id } = await params;
                     label="Belge Tipi"
                     value={isQuote ? "Taslak Teklif" : "Satış Kaydı"}
                   />
+
+                  {sale.warehouse ? (
+                    <InfoLine label="Depo" value={sale.warehouse.name} />
+                  ) : null}
+
+                  {!isQuote && sale.revisionNumber > 0 ? (
+                    <InfoLine label="Revizyon" value={`#${sale.revisionNumber}`} />
+                  ) : null}
 
                   {!isQuote ? (
                     <div className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 p-3">

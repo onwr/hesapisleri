@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { ReactNode } from "react";
 import { AppSidebar } from "./app-sidebar";
@@ -6,6 +6,7 @@ import { AppTopbar } from "./app-topbar";
 import { AiDrawerProvider } from "@/components/ai-assistant/ai-drawer-context";
 import { AiFloatingLauncher } from "@/components/ai-assistant/ai-floating-launcher";
 import { GlobalAiDrawer } from "@/components/ai-assistant/global-ai-drawer";
+import type { AiPlatformStatus } from "@/lib/ai/ai-config";
 import {
   SidebarProvider,
   sidebarOffsetClass,
@@ -19,10 +20,14 @@ type AppShellClientProps = {
   companyRole?: string;
   isSuperAdmin?: boolean;
   isOwner?: boolean;
+  canUseAi?: boolean;
+  aiPlatformStatus?: AiPlatformStatus;
   membershipSummary?: {
     statusLabel: string;
     remainingDays: number;
     isExpired: boolean;
+    periodEndLabel?: string | null;
+    policyNote?: string | null;
   };
 };
 
@@ -31,7 +36,7 @@ function AppShellMain({ children }: { children: ReactNode }) {
 
   return (
     <main
-      className={`px-5 py-6 transition-[margin] duration-200 max-md:min-w-0 lg:px-8 ${sidebarOffsetClass(collapsed)}`}
+      className={`px-5 py-6 text-[15px] transition-[margin] duration-200 max-md:min-w-0 lg:px-8 ${sidebarOffsetClass(collapsed)}`}
     >
       {children}
     </main>
@@ -45,6 +50,8 @@ export function AppShellClient({
   companyRole,
   isSuperAdmin = false,
   isOwner = false,
+  canUseAi = false,
+  aiPlatformStatus = "enabled",
   membershipSummary,
 }: AppShellClientProps) {
   return (
@@ -61,8 +68,8 @@ export function AppShellClient({
           />
           <AppTopbar userName={userName} companyName={companyName} />
           <AppShellMain>{children}</AppShellMain>
-          <AiFloatingLauncher />
-          <GlobalAiDrawer />
+          {canUseAi ? <AiFloatingLauncher /> : null}
+          {canUseAi ? <GlobalAiDrawer /> : null}
         </div>
       </AiDrawerProvider>
     </SidebarProvider>

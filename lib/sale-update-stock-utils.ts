@@ -69,7 +69,8 @@ export function buildSaleStockCorrectionDeltas(
 export async function validateSaleStockCorrectionDeltas(
   tx: TransactionClient,
   companyId: string,
-  deltas: SaleStockCorrectionDelta[]
+  deltas: SaleStockCorrectionDelta[],
+  allowNegativeStock = false
 ): Promise<StockWarningItem[]> {
   const warnings: StockWarningItem[] = [];
 
@@ -103,7 +104,7 @@ export async function validateSaleStockCorrectionDeltas(
           availableQty: quantity,
           requestedQty: delta.delta,
         }),
-        productId: delta.productId,
+        productId: allowNegativeStock ? undefined : delta.productId,
       });
     }
   }

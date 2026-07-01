@@ -53,6 +53,7 @@ export const updateSaleSchema = z.object({
   discountValue: z.number().min(0).optional(),
   discountNote: z.string().optional().nullable(),
   items: z.array(updateSaleItemSchema).min(1, "En az bir ürün ekleyin."),
+  revisionNumber: z.number().int().min(0).optional(),
 });
 
 export type UpdateSaleInput = z.infer<typeof updateSaleSchema>;
@@ -95,6 +96,17 @@ export async function updateSaleById(input: {
       ok: false as const,
       status: 400,
       message: eligibility.message,
+    };
+  }
+
+  if (
+    input.data.revisionNumber !== undefined &&
+    sale.revisionNumber !== input.data.revisionNumber
+  ) {
+    return {
+      ok: false as const,
+      status: 409,
+      message: "SALE_VERSION_CONFLICT: Bu satış başka bir işlem tarafından güncellenmiş. Sayfayı yenileyip tekrar deneyin.",
     };
   }
 
@@ -154,6 +166,12 @@ export async function updateSaleById(input: {
     };
   }
 
+  const settings = await db.companySettings.findUnique({
+    where: { companyId: input.companyId },
+    select: { allowNegativeStockSales: true },
+  });
+  const allowNegativeStock = settings?.allowNegativeStockSales ?? false;
+
   try {
     const updated = await db.$transaction(async (tx) => {
       const resolvedWarehouseId = await resolveWarehouseId(
@@ -170,7 +188,8 @@ export async function updateSaleById(input: {
           quantity: item.quantity,
           name: item.name,
         })),
-        resolvedWarehouseId
+        resolvedWarehouseId,
+        allowNegativeStock
       );
 
       const hardStockIssue = stockWarnings.find((warning) => warning.productId);
@@ -195,7 +214,8 @@ export async function updateSaleById(input: {
       const correctionWarnings = await validateSaleStockCorrectionDeltas(
         tx,
         input.companyId,
-        correctionDeltas
+        correctionDeltas,
+        allowNegativeStock
       );
 
       if (correctionWarnings.length > 0) {
@@ -247,6 +267,7 @@ export async function updateSaleById(input: {
           total: totals.total,
           paymentStatus: payment.paymentStatus,
           paidAmount: payment.paidAmount,
+          revisionNumber: { increment: 1 },
           items: {
             create: input.data.items.map((item) => ({
               productId: item.productId || null,

@@ -10,16 +10,23 @@ import {
   parseFavoriteFilter,
   parsePage,
   parseSearchQuery,
+  parseSupplierCustomerRoleFilter,
+  parseSupplierLastActivityFrom,
+  parseSupplierListBalanceDirection,
+  parseSupplierStatusFilter,
   parseSupplierTab,
   toSupplierTableRow,
+  type SupplierListBalanceDirection,
   type SupplierStatCard,
   type SupplierTabKey,
 } from "@/lib/suppliers-page-utils";
+import type { GetSuppliersOptions } from "@/lib/supplier-service";
 
 export const SUPPLIERS_PAGE_SIZE = 10;
 
 export {
   buildSuppliersExportQuery,
+  buildSuppliersLedgerExportQuery,
   buildSuppliersQuery,
   formatSupplierMoney,
   getCategoryBadge,
@@ -34,23 +41,32 @@ export {
   SUPPLIER_TAB_LABELS,
 } from "@/lib/suppliers-page-utils";
 
-function filterByTab<T extends { isActive: boolean; balance: number; overdueAmount: number }>(
-  rows: T[],
-  tab: SupplierTabKey
-) {
+function tabToSupplierQuery(tab: SupplierTabKey): Partial<GetSuppliersOptions> {
   switch (tab) {
     case "active":
-      return rows.filter((row) => row.isActive);
+      return { isActive: true };
     case "passive":
-      return rows.filter((row) => !row.isActive);
+      return { isActive: false };
     case "payable":
-      return rows.filter((row) => row.balance > 0);
+      return { balanceDirection: "PAYABLE" };
     case "overdue":
-      return rows.filter((row) => row.overdueAmount > 0);
+      return { balanceStatus: "overdue" };
     default:
-      return rows;
+      return {};
   }
 }
+
+export type SuppliersPageOptions = {
+  tab: SupplierTabKey;
+  q: string | null;
+  category: string | null;
+  favorite: boolean;
+  page: number;
+  balanceDirection: SupplierListBalanceDirection;
+  customerRole: "all" | "with" | "without";
+  lastActivityFrom: Date | null;
+  status: "all" | "active" | "passive";
+};
 
 export function parseSuppliersPageOptions(params: {
   tab?: string;
@@ -58,25 +74,64 @@ export function parseSuppliersPageOptions(params: {
   category?: string;
   favorite?: string;
   page?: string;
+  balanceDirection?: string;
+  customerRole?: string;
+  lastActivityFrom?: string;
+  status?: string;
 }) {
+  const tab = parseSupplierTab(params.tab);
+  const statusFilter = parseSupplierStatusFilter(params.status);
+
+  const status: "all" | "active" | "passive" =
+    statusFilter !== "all"
+      ? statusFilter
+      : tab === "active"
+        ? "active"
+        : tab === "passive"
+          ? "passive"
+          : "all";
+
   return {
-    tab: parseSupplierTab(params.tab),
+    tab,
     q: parseSearchQuery(params.q),
     category: parseCategoryFilter(params.category),
     favorite: parseFavoriteFilter(params.favorite),
     page: parsePage(params.page),
-  };
+    balanceDirection: parseSupplierListBalanceDirection(params.balanceDirection),
+    customerRole: parseSupplierCustomerRoleFilter(params.customerRole),
+    lastActivityFrom: parseSupplierLastActivityFrom(params.lastActivityFrom),
+    status,
+  } satisfies SuppliersPageOptions;
 }
 
 export async function getSuppliersPageData(
   companyId: string,
   options: ReturnType<typeof parseSuppliersPageOptions>
 ) {
+  const tabFilters = tabToSupplierQuery(options.tab);
+
   const allRows = await getSuppliers({
     companyId,
     search: options.q,
     category: options.category,
     isFavorite: options.favorite || null,
+    ...tabFilters,
+    ...(options.balanceDirection !== "all"
+      ? { balanceDirection: options.balanceDirection }
+      : {}),
+    ...(options.customerRole === "with"
+      ? { hasCustomerRole: true }
+      : options.customerRole === "without"
+        ? { hasCustomerRole: false }
+        : {}),
+    ...(options.lastActivityFrom
+      ? { lastActivityFrom: options.lastActivityFrom }
+      : {}),
+    ...(options.status === "active"
+      ? { isActive: true }
+      : options.status === "passive"
+        ? { isActive: false }
+        : {}),
   });
 
   const summary = await getSupplierSummary(companyId);
@@ -91,9 +146,9 @@ export async function getSuppliersPageData(
       color: "emerald",
     },
     {
-      title: "Toplam Borç",
+      title: "Toplam Tedarikçiye Borç",
       value: formatSupplierMoney(summary.payableTotal),
-      subtitle: "Açık tedarikçi bakiyesi",
+      subtitle: `Tedarikçiden alacak: ${formatSupplierMoney(summary.receivableTotal)}`,
       iconKey: "wallet",
       color: "rose",
     },
@@ -120,20 +175,13 @@ export async function getSuppliersPageData(
     },
   ];
 
-  const tableSource = allRows.map((row, index) => ({
-    ...toSupplierTableRow(row, index),
-    balance: row.currentBalance,
-    overdueAmount: row.overdueAmount,
-    isActive: row.isActive,
-  }));
+  const tableSource = allRows.map((row, index) => toSupplierTableRow(row, index));
 
-  let filteredRows = filterByTab(tableSource, options.tab);
-
-  const totalRecords = filteredRows.length;
+  const totalRecords = tableSource.length;
   const totalPages = Math.max(1, Math.ceil(totalRecords / SUPPLIERS_PAGE_SIZE));
   const currentPage = Math.min(options.page, totalPages);
   const start = (currentPage - 1) * SUPPLIERS_PAGE_SIZE;
-  const rows = filteredRows.slice(start, start + SUPPLIERS_PAGE_SIZE);
+  const rows = tableSource.slice(start, start + SUPPLIERS_PAGE_SIZE);
 
   const categories = Array.from(
     new Set([

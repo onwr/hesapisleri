@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useTenantCacheSync } from "@/hooks/use-tenant-cache-sync";
+import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 import {
   ArrowLeft,
   CalendarDays,
@@ -25,6 +27,11 @@ import {
   getSupplierPrimaryLine,
   getSupplierSecondaryLine,
 } from "@/lib/supplier-utils";
+import { SUPPLIER_BALANCE_LABELS } from "@/lib/supplier-balance-utils";
+import { SupplierLedgerTable } from "@/components/suppliers/supplier-ledger-table";
+import { SupplierFinanceModal } from "@/components/suppliers/supplier-finance-modal";
+import { SupplierCustomerRoleModal } from "@/components/suppliers/supplier-customer-role-modal";
+import type { SupplierLedgerRow } from "@/lib/supplier-ledger-utils";
 
 type DetailTab =
   | "overview"
@@ -126,21 +133,37 @@ type SupplierDetailClientProps = {
   supplier: SupplierDetailRecord;
   summary: {
     currentBalance: number;
+    payableAmount: number;
+    receivableAmount: number;
+    directionLabel: string;
+    netStatusLabel: string;
     unpaidTotal: number;
     thisMonthPurchases: number;
     productCount: number;
     lastPayment: string | null;
+    lastMovementDate: string | null;
+    overduePayable: number;
+    totalPurchases: number;
   };
+  ledger: SupplierLedgerRow[];
+  linkedCustomer: {
+    id: string;
+    name: string;
+    balance: number;
+    href: string;
+  } | null;
   expenses: ExpenseRow[];
   payments: PaymentRow[];
   activityLogs: ActivityRow[];
   canManage: boolean;
+  canPay: boolean;
+  canCollect: boolean;
 };
 
 const TABS: { key: DetailTab; label: string }[] = [
   { key: "overview", label: "Genel Bakış" },
-  { key: "movements", label: "Hareketler" },
-  { key: "expenses", label: "Giderler" },
+  { key: "movements", label: "Cari Hareketler" },
+  { key: "expenses", label: "Giderler / Alışlar" },
   { key: "payments", label: "Ödemeler" },
   { key: "products", label: "Ürünler" },
   { key: "contacts", label: "İletişim" },
@@ -155,10 +178,14 @@ const SOFT_CARD_CLASS =
 export function SupplierDetailClient({
   supplier,
   summary,
+  ledger,
+  linkedCustomer,
   expenses,
   payments,
   activityLogs,
   canManage,
+  canPay,
+  canCollect,
 }: SupplierDetailClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -167,10 +194,16 @@ export function SupplierDetailClient({
   const initialTab = TABS.some((tab) => tab.key === requestedTab) ? requestedTab! : "overview";
   const [activeTab, setActiveTab] = useState<DetailTab>(initialTab);
   const [moreActionsOpen, setMoreActionsOpen] = useState(false);
+  const [financeModal, setFinanceModal] = useState<"payment" | "collection" | "adjustment" | null>(
+    null
+  );
+  const [customerRoleOpen, setCustomerRoleOpen] = useState(false);
   const [banner, setBanner] = useState<{ tone: "success" | "error"; text: string } | null>(
     null
   );
   const [actionPending, setActionPending] = useState(false);
+
+  useTenantCacheSync(() => {}, { refresh: true });
 
   const phoneHref = formatPhoneHref(supplier.phone ?? supplier.mobilePhone);
   const emailHref = formatEmailHref(supplier.email);
@@ -180,9 +213,7 @@ export function SupplierDetailClient({
       setBanner({ tone: "success", text: message });
     }
 
-    startTransition(() => {
-      router.refresh();
-    });
+    notifyTenantCacheSync();
   }
 
   async function patchSupplier(body: Record<string, unknown>) {
@@ -278,7 +309,6 @@ export function SupplierDetailClient({
       }
 
       router.push("/suppliers");
-      router.refresh();
     } catch (error) {
       setBanner({
         tone: "error",
@@ -358,13 +388,26 @@ export function SupplierDetailClient({
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
             {canManage ? (
               <>
-                <Link
-                  href={`/cash-bank?tab=transactions&q=${encodeURIComponent(getSupplierPrimaryLine(supplier))}`}
-                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-[#0f1f4d] px-4 text-[12px] font-black text-white"
-                >
-                  <Wallet size={14} />
-                  Ödeme Yap
-                </Link>
+                {canPay ? (
+                  <button
+                    type="button"
+                    onClick={() => setFinanceModal("payment")}
+                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-[#0f1f4d] px-4 text-[12px] font-black text-white"
+                  >
+                    <Wallet size={14} />
+                    Tedarikçiye Ödeme Yap
+                  </button>
+                ) : null}
+                {canCollect ? (
+                  <button
+                    type="button"
+                    onClick={() => setFinanceModal("collection")}
+                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-blue-100 bg-blue-50 px-4 text-[12px] font-black text-blue-700"
+                  >
+                    <Wallet size={14} />
+                    Tedarikçiden Tahsilat Al
+                  </button>
+                ) : null}
                 <Link
                   href={`/expenses/new?supplierId=${supplier.id}`}
                   className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-emerald-100 bg-emerald-50 px-4 text-[12px] font-black text-emerald-700"
@@ -372,6 +415,22 @@ export function SupplierDetailClient({
                   <Plus size={14} />
                   Gider Ekle
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => setFinanceModal("adjustment")}
+                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-4 text-[12px] font-black"
+                >
+                  Cari Düzeltme
+                </button>
+                {!linkedCustomer ? (
+                  <button
+                    type="button"
+                    onClick={() => setCustomerRoleOpen(true)}
+                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-violet-100 bg-violet-50 px-4 text-[12px] font-black text-violet-700"
+                  >
+                    Müşteri Rolü Ekle
+                  </button>
+                ) : null}
                 <Link
                   href={`/suppliers/${supplier.id}/edit`}
                   className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-4 text-[12px] font-black"
@@ -406,35 +465,36 @@ export function SupplierDetailClient({
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
         {[
           {
-            label: "Açık Bakiye",
-            value: formatSupplierMoney(summary.currentBalance, supplier.currency),
+            label: SUPPLIER_BALANCE_LABELS.PAYABLE,
+            value: formatSupplierMoney(summary.payableAmount, supplier.currency),
             icon: CircleDollarSign,
           },
           {
-            label: "Vadesi Geçen",
-            value: formatSupplierMoney(summary.unpaidTotal, supplier.currency),
-            icon: CalendarDays,
-          },
-          {
-            label: "Bu Ayki Alım",
-            value: formatSupplierMoney(summary.thisMonthPurchases, supplier.currency),
-            icon: FileText,
-          },
-          { label: "Bağlı Ürün", value: String(summary.productCount), icon: Package },
-          {
-            label: "Son Ödeme",
-            value: summary.lastPayment
-              ? new Date(summary.lastPayment).toLocaleDateString("tr-TR")
-              : "—",
+            label: SUPPLIER_BALANCE_LABELS.RECEIVABLE,
+            value: formatSupplierMoney(summary.receivableAmount, supplier.currency),
             icon: Wallet,
           },
           {
-            label: "Son Hareket",
-            value:
-              activityLogs[0]?.createdAt
-                ? new Date(activityLogs[0].createdAt).toLocaleDateString("tr-TR")
-                : "—",
+            label: "Net Durum",
+            value: summary.netStatusLabel,
             icon: RefreshCw,
+          },
+          {
+            label: "Vadesi Geçen",
+            value: formatSupplierMoney(summary.overduePayable, supplier.currency),
+            icon: CalendarDays,
+          },
+          {
+            label: "Toplam Alış",
+            value: formatSupplierMoney(summary.totalPurchases, supplier.currency),
+            icon: FileText,
+          },
+          {
+            label: "Son Hareket",
+            value: summary.lastMovementDate
+              ? new Date(summary.lastMovementDate).toLocaleDateString("tr-TR")
+              : "—",
+            icon: Truck,
           },
         ].map((item) => {
           const Icon = item.icon;
@@ -533,35 +593,10 @@ export function SupplierDetailClient({
 
       {activeTab === "movements" ? (
         <section className={`${CARD_CLASS} p-4`}>
-          <h2 className="text-[14px] font-black text-[#0f1f4d]">Tedarikçi Hareketleri</h2>
-          {activityLogs.length === 0 ? (
-            <EmptyTab message="Henüz hareket bulunmuyor." />
-          ) : (
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full min-w-[760px] text-left text-[12px]">
-                <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50 text-[11px] font-black text-slate-600">
-                    <th className="px-3 py-2.5">Tarih</th>
-                    <th className="px-3 py-2.5">İşlem</th>
-                    <th className="px-3 py-2.5">Referans</th>
-                    <th className="px-3 py-2.5">Açıklama</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {activityLogs.map((log) => (
-                    <tr key={log.id}>
-                      <td className="px-3 py-2.5 text-slate-500">
-                        {new Date(log.createdAt).toLocaleString("tr-TR")}
-                      </td>
-                      <td className="px-3 py-2.5 font-black">{log.action}</td>
-                      <td className="px-3 py-2.5">Tedarikçi</td>
-                      <td className="px-3 py-2.5">{log.message || "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <h2 className="text-[14px] font-black text-[#0f1f4d]">Cari Hareketler</h2>
+          <div className="mt-3">
+            <SupplierLedgerTable rows={ledger} currency={supplier.currency} />
+          </div>
         </section>
       ) : null}
 
@@ -771,6 +806,30 @@ export function SupplierDetailClient({
 
       {isPending || actionPending ? (
         <p className="text-[11px] font-semibold text-slate-500">Güncelleniyor...</p>
+      ) : null}
+
+      <SupplierFinanceModal
+        supplierId={supplier.id}
+        supplierName={getSupplierPrimaryLine(supplier)}
+        currency={supplier.currency}
+        payableAmount={summary.payableAmount}
+        receivableAmount={summary.receivableAmount}
+        canPay={canPay}
+        canCollect={canCollect}
+        canAdjust={canManage}
+        mode={financeModal}
+        onClose={() => setFinanceModal(null)}
+      />
+
+      {customerRoleOpen ? (
+        <SupplierCustomerRoleModal
+          supplierId={supplier.id}
+          onClose={() => setCustomerRoleOpen(false)}
+          onSuccess={(message) => {
+            setCustomerRoleOpen(false);
+            refreshPage(message);
+          }}
+        />
       ) : null}
     </div>
   );

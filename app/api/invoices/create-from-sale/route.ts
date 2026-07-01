@@ -13,7 +13,7 @@ import {
   buildInvoiceSnapshotData,
   saleItemToInvoiceLineInput,
 } from "@/lib/invoice-snapshot-utils";
-import { invalidateDashboardCache } from "@/lib/dashboard-cache-invalidation";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 const createFromSaleSchema = z.object({
   saleId: z.string().min(1, "Satış seçilmelidir."),
@@ -139,13 +139,14 @@ export async function POST(req: Request) {
       message: `${invoice.invoiceNo} numaralı fatura kaydı oluşturuldu.`,
     });
 
-    invalidateDashboardCache(companyId, "invoice-create-from-sale");
-
-    return NextResponse.json({
-      success: true,
-      message: "Fatura satıştan oluşturuldu.",
-      data: invoice,
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(companyId, {
+        reason: "invoice-create-from-sale",
+        entity: invoice,
+        message: "Fatura satıştan oluşturuldu.",
+        entityIds: { invoiceId: invoice.id },
+      }),
+    );
   } catch (error) {
     console.error("CREATE_INVOICE_FROM_SALE_ERROR", error);
 

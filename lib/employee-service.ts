@@ -35,7 +35,6 @@ import {
 import { resolveEmployeeDepartmentAssignment } from "@/lib/employee-department-service";
 import { roundCashMoney } from "@/lib/cash-bank-account-utils";
 import { ensureExpenseCategoryExists } from "@/lib/expense-category-service";
-import { buildExpenseTransactionTitle } from "@/lib/expense-utils";
 import {
   buildEmployeePaymentExpenseTitle,
   buildEmployeePaymentTransactionTitle,
@@ -58,8 +57,15 @@ import {
 import { getEmployeePerformanceDetail } from "@/lib/employee-performance-service";
 import {
   getFinanceAccountTypeLabel,
-  validateFinanceAccount,
 } from "@/lib/finance-account-utils";
+import {
+  EMPLOYEE_PAYMENT_VALIDATION_MESSAGES,
+  validateEmployeePaymentAccount,
+  validateEmployeePaymentCreateInput,
+} from "@/lib/employee-payment-validation";
+import {
+  getEmployeePaymentTypeBehavior,
+} from "@/lib/employee-payment-type-mapping";
 
 export class EmployeeServiceError extends Error {
   status: number;
@@ -77,15 +83,17 @@ async function assertFinancePaymentAccount(
   client: DbClient,
   companyId: string,
   accountId: string,
-  paymentCurrency: string
+  paymentCurrency: string,
+  options?: { amount?: number; checkBalance?: boolean }
 ) {
   const account = await client.account.findFirst({
-    where: { id: accountId, companyId },
+    where: { id: accountId },
   });
 
-  const validation = validateFinanceAccount(account, companyId, {
-    purpose: "disbursement",
+  const validation = validateEmployeePaymentAccount(account, companyId, {
     paymentCurrency,
+    amount: options?.amount,
+    checkBalance: options?.checkBalance,
   });
 
   if (!validation.ok) {
@@ -280,6 +288,11 @@ function serializePayment(
     paymentMethodLabel: account
       ? getFinanceAccountTypeLabel(account.type)
       : null,
+    advanceSettlementRemaining:
+      payment.type === "ADVANCE" &&
+      (payment.status === "PAID" || payment.direction === "PAID")
+        ? Number(payment.amount)
+        : null,
     createdByName: options?.createdByName ?? null,
     createdAt: payment.createdAt.toISOString(),
   };
@@ -1158,14 +1171,17 @@ export async function createEmployeeLedgerMovement(input: {
   }
 
   if (!input.accountId?.trim()) {
-    throw new EmployeeServiceError("Ödeme hesabı seçilmelidir.");
+    throw new EmployeeServiceError(
+      EMPLOYEE_PAYMENT_VALIDATION_MESSAGES.accountRequired
+    );
   }
 
   const account = await assertFinancePaymentAccount(
     db,
     input.companyId,
     input.accountId.trim(),
-    "TRY"
+    "TRY",
+    { amount: input.amount, checkBalance: true }
   );
 
   const paymentType: EmployeePaymentType =
@@ -1263,15 +1279,81 @@ export async function createEmployeePayment(input: {
   description?: string;
   relatedExpenseId?: string;
   relatedAccountId?: string;
+  payImmediately?: boolean;
 }) {
-  if (!input.amount || input.amount <= 0) {
-    throw new EmployeeServiceError("Geçerli bir tutar girin.");
+  const validation = validateEmployeePaymentCreateInput({
+    type: input.type,
+    amount: input.amount,
+    relatedAccountId: input.relatedAccountId,
+    currency: input.currency,
+  });
+
+  if (!validation.ok) {
+    throw new EmployeeServiceError(validation.message);
   }
 
   const employee = await getEmployeeInCompany(input.employeeId, input.companyId);
+  const typeBehavior = getEmployeePaymentTypeBehavior(input.type);
+  const currency = input.currency ?? "TRY";
   const direction =
     input.direction ??
     (input.type === "DEDUCTION" ? "DEDUCTED" : "PAYABLE");
+  const payImmediately =
+    input.payImmediately === true || validation.payImmediately;
+
+  if (payImmediately && validation.accountId) {
+    const paidAt = input.dueDate ?? new Date();
+
+    const result = await db.$transaction(async (tx) => {
+      await assertFinancePaymentAccount(
+        tx,
+        input.companyId,
+        validation.accountId!,
+        currency,
+        { amount: validation.amount, checkBalance: true }
+      );
+
+      const created = await tx.employeePayment.create({
+        data: {
+          companyId: input.companyId,
+          employeeId: input.employeeId,
+          type: input.type,
+          direction,
+          amount: validation.amount,
+          currency,
+          dueDate: input.dueDate,
+          status: "PENDING",
+          description: input.description,
+          relatedExpenseId: input.relatedExpenseId,
+          relatedAccountId: validation.accountId,
+          createdByUserId: input.actorUserId,
+        },
+      });
+
+      const paid = await markEmployeePaymentPaidInTx(tx, {
+        companyId: input.companyId,
+        actorUserId: input.actorUserId,
+        employeeId: input.employeeId,
+        payment: created,
+        paidAt,
+        relatedAccountId: validation.accountId!,
+      });
+
+      return paid.payment;
+    });
+
+    return serializePayment(result);
+  }
+
+  if (
+    typeBehavior.requiresAccountToDisburse &&
+    !typeBehavior.allowPendingWithoutAccount &&
+    !validation.accountId
+  ) {
+    throw new EmployeeServiceError(
+      EMPLOYEE_PAYMENT_VALIDATION_MESSAGES.accountRequired
+    );
+  }
 
   const payment = await db.$transaction(async (tx) => {
     const created = await tx.employeePayment.create({
@@ -1280,13 +1362,13 @@ export async function createEmployeePayment(input: {
         employeeId: input.employeeId,
         type: input.type,
         direction,
-        amount: input.amount,
-        currency: input.currency ?? "TRY",
+        amount: validation.amount,
+        currency,
         dueDate: input.dueDate,
         status: "PENDING",
         description: input.description,
         relatedExpenseId: input.relatedExpenseId,
-        relatedAccountId: input.relatedAccountId,
+        relatedAccountId: validation.accountId,
         createdByUserId: input.actorUserId,
       },
     });
@@ -1295,7 +1377,7 @@ export async function createEmployeePayment(input: {
       companyId: input.companyId,
       userId: input.actorUserId,
       action: "PAYMENT",
-      message: `${formatEmployeeDisplayName(employee)} için ${input.type} kaydı oluşturuldu.`,
+      message: `${formatEmployeeDisplayName(employee)} için ${typeBehavior.label} kaydı oluşturuldu.`,
     });
 
     return created;
@@ -1357,14 +1439,19 @@ export async function markEmployeePaymentPaidInTx(
   }
 
   if (!plan.accountId) {
-    throw new EmployeeServiceError("Ödeme hesabı seçilmelidir.");
+    throw new EmployeeServiceError(
+      EMPLOYEE_PAYMENT_VALIDATION_MESSAGES.accountRequired
+    );
   }
+
+  const typeBehavior = getEmployeePaymentTypeBehavior(input.payment.type);
 
   await assertFinancePaymentAccount(
     tx,
     input.companyId,
     plan.accountId,
-    input.payment.currency
+    input.payment.currency,
+    { amount: roundCashMoney(Number(input.payment.amount)), checkBalance: true }
   );
 
   const amount = roundCashMoney(Number(input.payment.amount));
@@ -1381,7 +1468,7 @@ export async function markEmployeePaymentPaidInTx(
     where: { id: input.employeeId },
   });
   const displayName = formatEmployeeDisplayName(employee);
-  const expenseTitle = buildEmployeePaymentExpenseTitle(displayName);
+  const expenseTitle = typeBehavior.buildExpenseTitle(displayName);
   const note = input.notes?.trim() || input.payment.description || null;
 
   if (plan.createExpense) {
@@ -1390,7 +1477,7 @@ export async function markEmployeePaymentPaidInTx(
         companyId: input.companyId,
         userId: input.actorUserId,
         title: expenseTitle,
-        category: EMPLOYEE_EXPENSE_CATEGORY,
+        category: typeBehavior.expenseCategory,
         amount,
         status: "APPROVED",
         paymentStatus: "PAID",
@@ -1422,18 +1509,19 @@ export async function markEmployeePaymentPaidInTx(
         status: "ACTIVE",
       },
     });
-    const newBalance = roundCashMoney(Number(account.balance) - amount);
+    const currentBalance = roundCashMoney(Number(account.balance));
+    if (currentBalance < amount) {
+      throw new EmployeeServiceError(
+        EMPLOYEE_PAYMENT_VALIDATION_MESSAGES.insufficientBalance
+      );
+    }
+    const newBalance = roundCashMoney(currentBalance - amount);
 
     const transaction = await tx.accountTransaction.create({
       data: {
         accountId: account.id,
         type: "EXPENSE",
-        title:
-          input.payment.type === "ADVANCE"
-            ? buildEmployeeAdvanceTransactionTitle(displayName)
-            : plan.createExpense
-              ? buildExpenseTransactionTitle(expenseTitle)
-              : buildEmployeePaymentTransactionTitle(displayName),
+        title: typeBehavior.buildTransactionTitle(displayName),
         amount,
         date: input.paidAt,
         note,
@@ -1467,7 +1555,7 @@ export async function markEmployeePaymentPaidInTx(
     where: { id: input.payment.id },
     data: {
       status: "PAID",
-      direction: input.payment.type === "DEDUCTION" ? "DEDUCTED" : "PAID",
+      direction: typeBehavior.paidDirection,
       paidAt: input.paidAt,
       relatedExpenseId,
       relatedTransactionId,
@@ -1543,7 +1631,9 @@ export async function markEmployeePaymentPaid(input: {
   );
 
   if (payment.status !== "PAID" && !accountId) {
-    throw new EmployeeServiceError("Ödeme hesabı seçilmelidir.");
+    throw new EmployeeServiceError(
+      EMPLOYEE_PAYMENT_VALIDATION_MESSAGES.accountRequired
+    );
   }
 
   const paidAt = input.paidAt ?? new Date();

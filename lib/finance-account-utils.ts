@@ -24,6 +24,17 @@ export function formatFinanceAccountLabel(
   return `${account.name} — ${account.currency}`;
 }
 
+export function formatFinanceAccountDisbursementLabel(
+  account: Pick<FinanceAccountOption, "name" | "type" | "currency" | "balance">
+) {
+  const typeLabel = getFinanceAccountTypeLabel(account.type);
+  const balance = Number(account.balance).toLocaleString("tr-TR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return `${account.name} (${typeLabel}) — ${balance} ${account.currency}`;
+}
+
 export function groupFinanceAccounts(accounts: FinanceAccountOption[]) {
   const cashAccounts = accounts.filter((account) => account.type === "CASH");
   const bankAccounts = accounts.filter((account) => account.type === "BANK");
@@ -106,7 +117,6 @@ export function validateFinanceAccount(
 }
 
 export const EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_MESSAGE =
-  "Çalışan ödemesi yapabilmek için önce";
+  "Ödeme yapabilmek için aktif bir kasa veya banka hesabı oluşturun.";
 
-export const EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_LINK_LABEL =
-  "Kasa ve Banka bölümünden aktif bir hesap oluşturun";
+export const EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_LINK_LABEL = "Kasa ve Banka";

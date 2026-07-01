@@ -8,15 +8,50 @@ export const AUTH_ROUTES = [
 export const PUBLIC_ROUTES = [
   "/",
   "/pricing",
+  "/partner",
+  "/partnership",
   "/partner/apply",
+  "/partnership/apply",
   "/kvkk-aydinlatma-metni",
   "/kvkk",
+  "/maintenance",
 ] as const;
 
 export const COMPANY_SELECTION_ROUTES = [
   "/companies/select",
   "/companies/new",
 ] as const;
+
+/** Yalnız bilinen tenant/admin namespace'leri korunur; bilinmeyen path'ler public 404 olur. */
+export const PROTECTED_ROUTE_PREFIXES = [
+  "/dashboard",
+  "/admin",
+  "/pos",
+  "/sales",
+  "/customers",
+  "/suppliers",
+  "/directory",
+  "/products",
+  "/stocks",
+  "/invoices",
+  "/cash-bank",
+  "/expenses",
+  "/reports",
+  "/ai-assistant",
+  "/team",
+  "/orders",
+  "/settings",
+  "/notifications",
+  "/calendar",
+  "/onboarding",
+  "/invite",
+  "/unauthorized",
+  "/partnership/dashboard",
+  "/partnership/status",
+  "/partner/dashboard",
+] as const;
+
+const PUBLIC_PARTNER_PREFIXES = ["/partner", "/partnership"] as const;
 
 const AUTH_API_PREFIX = "/api/auth/";
 
@@ -93,5 +128,24 @@ export function isProtectedRoute(pathname: string) {
     return false;
   }
 
-  return true;
+  if (
+    PUBLIC_PARTNER_PREFIXES.some(
+      (prefix) =>
+        normalized === prefix || normalized.startsWith(`${prefix}/apply`)
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    normalized.startsWith("/companies/") &&
+    !isCompanySelectionRoute(normalized)
+  ) {
+    return true;
+  }
+
+  return PROTECTED_ROUTE_PREFIXES.some(
+    (prefix) =>
+      normalized === prefix || normalized.startsWith(`${prefix}/`)
+  );
 }

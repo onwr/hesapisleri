@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Loader2, Trash2, Wallet } from "lucide-react";
 import { InvoiceCollectModal } from "@/components/invoices/invoice-collect-modal";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 
 type InvoiceDetailActionsProps = {
   invoiceId: string;
@@ -25,8 +26,8 @@ export function InvoiceDetailActions({
   canCancel,
 }: InvoiceDetailActionsProps) {
   const router = useRouter();
+  const { mutate, isSubmitting: cancelling } = useTenantMutation({ refresh: false });
   const [collectOpen, setCollectOpen] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState("");
 
   async function handleCancel() {
@@ -35,29 +36,20 @@ export function InvoiceDetailActions({
       return;
     }
 
-    setCancelling(true);
     setError("");
 
-    try {
-      const response = await fetch(`/api/invoices/${invoiceId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "cancel" }),
-      });
-      const data = await response.json();
+    const result = await mutate(`/api/invoices/${invoiceId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "cancel" }),
+    });
 
-      if (!response.ok || !data.success) {
-        setError(data.message || "Fatura iptal edilemedi.");
-        return;
-      }
-
-      router.push("/invoices");
-      router.refresh();
-    } catch {
-      setError("Sunucuya bağlanırken bir hata oluştu.");
-    } finally {
-      setCancelling(false);
+    if (!result.ok) {
+      setError(result.error ?? "Fatura iptal edilemedi.");
+      return;
     }
+
+    router.push("/invoices");
   }
 
   if (!canCollect && !canCancel) {

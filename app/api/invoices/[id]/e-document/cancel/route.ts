@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cancelInvoiceDocument } from "@/lib/efaturam/efaturam-document-service";
 import { requireApiModuleAccess } from "@/lib/module-access";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -17,11 +18,15 @@ export async function POST(_req: Request, { params }: Props) {
       invoiceId: id,
     });
 
-    return NextResponse.json({
-      success: true,
-      data: result,
-      message: "E-Arşiv belgesi iptal edildi.",
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(auth.companyId, {
+        reason: "invoice-e-document-action",
+        entity: { id },
+        message: "E-Arşiv belgesi iptal edildi.",
+        entityIds: { invoiceId: id },
+        extra: result,
+      }),
+    );
   } catch (error) {
     return NextResponse.json(
       {

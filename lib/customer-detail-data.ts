@@ -8,18 +8,22 @@ import {
   getBalanceStatus,
 } from "@/lib/customers-page-utils";
 import { getSaleRemainingAmount, roundMoney } from "@/lib/sale-payment-utils";
+import { parseCustomerFinanceNote } from "@/lib/customer-finance-utils";
+import { getTimeMs, toIsoString } from "@/lib/format-utils";
 import { isActiveSaleStatus } from "@/lib/sale-query-utils";
 
 export type CustomerLedgerEntryType =
   | "SALE"
   | "INVOICE"
   | "COLLECTION"
+  | "PAYMENT"
   | "CANCEL_SALE"
   | "CANCEL_INVOICE";
 
 export type CustomerLedgerEntry = {
   id: string;
-  date: Date;
+  occurredAt: string | null;
+  date: Date | string;
   type: CustomerLedgerEntryType;
   label: string;
   reference: string;
@@ -44,9 +48,21 @@ export type CustomerAccountSummary = {
   currentBalance: number;
   totalDebt: number;
   totalCollected: number;
-  lastCollectionDate: Date | null;
+  lastCollectionDate: string | null;
   balanceStatus: ReturnType<typeof getBalanceStatus>;
 };
+
+export async function getCustomerDetailRecord(
+  companyId: string,
+  customerId: string,
+) {
+  return db.customer.findFirst({
+    where: {
+      id: customerId,
+      companyId,
+    },
+  });
+}
 
 export type CustomerDetailLedgerData = {
   summary: CustomerAccountSummary;
@@ -73,6 +89,28 @@ function matchesSaleNo(
   tx: { title: string; note: string | null }
 ) {
   return tx.title.includes(saleNo) || (tx.note?.includes(saleNo) ?? false);
+}
+
+function resolveLedgerOccurredAt(
+  ...candidates: (Date | string | null | undefined)[]
+): string | null {
+  for (const candidate of candidates) {
+    const iso = toIsoString(candidate);
+    if (iso) return iso;
+  }
+  return null;
+}
+
+function buildLedgerEntry(
+  entry: Omit<CustomerLedgerEntry, "runningBalance" | "occurredAt" | "date">,
+  ...dateCandidates: (Date | string | null | undefined)[]
+): Omit<CustomerLedgerEntry, "runningBalance"> {
+  const occurredAt = resolveLedgerOccurredAt(...dateCandidates);
+  return {
+    ...entry,
+    occurredAt,
+    date: occurredAt ?? "",
+  };
 }
 
 export async function getCustomerDetailLedgerData(
@@ -122,6 +160,24 @@ export async function getCustomerDetailLedgerData(
 
   const invoices = allCustomerInvoices.filter((invoice) => !invoice.saleId);
 
+  const customerFinanceTransactions = await db.accountTransaction.findMany({
+    where: {
+      account: { companyId },
+      note: { contains: `customerId=${customerId}` },
+      type: { in: ["COLLECTION", "PAYMENT", "INCOME"] },
+    },
+    orderBy: { date: "asc" },
+    select: {
+      id: true,
+      title: true,
+      amount: true,
+      date: true,
+      createdAt: true,
+      note: true,
+      type: true,
+    },
+  });
+
   const saleNos = sales.map((sale) => sale.saleNo);
 
   const collections =
@@ -154,31 +210,39 @@ export async function getCustomerDetailLedgerData(
       matchesSaleNo(sale.saleNo, tx)
     );
 
-    rawEntries.push({
-      id: `sale-${sale.id}`,
-      date: sale.createdAt,
-      type: "SALE",
-      label: `Satış ${sale.saleNo}`,
-      reference: sale.saleNo,
-      href: `/sales/${sale.id}`,
-      debit: total,
-      credit: 0,
-      balanceEffect: total,
-    });
+    rawEntries.push(
+      buildLedgerEntry(
+        {
+          id: `sale-${sale.id}`,
+          type: "SALE",
+          label: `Satış ${sale.saleNo}`,
+          reference: sale.saleNo,
+          href: `/sales/${sale.id}`,
+          debit: total,
+          credit: 0,
+          balanceEffect: total,
+        },
+        sale.createdAt
+      )
+    );
 
     for (const tx of saleCollections) {
       const amount = Number(tx.amount);
-      rawEntries.push({
-        id: `collection-${tx.id}`,
-        date: tx.date,
-        type: "COLLECTION",
-        label: `Tahsilat · ${sale.saleNo}`,
-        reference: sale.saleNo,
-        href: `/sales/${sale.id}`,
-        debit: 0,
-        credit: amount,
-        balanceEffect: -amount,
-      });
+      rawEntries.push(
+        buildLedgerEntry(
+          {
+            id: `collection-${tx.id}`,
+            type: "COLLECTION",
+            label: `Tahsilat · ${sale.saleNo}`,
+            reference: sale.saleNo,
+            href: `/cash-bank/transactions/${tx.id}`,
+            debit: 0,
+            credit: amount,
+            balanceEffect: -amount,
+          },
+          tx.date
+        )
+      );
     }
 
     if (sale.status === "CANCELLED" || sale.status === "REFUNDED") {
@@ -189,17 +253,22 @@ export async function getCustomerDetailLedgerData(
       const cancelEffect = roundMoney(-(total - collectedTotal));
 
       if (cancelEffect !== 0) {
-        rawEntries.push({
-          id: `cancel-sale-${sale.id}`,
-          date: sale.updatedAt,
-          type: "CANCEL_SALE",
-          label: `Satış iptali · ${sale.saleNo}`,
-          reference: sale.saleNo,
-          href: `/sales/${sale.id}`,
-          debit: cancelEffect > 0 ? cancelEffect : 0,
-          credit: cancelEffect < 0 ? Math.abs(cancelEffect) : 0,
-          balanceEffect: cancelEffect,
-        });
+        rawEntries.push(
+          buildLedgerEntry(
+            {
+              id: `cancel-sale-${sale.id}`,
+              type: "CANCEL_SALE",
+              label: `Satış iptali · ${sale.saleNo}`,
+              reference: sale.saleNo,
+              href: `/sales/${sale.id}`,
+              debit: cancelEffect > 0 ? cancelEffect : 0,
+              credit: cancelEffect < 0 ? Math.abs(cancelEffect) : 0,
+              balanceEffect: cancelEffect,
+            },
+            sale.updatedAt,
+            sale.createdAt
+          )
+        );
       }
     }
   }
@@ -213,51 +282,109 @@ export async function getCustomerDetailLedgerData(
 
     if (invoice.status === "CANCELLED") {
       if (debt > 0) {
-        rawEntries.push({
-          id: `invoice-${invoice.id}`,
-          date: invoice.createdAt,
-          type: "INVOICE",
-          label: `Fatura ${invoice.invoiceNo}`,
-          reference: invoice.invoiceNo,
-          href: `/invoices/${invoice.id}`,
-          debit: debt,
-          credit: 0,
-          balanceEffect: debt,
-        });
+        rawEntries.push(
+          buildLedgerEntry(
+            {
+              id: `invoice-${invoice.id}`,
+              type: "INVOICE",
+              label: `Fatura ${invoice.invoiceNo}`,
+              reference: invoice.invoiceNo,
+              href: `/invoices/${invoice.id}`,
+              debit: debt,
+              credit: 0,
+              balanceEffect: debt,
+            },
+            invoice.createdAt
+          )
+        );
       }
 
-      rawEntries.push({
-        id: `cancel-invoice-${invoice.id}`,
-        date: invoice.updatedAt,
-        type: "CANCEL_INVOICE",
-        label: `Fatura iptali · ${invoice.invoiceNo}`,
-        reference: invoice.invoiceNo,
-        href: `/invoices/${invoice.id}`,
-        debit: 0,
-        credit: debt > 0 ? debt : total,
-        balanceEffect: debt > 0 ? -debt : -total,
-      });
+      rawEntries.push(
+        buildLedgerEntry(
+          {
+            id: `cancel-invoice-${invoice.id}`,
+            type: "CANCEL_INVOICE",
+            label: `Fatura iptali · ${invoice.invoiceNo}`,
+            reference: invoice.invoiceNo,
+            href: `/invoices/${invoice.id}`,
+            debit: 0,
+            credit: debt > 0 ? debt : total,
+            balanceEffect: debt > 0 ? -debt : -total,
+          },
+          invoice.updatedAt,
+          invoice.createdAt
+        )
+      );
       continue;
     }
 
     if (debt <= 0) continue;
 
-    rawEntries.push({
-      id: `invoice-${invoice.id}`,
-      date: invoice.createdAt,
-      type: "INVOICE",
-      label: `Manuel fatura ${invoice.invoiceNo}`,
-      reference: invoice.invoiceNo,
-      href: `/invoices/${invoice.id}`,
-      debit: debt,
-      credit: 0,
-      balanceEffect: debt,
-    });
+    rawEntries.push(
+      buildLedgerEntry(
+        {
+          id: `invoice-${invoice.id}`,
+          type: "INVOICE",
+          label: `Manuel fatura ${invoice.invoiceNo}`,
+          reference: invoice.invoiceNo,
+          href: `/invoices/${invoice.id}`,
+          debit: debt,
+          credit: 0,
+          balanceEffect: debt,
+        },
+        invoice.createdAt
+      )
+    );
   }
 
-  rawEntries.sort(
-    (a, b) => a.date.getTime() - b.date.getTime() || a.id.localeCompare(b.id)
-  );
+  for (const tx of customerFinanceTransactions) {
+    const meta = parseCustomerFinanceNote(tx.note);
+    if (!meta || meta.customerId !== customerId) continue;
+
+    const amount = Number(tx.amount);
+    if (meta.kind === "collection") {
+      rawEntries.push(
+        buildLedgerEntry(
+          {
+            id: `customer-collection-${tx.id}`,
+            type: "COLLECTION",
+            label: tx.title || "Müşteri tahsilatı",
+            reference: "Cari tahsilat",
+            href: `/cash-bank/transactions/${tx.id}`,
+            debit: 0,
+            credit: amount,
+            balanceEffect: -amount,
+          },
+          tx.date,
+          tx.createdAt
+        )
+      );
+      continue;
+    }
+
+    rawEntries.push(
+      buildLedgerEntry(
+        {
+          id: `customer-payment-${tx.id}`,
+          type: "PAYMENT",
+          label: tx.title || "Müşteriye ödeme",
+          reference: "Cari ödeme",
+          href: `/cash-bank/transactions/${tx.id}`,
+          debit: amount,
+          credit: 0,
+          balanceEffect: amount,
+        },
+        tx.date,
+        tx.createdAt
+      )
+    );
+  }
+
+  rawEntries.sort((a, b) => {
+    const aTime = getTimeMs(a.occurredAt) ?? 0;
+    const bTime = getTimeMs(b.occurredAt) ?? 0;
+    return aTime - bTime || a.id.localeCompare(b.id);
+  });
 
   let running = 0;
   const ledgerAsc = rawEntries.map((entry) => {
@@ -284,15 +411,18 @@ export async function getCustomerDetailLedgerData(
       .reduce((sum, tx) => sum + Number(tx.amount), 0)
   );
 
-  const collectionDates = rawEntries
+  const collectionOccurredAt = rawEntries
     .filter((entry) => entry.type === "COLLECTION")
-    .map((entry) => entry.date);
+    .map((entry) => entry.occurredAt)
+    .filter((value): value is string => Boolean(value));
 
   const lastCollectionDate =
-    collectionDates.length > 0
-      ? collectionDates.reduce((latest, date) =>
-          date.getTime() > latest.getTime() ? date : latest
-        )
+    collectionOccurredAt.length > 0
+      ? collectionOccurredAt.reduce((latest, iso) => {
+          const latestMs = getTimeMs(latest) ?? 0;
+          const isoMs = getTimeMs(iso) ?? 0;
+          return isoMs > latestMs ? iso : latest;
+        })
       : null;
 
   const currentBalance = Number(customer.balance);
@@ -317,10 +447,14 @@ export async function getCustomerDetailLedgerData(
       };
     })
     .filter((sale) => sale.remainingAmount > 0)
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    .sort(
+      (a, b) => (getTimeMs(b.createdAt) ?? 0) - (getTimeMs(a.createdAt) ?? 0)
+    );
 
   const recentSales = [...sales]
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .sort(
+      (a, b) => (getTimeMs(b.createdAt) ?? 0) - (getTimeMs(a.createdAt) ?? 0)
+    )
     .slice(0, 5)
     .map((sale) => ({
       id: sale.id,

@@ -1,9 +1,9 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Loader2, X } from "lucide-react";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 
 type WarehouseCreateModalProps = {
   open: boolean;
@@ -11,8 +11,10 @@ type WarehouseCreateModalProps = {
 };
 
 export function WarehouseCreateModal({ open, onClose }: WarehouseCreateModalProps) {
-  const router = useRouter();
-  const [saving, setSaving] = useState(false);
+  const { mutate, isSubmitting } = useTenantMutation({
+    refresh: false,
+    onSuccess: () => onClose(),
+  });
   const [error, setError] = useState("");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
@@ -33,35 +35,22 @@ export function WarehouseCreateModal({ open, onClose }: WarehouseCreateModalProp
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSaving(true);
     setError("");
 
-    try {
-      const response = await fetch("/api/products/stocks/warehouses", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          code: code || undefined,
-          address: address || undefined,
-          note: note || undefined,
-          isDefault,
-        }),
-      });
+    const result = await mutate("/api/products/stocks/warehouses", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        code: code || undefined,
+        address: address || undefined,
+        note: note || undefined,
+        isDefault,
+      }),
+    });
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        setError(data.message || "Depo oluşturulamadı.");
-        return;
-      }
-
-      onClose();
-      router.refresh();
-    } catch {
-      setError("Sunucu hatası.");
-    } finally {
-      setSaving(false);
+    if (!result.ok && result.error !== "duplicate_submit") {
+      setError(result.error || "Depo oluşturulamadı.");
     }
   }
 
@@ -114,10 +103,10 @@ export function WarehouseCreateModal({ open, onClose }: WarehouseCreateModalProp
           {error ? <p className="text-[12px] font-bold text-rose-600">{error}</p> : null}
           <button
             type="submit"
-            disabled={saving}
+            disabled={isSubmitting}
             className="h-11 w-full rounded-xl bg-[#0f1f4d] text-[13px] font-black text-white disabled:opacity-60"
           >
-            {saving ? <Loader2 className="mx-auto animate-spin" size={18} /> : "Oluştur"}
+            {isSubmitting ? <Loader2 className="mx-auto animate-spin" size={18} /> : "Oluştur"}
           </button>
         </form>
       </div>

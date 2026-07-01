@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { createActivityLog } from "@/lib/activity-log-utils";
+import {
+  buildSafeActivityMessage,
+  createActivityLog,
+} from "@/lib/activity-log-utils";
 import { db } from "@/lib/prisma";
 import { requireApiModuleAccess } from "@/lib/module-access";
 import {
@@ -17,6 +20,7 @@ import {
 import { requireCompanyLimit } from "@/lib/billing/entitlements/entitlement-enforcement-service";
 import { EntitlementError } from "@/lib/billing/entitlements/entitlement-errors";
 import { applyWarehouseStockMovement } from "@/lib/warehouse-service";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 export async function POST(req: Request) {
   try {
@@ -126,18 +130,23 @@ export async function POST(req: Request) {
       userId,
       action: "CREATE",
       module: "products",
-      message: isService
-        ? `Hizmet oluşturuldu: ${product.name}`
-        : `Ürün oluşturuldu: ${product.name}`,
+      message: buildSafeActivityMessage(
+        isService ? "SERVICE_CREATED" : "PRODUCT_CREATED",
+        { productName: product.name }
+      ),
     });
 
-    return NextResponse.json({
-      success: true,
-      message: isService
-        ? "Hizmet başarıyla oluşturuldu."
-        : "Ürün başarıyla oluşturuldu.",
-      data: product,
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(companyId, {
+        reason: "product-create",
+        entityIds: { productId: product.id },
+        entity: product as Record<string, unknown>,
+        message: isService
+          ? "Hizmet başarıyla oluşturuldu."
+          : "Ürün başarıyla oluşturuldu.",
+        stocks: !isService ? { [product.id]: product.stock } : undefined,
+      }),
+    );
   } catch (error) {
     console.error("CREATE_PRODUCT_ERROR", error);
 

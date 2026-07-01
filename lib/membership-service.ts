@@ -24,6 +24,7 @@ import {
   findPendingMembershipPayment,
 } from "@/lib/payments/pending-membership-payment";
 import { getSerializedPaytrCapabilities } from "@/lib/payments/paytr-capabilities";
+import { getCheckoutProviderForClient } from "@/lib/payments/billing-provider-resolver";
 
 export const DEFAULT_MEMBERSHIP_PLAN_CODE = "standard";
 
@@ -265,6 +266,7 @@ export async function getMembershipBillingData(input: {
         hasSavedCard: Boolean(subscription.defaultPaymentMethodId),
       },
     },
+    checkout: getCheckoutProviderForClient(),
   };
 }
 
@@ -573,11 +575,32 @@ export async function getSidebarMembershipSummary(companyId: string) {
   const subscription = await ensureCompanySubscription(companyId);
   const status = getMembershipStatus(subscription);
   const remainingDays = getRemainingMembershipDays(subscription.currentPeriodEnd);
+  const periodEnd = subscription.currentPeriodEnd;
+
+  let policyNote: string | null = null;
+  if (status === "EXPIRED") {
+    policyNote =
+      "Süre dolduğunda yeni işlem kısıtlanır; mevcut verileriniz korunur. Devam için ödeme yapın.";
+  } else if (status === "TRIAL") {
+    policyNote =
+      "Deneme süresi bitince üyelik ödemesi gerekir; aksi halde erişim kısıtlanır.";
+  } else if (status === "GRACE_PERIOD" || status === "PAST_DUE") {
+    policyNote =
+      "Ödeme gecikmesi var; kesintisiz kullanım için faturalandırmayı tamamlayın.";
+  }
 
   return {
     status,
     statusLabel: EFFECTIVE_MEMBERSHIP_STATUS_LABELS[status],
     remainingDays,
     isExpired: status === "EXPIRED",
+    periodEndLabel: periodEnd
+      ? new Intl.DateTimeFormat("tr-TR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        }).format(periodEnd)
+      : null,
+    policyNote,
   };
 }

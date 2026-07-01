@@ -289,6 +289,17 @@ enum PaymentProvider {
   PAYTR
   LEGACY
   MANUAL
+  SIPAY
+}
+
+enum PaymentAttemptStatus {
+  CREATED
+  CHECKOUT_LINK_READY
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+  EXPIRED
 }
 
 enum MembershipPaymentType {
@@ -634,6 +645,7 @@ model User {
   calendarEvents                     CalendarEvent[]
   directoryContacts                  DirectoryContact[]       @relation("DirectoryContactCreator")
   createdSuppliers                   Supplier[]               @relation("SupplierCreator")
+  createdSupplierLedgerEntries       SupplierLedgerEntry[]    @relation("SupplierLedgerCreator")
   aiConversations                    AIConversation[]
   aiUsageLogs                        AIUsageLog[]
   adminCompanyNotesAuthored          AdminCompanyNote[]       @relation("AdminCompanyNotesAuthored")
@@ -651,6 +663,7 @@ model User {
   cancellationScheduledSubscriptions CompanySubscription[]    @relation("SubscriptionCancellationScheduledBy")
   passwordResetTokens                PasswordResetToken[]
   passwordResetsCreated              PasswordResetToken[]     @relation("PasswordResetCreatedByAdmin")
+  mobileSessions                     MobileSession[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -682,68 +695,71 @@ model Company {
   logoUrl   String?
   status    Status  @default(ACTIVE)
 
-  users                         CompanyUser[]
-  customers                     Customer[]
-  customerGroups                CustomerGroup[]
-  products                      Product[]
-  categories                    ProductCategory[]
-  sales                         Sale[]
-  salePayments                  SalePayment[]
-  invoices                      Invoice[]
-  expenses                      Expense[]
-  expenseCategories             ExpenseCategory[]
-  accounts                      Account[]
-  stockMovements                StockMovement[]
-  membershipPayments            MembershipPayment[]
-  paymentMethods                CompanyPaymentMethod[]
-  paymentRefunds                PaymentRefund[]
-  billingRuns                   SubscriptionBillingRun[]
-  billingOutboxEvents           BillingOutboxEvent[]
-  subscription                  CompanySubscription?
-  notifications                 Notification[]
-  activityLogs                  ActivityLog[]
-  settings                      CompanySettings?
-  invites                       CompanyInvite[]
-  warehouses                    Warehouse[]
-  warehouseStocks               WarehouseStock[]
-  warehouseTransfers            WarehouseTransfer[]
-  marketplaceIntegrations       MarketplaceIntegration[]
-  marketplaceSyncRuns           MarketplaceSyncRun[]
-  productChannelMappings        ProductChannelMapping[]
-  efaturamIntegration           EfaturamIntegration?
-  invoiceDocumentSubmissions    InvoiceDocumentSubmission[]
-  eDocumentTaxpayerLookupCaches EDocumentTaxpayerLookupCache[]
-  eDocumentGibUserListCache     EDocumentGibUserListCache?
-  calendarEvents                CalendarEvent[]
-  employees                     Employee[]
-  employeeSalaries              EmployeeSalary[]
-  employeePayments              EmployeePayment[]
-  employeeLeaves                EmployeeLeave[]
-  employeePerformanceRecords    EmployeePerformanceRecord[]
-  employeePerformanceTargets    EmployeePerformanceTarget[]
-  payrollRuns                   PayrollRun[]
-  payrollRunItems               PayrollRunItem[]
-  employeeDepartments           EmployeeDepartment[]
-  directoryContacts             DirectoryContact[]
-  suppliers                     Supplier[]
-  supplierContacts              SupplierContact[]
-  supplierProducts              SupplierProduct[]
-  partnerConversions            PartnerConversion[]
-  campaignScopes                MembershipCampaignScope[]
-  couponRedemptions             MembershipCouponRedemption[]
-  discountRedemptions           MembershipDiscountRedemption[]
-  planPriceOverrides            CompanyPlanPriceOverride[]
-  addOnSubscriptions            CompanyAddOnSubscription[]
-  entitlementOverrides          CompanyEntitlementOverride[]
-  usagePeriods                  UsagePeriod[]
-  usageEvents                   UsageEvent[]
-  usageCredits                  CompanyUsageCredit[]
-  aiSettings                    CompanyAISettings?
-  aiConversations               AIConversation[]
-  aiUsageLogs                   AIUsageLog[]
-  aiInsightCaches               AIInsightCache[]
-  adminNotes                    AdminCompanyNote[]
-  onboarding                    CompanyOnboarding?
+  users                          CompanyUser[]
+  customers                      Customer[]
+  customerGroups                 CustomerGroup[]
+  products                       Product[]
+  categories                     ProductCategory[]
+  sales                          Sale[]
+  salePayments                   SalePayment[]
+  invoices                       Invoice[]
+  expenses                       Expense[]
+  expenseCategories              ExpenseCategory[]
+  accounts                       Account[]
+  stockMovements                 StockMovement[]
+  membershipPayments             MembershipPayment[]
+  paymentAttempts                PaymentAttempt[]
+  paymentMethods                 CompanyPaymentMethod[]
+  paymentRefunds                 PaymentRefund[]
+  billingRuns                    SubscriptionBillingRun[]
+  billingOutboxEvents            BillingOutboxEvent[]
+  subscription                   CompanySubscription?
+  notifications                  Notification[]
+  activityLogs                   ActivityLog[]
+  settings                       CompanySettings?
+  invites                        CompanyInvite[]
+  warehouses                     Warehouse[]
+  warehouseStocks                WarehouseStock[]
+  warehouseTransfers             WarehouseTransfer[]
+  marketplaceIntegrations        MarketplaceIntegration[]
+  marketplaceSyncRuns            MarketplaceSyncRun[]
+  productChannelMappings         ProductChannelMapping[]
+  efaturamIntegration            EfaturamIntegration?
+  invoiceDocumentSubmissions     InvoiceDocumentSubmission[]
+  eDocumentTaxpayerLookupCaches  EDocumentTaxpayerLookupCache[]
+  eDocumentGibUserListCache      EDocumentGibUserListCache?
+  calendarEvents                 CalendarEvent[]
+  employees                      Employee[]
+  employeeSalaries               EmployeeSalary[]
+  employeePayments               EmployeePayment[]
+  employeeLeaves                 EmployeeLeave[]
+  employeePerformanceRecords     EmployeePerformanceRecord[]
+  employeePerformanceTargets     EmployeePerformanceTarget[]
+  payrollRuns                    PayrollRun[]
+  payrollRunItems                PayrollRunItem[]
+  employeeDepartments            EmployeeDepartment[]
+  directoryContacts              DirectoryContact[]
+  suppliers                      Supplier[]
+  supplierLedgerEntries          SupplierLedgerEntry[]
+  supplierContacts               SupplierContact[]
+  supplierProducts               SupplierProduct[]
+  partnerConversions             PartnerConversion[]
+  campaignScopes                 MembershipCampaignScope[]
+  couponRedemptions              MembershipCouponRedemption[]
+  discountRedemptions            MembershipDiscountRedemption[]
+  planPriceOverrides             CompanyPlanPriceOverride[]
+  addOnSubscriptions             CompanyAddOnSubscription[]
+  entitlementOverrides           CompanyEntitlementOverride[]
+  usagePeriods                   UsagePeriod[]
+  usageEvents                    UsageEvent[]
+  usageCredits                   CompanyUsageCredit[]
+  aiSettings                     CompanyAISettings?
+  aiConversations                AIConversation[]
+  aiUsageLogs                    AIUsageLog[]
+  aiInsightCaches                AIInsightCache[]
+  adminNotes                     AdminCompanyNote[]
+  onboarding                     CompanyOnboarding?
+  invoiceCollectionIdempotencies InvoiceCollectionIdempotency[]
 
   referringPartnerId String?
   referringPartner   PartnerProfile? @relation("ReferredCompanies", fields: [referringPartnerId], references: [id], onDelete: SetNull)
@@ -789,6 +805,13 @@ model CompanyOnboarding {
   updatedAt DateTime @updatedAt
 
   @@index([companyId, status])
+}
+
+enum SupplierLedgerEntryType {
+  OPENING_BALANCE
+  PAYMENT
+  COLLECTION
+  ADJUSTMENT
 }
 
 enum DirectoryContactType {
@@ -887,6 +910,8 @@ model CompanySettings {
   autoCreateCashAccount      Boolean @default(true)
   hideInactiveAccounts       Boolean @default(true)
 
+  allowNegativeStockSales Boolean @default(false)
+
   notifyLowStock         Boolean @default(true)
   notifyDueInvoices      Boolean @default(true)
   notifyLateCollections  Boolean @default(true)
@@ -944,6 +969,8 @@ model Customer {
   balance                Decimal @default(0)
   status                 Status  @default(ACTIVE)
 
+  linkedSuppliers Supplier[] @relation("SupplierLinkedCustomer")
+
   sales    Sale[]
   invoices Invoice[]
 
@@ -975,38 +1002,45 @@ model Supplier {
   companyId String
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  code            String?
-  name            String
-  companyName     String?
-  contactName     String?
-  phone           String?
-  mobilePhone     String?
-  email           String?
-  website         String?
-  taxOffice       String?
-  taxNumber       String?
-  iban            String?
-  address         String?
-  city            String?
-  district        String?
-  country         String   @default("Türkiye")
-  category        String?
-  tags            String[] @default([])
-  notes           String?
-  openingBalance  Decimal  @default(0) @db.Decimal(12, 2)
-  currentBalance  Decimal  @default(0) @db.Decimal(12, 2)
-  currency        String   @default("TRY")
-  paymentTermDays Int?
-  isActive        Boolean  @default(true)
-  isFavorite      Boolean  @default(false)
+  code               String?
+  name               String
+  companyName        String?
+  contactName        String?
+  phone              String?
+  mobilePhone        String?
+  email              String?
+  website            String?
+  taxOffice          String?
+  taxNumber          String?
+  iban               String?
+  address            String?
+  city               String?
+  district           String?
+  country            String    @default("Türkiye")
+  category           String?
+  tags               String[]  @default([])
+  notes              String?
+  openingBalance     Decimal   @default(0) @db.Decimal(12, 2)
+  openingBalanceDate DateTime?
+  openingBalanceNote String?
+  currentBalance     Decimal   @default(0) @db.Decimal(12, 2)
+  currency           String    @default("TRY")
+  paymentTermDays    Int?
+  isActive           Boolean   @default(true)
+  isFavorite         Boolean   @default(false)
+
+  linkedCustomerId String?
+  linkedCustomer   Customer? @relation("SupplierLinkedCustomer", fields: [linkedCustomerId], references: [id], onDelete: SetNull)
 
   createdByUserId String?
   createdByUser   User?   @relation("SupplierCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
 
-  contacts         SupplierContact[]
-  supplierProducts SupplierProduct[]
-  expenses         Expense[]
-  stockMovements   StockMovement[]
+  contacts            SupplierContact[]
+  supplierProducts    SupplierProduct[]
+  expenses            Expense[]
+  stockMovements      StockMovement[]
+  ledgerEntries       SupplierLedgerEntry[]
+  accountTransactions AccountTransaction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1017,6 +1051,44 @@ model Supplier {
   @@index([companyId, isFavorite])
   @@index([companyId, name])
   @@index([companyId, taxNumber])
+  @@index([companyId, linkedCustomerId])
+}
+
+model SupplierLedgerEntry {
+  id String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  type          SupplierLedgerEntryType
+  amount        Decimal                 @db.Decimal(12, 2)
+  balanceEffect Decimal                 @db.Decimal(12, 2)
+  date          DateTime
+  description   String?
+  reason        String?
+
+  expenseId String?
+  expense   Expense? @relation(fields: [expenseId], references: [id], onDelete: SetNull)
+
+  accountTransactionId String?             @unique
+  accountTransaction   AccountTransaction? @relation(fields: [accountTransactionId], references: [id], onDelete: SetNull)
+
+  sourceType     String?
+  sourceId       String?
+  idempotencyKey String?
+
+  createdByUserId String?
+  createdByUser   User?   @relation("SupplierLedgerCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@unique([companyId, sourceType, sourceId])
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, supplierId])
+  @@index([supplierId, date])
 }
 
 model SupplierContact {
@@ -1279,6 +1351,8 @@ model Sale {
   warehouse   Warehouse? @relation(fields: [warehouseId], references: [id])
 
   saleDate DateTime @default(now())
+
+  revisionNumber Int @default(0)
 
   cancelledAt       DateTime?
   cancelledByUserId String?
@@ -1632,20 +1706,21 @@ model Expense {
   userId String?
   user   User?   @relation(fields: [userId], references: [id])
 
-  title              String
-  category           String?
-  supplier           String?
-  supplierId         String?
-  supplierRef        Supplier?            @relation(fields: [supplierId], references: [id], onDelete: SetNull)
-  amount             Decimal
-  status             ExpenseStatus        @default(APPROVED)
-  paymentStatus      ExpensePaymentStatus @default(UNPAID)
-  accountId          String?
-  account            Account?             @relation(fields: [accountId], references: [id], onDelete: SetNull)
-  accountTransaction AccountTransaction?
-  employeePayments   EmployeePayment[]    @relation("EmployeePaymentExpense")
-  date               DateTime             @default(now())
-  note               String?
+  title                 String
+  category              String?
+  supplier              String?
+  supplierId            String?
+  supplierRef           Supplier?             @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  amount                Decimal
+  status                ExpenseStatus         @default(APPROVED)
+  paymentStatus         ExpensePaymentStatus  @default(UNPAID)
+  accountId             String?
+  account               Account?              @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  accountTransaction    AccountTransaction?
+  employeePayments      EmployeePayment[]     @relation("EmployeePaymentExpense")
+  supplierLedgerEntries SupplierLedgerEntry[]
+  date                  DateTime              @default(now())
+  note                  String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1702,11 +1777,16 @@ model AccountTransaction {
   invoiceId String?
   invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
 
-  employeePayments EmployeePayment[] @relation("EmployeePaymentTransaction")
+  supplierId String?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  employeePayments    EmployeePayment[]    @relation("EmployeePaymentTransaction")
+  supplierLedgerEntry SupplierLedgerEntry?
 
   createdAt DateTime @default(now())
 
   @@index([invoiceId])
+  @@index([supplierId])
 }
 
 model StockMovement {
@@ -2395,6 +2475,60 @@ model MembershipPayment {
   @@index([subscriptionId, status])
   @@index([status, createdAt])
   @@index([paymentMethodId])
+}
+
+model PaymentAttempt {
+  id String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  userId String?
+
+  // Idempotency: same key + same payloadHash = replay; same key + different payloadHash = 409
+  idempotencyKey String
+  payloadHash    String
+
+  provider PaymentProvider      @default(SIPAY)
+  status   PaymentAttemptStatus @default(CREATED)
+
+  // Globally unique, non-guessable invoice ID sent to Sipay
+  invoiceId String @unique
+
+  // Sipay hosted checkout link
+  checkoutUrl String?
+
+  // Plan snapshot
+  planId        String?
+  planPriceId   String?
+  priceSnapshot Json?
+
+  // Payer info (no card data ever stored)
+  payerEmail String?
+  payerName  String?
+  payerIp    String?
+
+  // Amount
+  amountMinor Int
+  currency    String @default("TRY")
+
+  // Provider result
+  providerStatus    String?
+  providerPaymentId String?
+  paidAt            DateTime?
+  failedAt          DateTime?
+  cancelledAt       DateTime?
+
+  testMode Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId])
+  @@index([invoiceId])
+  @@index([status])
+  @@index([companyId, status, createdAt])
 }
 
 model CompanyPaymentMethod {
@@ -3694,4 +3828,45 @@ model AIInsightCache {
 
   @@unique([companyId, cacheKey])
   @@index([expiresAt])
+}
+
+model MobileSession {
+  id             String    @id @default(cuid())
+  userId         String
+  tokenHash      String    @unique
+  companyId      String?
+  sessionVersion Int       @default(1)
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  deviceInfo     String?
+  createdAt      DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+enum InvoiceCollectionIdempotencyStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model InvoiceCollectionIdempotency {
+  id                   String                             @id @default(cuid())
+  companyId            String
+  company              Company                            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  idempotencyKey       String
+  payloadHash          String
+  status               InvoiceCollectionIdempotencyStatus @default(PROCESSING)
+  invoiceId            String?
+  accountTransactionId String?
+  userId               String?
+  result               Json?
+  createdAt            DateTime                           @default(now())
+  completedAt          DateTime?
+
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, status])
 }

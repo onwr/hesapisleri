@@ -6,6 +6,7 @@ import {
   SaleStockValidationError,
   validateSaleItemsStock,
 } from "@/lib/sale-stock-utils";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -46,6 +47,12 @@ export async function POST(_req: Request, { params }: Props) {
       warehouseId: item.warehouseId ?? undefined,
     }));
 
+    const companySettings = await db.companySettings.findUnique({
+      where: { companyId: auth.companyId },
+      select: { allowNegativeStockSales: true },
+    });
+    const allowNegativeStock = companySettings?.allowNegativeStockSales ?? false;
+
     let stockWarnings: Awaited<ReturnType<typeof validateSaleItemsStock>> = [];
 
     await db.$transaction(async (tx) => {
@@ -53,7 +60,8 @@ export async function POST(_req: Request, { params }: Props) {
         tx,
         auth.companyId,
         stockItems,
-        sale.warehouseId
+        sale.warehouseId,
+        allowNegativeStock
       );
 
       await applySaleStockDecrement(
@@ -61,7 +69,8 @@ export async function POST(_req: Request, { params }: Props) {
         auth.companyId,
         sale.saleNo,
         sale.items,
-        sale.warehouseId
+        sale.warehouseId,
+        allowNegativeStock
       );
 
       await tx.sale.update({
@@ -80,16 +89,21 @@ export async function POST(_req: Request, { params }: Props) {
       });
     });
 
-    return NextResponse.json({
-      success: true,
-      message: "Sipariş onaylandı ve stok düşüldü.",
-      ...(stockWarnings.length > 0
-        ? {
-            warning: stockWarnings[0]?.message,
-            negativeStockItems: stockWarnings,
-          }
-        : {}),
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(auth.companyId, {
+        reason: "order-approve",
+        entity: { id },
+        message: "Sipariş onaylandı ve stok düşüldü.",
+        entityIds: { orderId: id },
+        extra:
+          stockWarnings.length > 0
+            ? {
+                warning: stockWarnings[0]?.message,
+                negativeStockItems: stockWarnings,
+              }
+            : {},
+      }),
+    );
   } catch (error) {
     if (error instanceof SaleStockValidationError) {
       return NextResponse.json(

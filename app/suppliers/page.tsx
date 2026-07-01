@@ -25,11 +25,13 @@ import {
   formatSupplierMoney,
   getCategoryBadge,
   getInitials,
-  getSupplierBalanceStatus,
   getSupplierStatusBadge,
   getSuppliersPageData,
   parseSuppliersPageOptions,
 } from "@/lib/supplier-page-data";
+import { getCachedSuppliersPageData } from "@/lib/tenant-cache/cached-tenant-page-data";
+import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
+import { formatDisplayDate, toIsoString } from "@/lib/format-utils";
 
 type SuppliersPageProps = {
   searchParams: Promise<{
@@ -38,6 +40,10 @@ type SuppliersPageProps = {
     category?: string;
     q?: string;
     favorite?: string;
+    balanceDirection?: string;
+    customerRole?: string;
+    lastActivityFrom?: string;
+    status?: string;
   }>;
 };
 
@@ -113,7 +119,10 @@ export default async function SuppliersPage({ searchParams }: SuppliersPageProps
     totalRecords,
     totalPages,
     currentPage,
-  } = await getSuppliersPageData(company.id, options);
+  } = await getCachedSuppliersPageData({
+    companyId: company.id,
+    options,
+  });
 
   const exportHref = buildSuppliersExportQuery({
     tab: options.tab,
@@ -127,10 +136,15 @@ export default async function SuppliersPage({ searchParams }: SuppliersPageProps
     Boolean(options.q) ||
     Boolean(options.category) ||
     options.tab !== "all" ||
-    options.favorite;
+    options.favorite ||
+    options.balanceDirection !== "all" ||
+    options.customerRole !== "all" ||
+    Boolean(options.lastActivityFrom) ||
+    options.status !== "all";
 
   return (
     <AppShell>
+      <TenantPageSync />
       <div className="space-y-5">
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           {actionCards.map((card) => {
@@ -221,18 +235,28 @@ export default async function SuppliersPage({ searchParams }: SuppliersPageProps
             searchQuery={options.q}
             categories={categories}
             favoriteOnly={options.favorite}
+            balanceDirection={options.balanceDirection}
+            customerRole={options.customerRole}
+            lastActivityFrom={
+              options.lastActivityFrom
+                ? toIsoString(options.lastActivityFrom)?.slice(0, 10) ?? null
+                : null
+            }
+            statusFilter={options.status}
           />
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1120px] text-left">
+            <table className="w-full min-w-[1280px] text-left">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-black text-[#24345f]/80">
                   <th className="px-4 py-3">Tedarikçi</th>
-                  <th className="px-4 py-3">Telefon</th>
-                  <th className="px-4 py-3">E-Posta</th>
-                  <th className="px-4 py-3">Vergi No</th>
-                  <th className="px-4 py-3">Kategori</th>
-                  <th className="px-4 py-3">Borç / Bakiye</th>
+                  <th className="px-4 py-3">İletişim</th>
+                  <th className="px-4 py-3">Rol</th>
+                  <th className="px-4 py-3">Toplam Alış / Gider</th>
+                  <th className="px-4 py-3">Tedarikçiye Borcumuz</th>
+                  <th className="px-4 py-3">Tedarikçiden Alacağımız</th>
+                  <th className="px-4 py-3">Net Cari Durum</th>
+                  <th className="px-4 py-3">Son Hareket</th>
                   <th className="px-4 py-3">Durum</th>
                   <th className="px-4 py-3 text-center">İşlemler</th>
                 </tr>
@@ -240,7 +264,6 @@ export default async function SuppliersPage({ searchParams }: SuppliersPageProps
 
               <tbody className="divide-y divide-slate-100">
                 {rows.map((supplier) => {
-                  const balanceStatus = getSupplierBalanceStatus(supplier.balance);
                   const statusBadge = getSupplierStatusBadge(supplier.isActive);
 
                   return (
@@ -269,56 +292,84 @@ export default async function SuppliersPage({ searchParams }: SuppliersPageProps
                                 />
                               ) : null}
                             </p>
-                            {supplier.contactName ? (
-                              <p className="truncate text-[10px] font-medium text-slate-400">
-                                {supplier.contactName}
-                              </p>
+                            {supplier.category ? (
+                              <span
+                                className={[
+                                  "mt-1 inline-block rounded-md px-2 py-0.5 text-[10px] font-black",
+                                  getCategoryBadge(supplier.category),
+                                ].join(" ")}
+                              >
+                                {supplier.category}
+                              </span>
                             ) : null}
                           </div>
                         </div>
                       </td>
 
                       <td className="px-4 py-3 text-slate-600">
-                        {supplier.phone || "-"}
-                      </td>
-
-                      <td className="px-4 py-3 text-slate-600">
-                        {supplier.email || "-"}
-                      </td>
-
-                      <td className="px-4 py-3 text-slate-600">
-                        {supplier.taxNumber || "-"}
+                        <p>{supplier.phone || "-"}</p>
+                        <p className="mt-0.5 truncate text-[10px] font-medium text-slate-400">
+                          {supplier.email || "-"}
+                        </p>
                       </td>
 
                       <td className="px-4 py-3">
-                        <span
-                          className={[
-                            "rounded-md px-2 py-1 text-[10px] font-black",
-                            getCategoryBadge(supplier.category),
-                          ].join(" ")}
-                        >
-                          {supplier.category || "Diğer"}
-                        </span>
+                        {supplier.hasCustomerRole ? (
+                          <span className="rounded-md bg-violet-50 px-2 py-1 text-[10px] font-black text-violet-700">
+                            Müşteri Rolü
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-medium text-slate-400">—</span>
+                        )}
+                      </td>
+
+                      <td className="px-4 py-3 font-black text-[#0f1f4d]">
+                        {formatSupplierMoney(supplier.totalPurchases, supplier.currency)}
                       </td>
 
                       <td className="px-4 py-3">
-                        <p
-                          className={[
-                            "font-black tracking-[-0.01em]",
-                            balanceStatus.amountClass,
-                          ].join(" ")}
-                        >
-                          {formatSupplierMoney(
-                            Math.abs(supplier.balance),
-                            supplier.currency
-                          )}
-                        </p>
-                        <p className="mt-0.5 text-[10px] font-bold text-slate-500">
-                          {balanceStatus.subLabel}
-                          {supplier.overdueAmount > 0
-                            ? ` · Vadesi geçen ${formatSupplierMoney(supplier.overdueAmount, supplier.currency)}`
-                            : ""}
-                        </p>
+                        {supplier.payableAmount > 0 ? (
+                          <p className="font-black text-rose-500">
+                            {formatSupplierMoney(supplier.payableAmount, supplier.currency)}
+                          </p>
+                        ) : (
+                          <p className="text-[10px] font-medium text-slate-400">—</p>
+                        )}
+                      </td>
+
+                      <td className="px-4 py-3">
+                        {supplier.receivableAmount > 0 ? (
+                          <p className="font-black text-emerald-600">
+                            {formatSupplierMoney(supplier.receivableAmount, supplier.currency)}
+                          </p>
+                        ) : (
+                          <p className="text-[10px] font-medium text-slate-400">—</p>
+                        )}
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <p className="font-black text-[#0f1f4d]">{supplier.netStatusLabel}</p>
+                        {supplier.overdueAmount > 0 ? (
+                          <p className="mt-0.5 text-[10px] font-bold text-orange-500">
+                            Vadesi geçen{" "}
+                            {formatSupplierMoney(supplier.overdueAmount, supplier.currency)}
+                          </p>
+                        ) : null}
+                      </td>
+
+                      <td className="px-4 py-3 text-slate-600">
+                        {supplier.lastActivityAt ? (
+                          <>
+                            <p className="font-bold text-[#0f1f4d]">
+                              {formatDisplayDate(supplier.lastActivityAt)}
+                            </p>
+                            <p className="mt-0.5 text-[10px] font-medium text-slate-400">
+                              {supplier.lastActivityType ?? "Hareket"}
+                            </p>
+                          </>
+                        ) : (
+                          <span className="text-[10px] font-medium text-slate-400">—</span>
+                        )}
                       </td>
 
                       <td className="px-4 py-3">
@@ -363,7 +414,7 @@ export default async function SuppliersPage({ searchParams }: SuppliersPageProps
 
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-5 py-16 text-center">
+                    <td colSpan={10} className="px-5 py-16 text-center">
                       <div className="mx-auto max-w-sm">
                         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-50 text-blue-600">
                           <Truck size={28} />
@@ -403,6 +454,14 @@ export default async function SuppliersPage({ searchParams }: SuppliersPageProps
             currentPage={currentPage}
             totalRecords={totalRecords}
             favoriteOnly={options.favorite}
+            balanceDirection={options.balanceDirection}
+            customerRole={options.customerRole}
+            lastActivityFrom={
+              options.lastActivityFrom
+                ? toIsoString(options.lastActivityFrom)?.slice(0, 10) ?? null
+                : null
+            }
+            statusFilter={options.status}
           />
         </section>
       </div>

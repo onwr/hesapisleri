@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { appOutlineButtonClass, appPrimaryButtonClass } from "@/lib/admin-ui";
 import { formatMoney } from "@/lib/format-utils";
 
@@ -16,15 +16,41 @@ type PreviewData = {
   notices: string[];
 };
 
+export type AdminPlanPriceWizardInitial = {
+  id?: string;
+  billingInterval: string;
+  currency: string;
+  listPrice: number;
+  salePrice: number;
+  vatRate: number;
+  vatIncluded: boolean;
+  effectiveFrom: string;
+  effectiveUntil: string | null;
+  priceChangePolicy: string;
+  isPublic: boolean;
+  status?: string;
+};
+
+export type AdminPlanPriceWizardMode = "create" | "edit-draft" | "revise";
+
 type Props = {
   open: boolean;
   onClose: () => void;
   planId: string;
   defaultCurrency: string;
   onSuccess: (msg: string) => void;
+  mode?: AdminPlanPriceWizardMode;
+  priceId?: string;
+  initialPrice?: AdminPlanPriceWizardInitial | null;
 };
 
 const INTERVALS = ["MONTHLY", "QUARTERLY", "SEMI_ANNUAL", "YEARLY"] as const;
+const INTERVAL_LABELS: Record<string, string> = {
+  MONTHLY: "Aylık",
+  QUARTERLY: "3 Aylık",
+  SEMI_ANNUAL: "6 Aylık",
+  YEARLY: "Yıllık",
+};
 const POLICIES = [
   "NEW_SUBSCRIBERS_ONLY",
   "NEXT_RENEWAL",
@@ -32,40 +58,141 @@ const POLICIES = [
   "GRANDFATHERED",
 ] as const;
 
-export function AdminPlanPriceWizard({ open, onClose, planId, defaultCurrency, onSuccess }: Props) {
+function toDatetimeLocalValue(iso: string | null | undefined) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function defaultFormState(currency: string) {
+  return {
+    billingInterval: "MONTHLY" as (typeof INTERVALS)[number],
+    currency,
+    listPrice: "",
+    salePrice: "",
+    vatRate: 20,
+    vatIncluded: false,
+    effectiveFrom: new Date().toISOString().slice(0, 16),
+    effectiveUntil: "",
+    priceChangePolicy: "NEW_SUBSCRIBERS_ONLY" as (typeof POLICIES)[number],
+    isPublic: true,
+    adminNote: "",
+  };
+}
+
+export function AdminPlanPriceWizard({
+  open,
+  onClose,
+  planId,
+  defaultCurrency,
+  onSuccess,
+  mode = "create",
+  priceId,
+  initialPrice,
+}: Props) {
   const [step, setStep] = useState<"form" | "preview">("form");
-  const [billingInterval, setBillingInterval] = useState<(typeof INTERVALS)[number]>("MONTHLY");
-  const [currency, setCurrency] = useState(defaultCurrency);
-  const [listPrice, setListPrice] = useState("");
-  const [salePrice, setSalePrice] = useState("");
-  const [vatRate, setVatRate] = useState(20);
-  const [vatIncluded, setVatIncluded] = useState(false);
-  const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().slice(0, 16));
-  const [effectiveUntil, setEffectiveUntil] = useState("");
-  const [priceChangePolicy, setPriceChangePolicy] = useState<(typeof POLICIES)[number]>("NEW_SUBSCRIBERS_ONLY");
-  const [isPublic, setIsPublic] = useState(true);
-  const [reason, setReason] = useState("");
+  const [form, setForm] = useState(() => defaultFormState(defaultCurrency));
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [priceForm, setPriceForm] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const [reason, setReason] = useState("");
+
+  const isEditDraft = mode === "edit-draft" && Boolean(priceId);
+  const isRevise = mode === "revise";
+
+  useEffect(() => {
+    if (!open) return;
+    setStep("form");
+    setPreview(null);
+    setPriceForm(null);
+    setError(null);
+    setReason("");
+    if (initialPrice) {
+      setForm({
+        billingInterval: initialPrice.billingInterval as (typeof INTERVALS)[number],
+        currency: initialPrice.currency,
+        listPrice: String(initialPrice.listPrice),
+        salePrice: String(initialPrice.salePrice),
+        vatRate: initialPrice.vatRate,
+        vatIncluded: initialPrice.vatIncluded,
+        effectiveFrom: toDatetimeLocalValue(initialPrice.effectiveFrom),
+        effectiveUntil: toDatetimeLocalValue(initialPrice.effectiveUntil),
+        priceChangePolicy: initialPrice.priceChangePolicy as (typeof POLICIES)[number],
+        isPublic: initialPrice.isPublic,
+        adminNote: "",
+      });
+    } else {
+      setForm(defaultFormState(defaultCurrency));
+    }
+  }, [open, initialPrice, defaultCurrency]);
 
   if (!open) return null;
 
   function buildPayload() {
     return {
-      billingInterval,
-      currency,
-      listPrice,
-      salePrice,
-      vatRate,
-      vatIncluded,
-      effectiveFrom: new Date(effectiveFrom).toISOString(),
-      effectiveUntil: effectiveUntil ? new Date(effectiveUntil).toISOString() : null,
-      priceChangePolicy,
-      isPublic,
+      billingInterval: form.billingInterval,
+      currency: form.currency,
+      listPrice: form.listPrice,
+      salePrice: form.salePrice,
+      vatRate: form.vatRate,
+      vatIncluded: form.vatIncluded,
+      effectiveFrom: new Date(form.effectiveFrom).toISOString(),
+      effectiveUntil: form.effectiveUntil ? new Date(form.effectiveUntil).toISOString() : null,
+      priceChangePolicy: form.priceChangePolicy,
+      isPublic: form.isPublic,
+      adminNote: form.adminNote.trim() || undefined,
     };
+  }
+
+  async function handleSaveDraft(e: React.FormEvent) {
+    e.preventDefault();
+    if (!priceId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/plans/${planId}/prices/${priceId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildPayload()),
+      });
+      const json = await res.json();
+      if (!json.success) {
+        setError(json.message ?? "Kayıt başarısız");
+        return;
+      }
+      onSuccess(json.message ?? "Fiyat güncellendi.");
+      close();
+    } catch {
+      setError("Kayıt isteği başarısız");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handlePublishDraft() {
+    if (!priceId) return;
+    setPublishing(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/plans/${planId}/prices/${priceId}/publish`, {
+        method: "POST",
+      });
+      const json = await res.json();
+      if (!json.success) {
+        setError(json.message ?? "Yayınlama başarısız");
+        return;
+      }
+      onSuccess(json.message ?? "Fiyat yayınlandı.");
+      close();
+    } catch {
+      setError("Yayınlama başarısız");
+    } finally {
+      setPublishing(false);
+    }
   }
 
   async function handlePreview(e: React.FormEvent) {
@@ -117,9 +244,7 @@ export function AdminPlanPriceWizard({ open, onClose, planId, defaultCurrency, o
         return;
       }
       onSuccess(json.message ?? "Fiyat yayınlandı.");
-      setStep("form");
-      setPreview(null);
-      setReason("");
+      close();
     } catch {
       setError("Yayınlama başarısız");
     } finally {
@@ -134,69 +259,177 @@ export function AdminPlanPriceWizard({ open, onClose, planId, defaultCurrency, o
     onClose();
   }
 
+  const title =
+    step === "preview"
+      ? "Fiyat önizleme"
+      : isEditDraft
+        ? "Fiyat düzenle"
+        : isRevise
+          ? "Yeni fiyat versiyonu"
+          : "Yeni fiyat";
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white p-5 shadow-xl">
-        <h3 className="text-[14px] font-bold text-slate-900">
-          {step === "form" ? "Yeni fiyat — Adım 1" : "Fiyat önizleme — Adım 2"}
-        </h3>
+        <h3 className="text-[14px] font-bold text-slate-900">{title}</h3>
+        {isRevise ? (
+          <p className="mt-1 text-[11px] text-slate-500">
+            Aktif fiyat doğrudan değiştirilmez; önizleme sonrası yeni versiyon yayınlanır.
+          </p>
+        ) : null}
 
         {step === "form" ? (
-          <form onSubmit={handlePreview} className="mt-4 grid gap-3 text-[12px] sm:grid-cols-2">
+          <form
+            onSubmit={isEditDraft ? handleSaveDraft : handlePreview}
+            className="mt-4 grid gap-3 text-[12px] sm:grid-cols-2"
+          >
             <label>
               Dönem
-              <select className="mt-1 w-full rounded border px-2 py-1.5" value={billingInterval} onChange={(e) => setBillingInterval(e.target.value as typeof billingInterval)}>
+              <select
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={form.billingInterval}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    billingInterval: e.target.value as (typeof INTERVALS)[number],
+                  }))
+                }
+                disabled={isEditDraft}
+              >
                 {INTERVALS.map((i) => (
-                  <option key={i} value={i}>{i}</option>
+                  <option key={i} value={i}>
+                    {INTERVAL_LABELS[i] ?? i}
+                  </option>
                 ))}
               </select>
             </label>
             <label>
               Para birimi
-              <input className="mt-1 w-full rounded border px-2 py-1.5 font-mono uppercase" value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} maxLength={3} />
+              <input
+                className="mt-1 w-full rounded border px-2 py-1.5 font-mono uppercase"
+                value={form.currency}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, currency: e.target.value.toUpperCase() }))
+                }
+                maxLength={3}
+                disabled={isEditDraft}
+              />
             </label>
             <label>
               Liste fiyatı
-              <input className="mt-1 w-full rounded border px-2 py-1.5" value={listPrice} onChange={(e) => setListPrice(e.target.value)} required />
+              <input
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={form.listPrice}
+                onChange={(e) => setForm((prev) => ({ ...prev, listPrice: e.target.value }))}
+                required
+              />
             </label>
             <label>
               Satış fiyatı
-              <input className="mt-1 w-full rounded border px-2 py-1.5" value={salePrice} onChange={(e) => setSalePrice(e.target.value)} required />
+              <input
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={form.salePrice}
+                onChange={(e) => setForm((prev) => ({ ...prev, salePrice: e.target.value }))}
+                required
+              />
             </label>
             <label>
               KDV %
-              <input type="number" className="mt-1 w-full rounded border px-2 py-1.5" value={vatRate} onChange={(e) => setVatRate(Number(e.target.value))} />
+              <input
+                type="number"
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={form.vatRate}
+                onChange={(e) => setForm((prev) => ({ ...prev, vatRate: Number(e.target.value) }))}
+              />
             </label>
             <label className="flex items-end gap-2 pb-1">
-              <input type="checkbox" checked={vatIncluded} onChange={(e) => setVatIncluded(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={form.vatIncluded}
+                onChange={(e) => setForm((prev) => ({ ...prev, vatIncluded: e.target.checked }))}
+              />
               KDV dahil
             </label>
             <label>
               Başlangıç
-              <input type="datetime-local" className="mt-1 w-full rounded border px-2 py-1.5" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
+              <input
+                type="datetime-local"
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={form.effectiveFrom}
+                onChange={(e) => setForm((prev) => ({ ...prev, effectiveFrom: e.target.value }))}
+              />
             </label>
             <label>
               Bitiş (opsiyonel)
-              <input type="datetime-local" className="mt-1 w-full rounded border px-2 py-1.5" value={effectiveUntil} onChange={(e) => setEffectiveUntil(e.target.value)} />
+              <input
+                type="datetime-local"
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={form.effectiveUntil}
+                onChange={(e) => setForm((prev) => ({ ...prev, effectiveUntil: e.target.value }))}
+              />
             </label>
             <label className="sm:col-span-2">
               Fiyat değişim politikası
-              <select className="mt-1 w-full rounded border px-2 py-1.5" value={priceChangePolicy} onChange={(e) => setPriceChangePolicy(e.target.value as typeof priceChangePolicy)}>
+              <select
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                value={form.priceChangePolicy}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    priceChangePolicy: e.target.value as (typeof POLICIES)[number],
+                  }))
+                }
+              >
                 {POLICIES.map((p) => (
-                  <option key={p} value={p}>{p}</option>
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
                 ))}
               </select>
             </label>
             <label className="flex items-center gap-2 sm:col-span-2">
-              <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={form.isPublic}
+                onChange={(e) => setForm((prev) => ({ ...prev, isPublic: e.target.checked }))}
+              />
               Public (checkout görünür)
             </label>
+            {isEditDraft ? (
+              <label className="sm:col-span-2">
+                Admin notu
+                <textarea
+                  className="mt-1 w-full rounded border px-2 py-1.5"
+                  rows={2}
+                  value={form.adminNote}
+                  onChange={(e) => setForm((prev) => ({ ...prev, adminNote: e.target.value }))}
+                />
+              </label>
+            ) : null}
             {error ? <p className="sm:col-span-2 text-red-700">{error}</p> : null}
-            <div className="flex justify-end gap-2 sm:col-span-2">
-              <button type="button" className={appOutlineButtonClass} onClick={close}>İptal</button>
-              <button type="submit" className={appPrimaryButtonClass} disabled={loading}>
-                {loading ? "Hesaplanıyor…" : "Önizle"}
+            <div className="flex flex-wrap justify-end gap-2 sm:col-span-2">
+              <button type="button" className={appOutlineButtonClass} onClick={close}>
+                İptal
               </button>
+              {isEditDraft ? (
+                <>
+                  <button
+                    type="button"
+                    className={appOutlineButtonClass}
+                    disabled={publishing}
+                    onClick={handlePublishDraft}
+                  >
+                    {publishing ? "Yayınlanıyor…" : "Kaydet ve yayınla"}
+                  </button>
+                  <button type="submit" className={appPrimaryButtonClass} disabled={loading}>
+                    {loading ? "Kaydediliyor…" : "Kaydet"}
+                  </button>
+                </>
+              ) : (
+                <button type="submit" className={appPrimaryButtonClass} disabled={loading}>
+                  {loading ? "Hesaplanıyor…" : "Önizle"}
+                </button>
+              )}
             </div>
           </form>
         ) : preview ? (
@@ -233,12 +466,25 @@ export function AdminPlanPriceWizard({ open, onClose, planId, defaultCurrency, o
             </ul>
             <label className="block">
               Yayın sebebi (zorunlu)
-              <textarea className="mt-1 w-full rounded border px-2 py-1.5" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} required />
+              <textarea
+                className="mt-1 w-full rounded border px-2 py-1.5"
+                rows={2}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                required
+              />
             </label>
             {error ? <p className="text-red-700">{error}</p> : null}
             <div className="flex justify-end gap-2">
-              <button type="button" className={appOutlineButtonClass} onClick={() => setStep("form")}>Geri</button>
-              <button type="button" className={appPrimaryButtonClass} disabled={publishing} onClick={handlePublish}>
+              <button type="button" className={appOutlineButtonClass} onClick={() => setStep("form")}>
+                Geri
+              </button>
+              <button
+                type="button"
+                className={appPrimaryButtonClass}
+                disabled={publishing}
+                onClick={handlePublish}
+              >
                 {publishing ? "Yayınlanıyor…" : "Yayınla"}
               </button>
             </div>

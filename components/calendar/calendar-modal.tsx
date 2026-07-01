@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -83,14 +83,14 @@ function QuickEventRow({ event }: { event: NormalizedCalendarEvent }) {
             <span className="text-[9px] font-bold text-rose-600">Geciken</span>
           ) : null}
         </div>
-        <p className="mt-1 truncate text-xs font-extrabold text-[#0f1f4d]">
+        <p className="mt-1 truncate text-[13px] font-extrabold text-[#0f1f4d]">
           {event.title}
         </p>
-        <p className="mt-0.5 text-[10px] font-medium text-slate-500">
+        <p className="mt-0.5 text-[11px] font-medium text-slate-500">
           {formatEventTime(event)}
         </p>
         {event.amount != null ? (
-          <p className="mt-1 text-[11px] font-extrabold text-orange-600">
+          <p className="mt-1 text-[12px] font-extrabold text-orange-600">
             {formatMoney(event.amount)}
           </p>
         ) : null}
@@ -98,7 +98,7 @@ function QuickEventRow({ event }: { event: NormalizedCalendarEvent }) {
       {href ? (
         <Link
           href={href}
-          className="inline-flex h-8 shrink-0 items-center gap-0.5 rounded-lg px-2 text-[10px] font-bold text-blue-600 hover:bg-blue-50"
+          className="inline-flex h-8 shrink-0 items-center gap-0.5 rounded-lg px-2 text-[11px] font-bold text-blue-600 hover:bg-blue-50"
         >
           Detay
           <RowChevron size={12} />
@@ -191,11 +191,11 @@ export function CalendarQuickModal({ onClose }: CalendarQuickModalProps) {
             </div>
             <div>
               <h2 className="text-base font-extrabold text-[#0f1f4d]">Takvim</h2>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-[13px] text-slate-500">
                 Bugün ve yaklaşan etkinlikler
               </p>
               {criticalCount > 0 ? (
-                <p className="mt-2 text-[11px] font-bold text-rose-600">
+                <p className="mt-2 text-[12px] font-bold text-rose-600">
                   {criticalCount} geciken/kritik kayıt var
                 </p>
               ) : null}
@@ -262,8 +262,8 @@ export function CalendarQuickModal({ onClose }: CalendarQuickModalProps) {
 
             <div className={`${CALENDAR_CARD_CLASS} mt-5 p-4`}>
               <div className="mb-3 flex items-center justify-between gap-2">
-                <h3 className="text-xs font-extrabold text-[#0f1f4d]">Bugün</h3>
-                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-black text-blue-700">
+                <h3 className="text-[13px] font-extrabold text-[#0f1f4d]">Bugün</h3>
+                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-black text-blue-700">
                   {todayEvents.length}
                 </span>
               </div>
@@ -283,7 +283,7 @@ export function CalendarQuickModal({ onClose }: CalendarQuickModalProps) {
             </div>
 
             <div className={`${CALENDAR_CARD_CLASS} mt-4 p-4`}>
-              <h3 className="mb-3 text-xs font-extrabold text-[#0f1f4d]">
+              <h3 className="mb-3 text-[13px] font-extrabold text-[#0f1f4d]">
                 Yaklaşan 5 etkinlik
               </h3>
               {upcomingEvents.length === 0 ? (
@@ -307,14 +307,14 @@ export function CalendarQuickModal({ onClose }: CalendarQuickModalProps) {
         <Link
           href="/calendar"
           onClick={onClose}
-          className="inline-flex h-10 flex-1 items-center justify-center rounded-2xl border border-slate-200/90 bg-white text-xs font-bold text-[#0f1f4d] transition hover:bg-slate-50"
+          className="inline-flex h-10 flex-1 items-center justify-center rounded-2xl border border-slate-200/90 bg-white text-[13px] font-bold text-[#0f1f4d] transition hover:bg-slate-50"
         >
           Tam Takvimi Aç
         </Link>
         <Link
           href="/calendar"
           onClick={onClose}
-          className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-2xl bg-[#0f1f4d] text-xs font-bold text-white transition hover:bg-[#162a5c]"
+          className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-2xl bg-[#0f1f4d] text-[13px] font-bold text-white transition hover:bg-[#162a5c]"
         >
           <Plus size={14} />
           Etkinlik Ekle
@@ -432,7 +432,7 @@ export function CalendarTopbarButton() {
       >
         <CalendarDays size={18} />
         {!loadingCount && todayCount > 0 ? (
-          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#0f1f4d] px-1 text-[10px] font-black text-white ring-2 ring-white">
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#0f1f4d] px-1 text-[11px] font-black text-white ring-2 ring-white">
             {todayCount > 9 ? "9+" : todayCount}
           </span>
         ) : null}

@@ -7,20 +7,24 @@ import {
   ArrowUpRight,
   Building2,
   CalendarDays,
+  Eye,
   Landmark,
   Sparkles,
   Wallet,
 } from "lucide-react";
+import { AccountArchiveActions } from "@/components/cash-bank/account-archive-actions";
 import { AccountDetailActions } from "@/components/cash-bank/account-detail-actions";
 import { AppShell } from "@/components/layout/app-shell";
 import { guardPageModule } from "@/lib/module-access";
 
 import { BankLogo } from "@/components/shared/bank-logo";
-import { getAccountDetailData } from "@/lib/cash-bank-account-service";
+import { getCachedCashBankAccountDetailData } from "@/lib/tenant-cache/cached-tenant-page-data";
+import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
 import {
   formatCashMoney,
   getAccountTypeText,
 } from "@/lib/cash-bank-page-utils";
+import { canManageAccounts } from "@/lib/permission-utils";
 type Props = {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ movement?: string }>;
@@ -76,10 +80,16 @@ export default async function CashBankAccountDetailPage({ params,
 }: Props) {
   const session = await guardPageModule("cash-bank");
   const company = session.company;
-const { id } = await params;
+  const companyUser = session.companyUser;
+  const effectiveRole = session.effectiveRole;
+  const canManage = canManageAccounts(effectiveRole, companyUser.isOwner);
+  const { id } = await params;
   const query = await searchParams;
 
-  const detail = await getAccountDetailData(company.id, id);
+  const detail = await getCachedCashBankAccountDetailData({
+    companyId: company.id,
+    accountId: id,
+  });
   if (!detail) notFound();
 
   const { account, transactions, metrics, companyAccounts } = detail;
@@ -87,7 +97,8 @@ const { id } = await params;
 
   return (
     <AppShell>
-      <div className="space-y-5">
+      <TenantPageSync />
+      <div className="min-w-0 space-y-5">
         <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex items-start gap-4">
@@ -138,13 +149,23 @@ const { id } = await params;
               </div>
             </div>
 
-            <AccountDetailActions
+            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-end">
+              <AccountArchiveActions
+                accountId={account.id}
+                accountName={account.name}
+                balance={account.balance}
+                status={account.status}
+                isDefault={account.isDefault}
+                canManage={canManage}
+              />
+              <AccountDetailActions
               accountId={account.id}
               accountName={account.name}
               currentBalance={account.balance}
               companyAccounts={companyAccounts}
               openMovementOnMount={openMovementOnMount}
             />
+            </div>
           </div>
         </section>
 
@@ -202,6 +223,7 @@ const { id } = await params;
                   <th className="px-3 py-3">Kaynak</th>
                   <th className="px-3 py-3">Referans</th>
                   <th className="px-3 py-3 text-right">Bakiye</th>
+                  <th className="px-3 py-3 text-center">Detay</th>
                 </tr>
               </thead>
 
@@ -268,6 +290,15 @@ const { id } = await params;
 
                       <td className="whitespace-nowrap px-3 py-3 text-right text-[12px] font-black text-[#0f1f4d]">
                         {formatCashMoney(transaction.balanceAfter)}
+                      </td>
+                      <td className="px-3 py-3 text-center">
+                        <Link
+                          href={`/cash-bank/transactions/${transaction.id}`}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-[#24345f] transition hover:border-blue-100 hover:bg-blue-50 hover:text-blue-600"
+                          title="Detay"
+                        >
+                          <Eye size={13} />
+                        </Link>
                       </td>
                     </tr>
                   );

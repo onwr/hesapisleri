@@ -148,9 +148,10 @@ export function CashBankSidebarWidgets({
         <div className="space-y-3">
           {recentTransactions.length > 0 ? (
             recentTransactions.map((transaction, index) => (
-              <div
+              <Link
                 key={transaction.id}
-                className="animate-in fade-in slide-in-from-bottom-2 fill-mode-both flex items-start gap-3 duration-500"
+                href={`/cash-bank/transactions/${transaction.id}`}
+                className="animate-in fade-in slide-in-from-bottom-2 fill-mode-both flex items-start gap-3 rounded-xl transition hover:bg-slate-50 duration-500"
                 style={{ animationDelay: `${160 + index * 50}ms` }}
               >
                 <div
@@ -179,7 +180,7 @@ export function CashBankSidebarWidgets({
                     {formatCashDate(transaction.date)}
                   </p>
                 </div>
-              </div>
+              </Link>
             ))
           ) : (
             <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-[12px] font-medium text-slate-500">

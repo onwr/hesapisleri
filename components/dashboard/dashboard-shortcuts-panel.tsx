@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -151,14 +151,15 @@ export function DashboardShortcutsPanel({
     <>
       <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h3 className="text-[15px] font-extrabold text-[#0f1f4d]">
+          <h3 className="text-[16px] font-extrabold text-[#0f1f4d]">
             Kısayollarım
           </h3>
 
           <button
             type="button"
             onClick={openEditor}
-            className="text-[11px] font-bold text-blue-600 transition hover:text-blue-700"
+            aria-label="Kısayolları düzenle"
+            className="text-[13px] font-bold text-blue-700 transition hover:text-blue-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-200"
           >
             Düzenle
           </button>
@@ -184,7 +185,7 @@ export function DashboardShortcutsPanel({
                     <Icon size={21} strokeWidth={2.4} />
                   </div>
 
-                  <span className="line-clamp-2 text-[10px] font-bold leading-tight text-[#24345f]">
+                  <span className="line-clamp-2 text-[13px] font-bold leading-tight text-[#24345f]">
                     {item.label}
                   </span>
                 </Link>
@@ -212,14 +213,14 @@ export function DashboardShortcutsPanel({
                 key={`slot-${index}`}
                 className="flex items-center gap-2 rounded-xl border border-slate-200/80 bg-slate-50/70 p-2"
               >
-                <span className="w-5 shrink-0 text-center text-[11px] font-black text-slate-400">
+                <span className="w-5 shrink-0 text-center text-[13px] font-black text-slate-500">
                   {index + 1}
                 </span>
 
                 <select
                   value={selectedId}
                   onChange={(event) => updateDraftSlot(index, event.target.value)}
-                  className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-[12px] font-semibold text-[#0f1f4d] outline-none focus:border-blue-200 focus:ring-2 focus:ring-blue-50"
+                  className="h-10 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-[#0f1f4d] outline-none focus:border-blue-200 focus:ring-2 focus:ring-blue-50"
                 >
                   {DASHBOARD_SHORTCUT_CATALOG.map((item) => (
                     <option key={item.id} value={item.id}>

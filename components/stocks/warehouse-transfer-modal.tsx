@@ -1,9 +1,9 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Loader2, X } from "lucide-react";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 import type {
   StockFormProduct,
   StockFormWarehouse,
@@ -36,8 +36,13 @@ export function WarehouseTransferModal({
   defaultProductId,
   defaultFromWarehouseId,
 }: WarehouseTransferModalProps) {
-  const router = useRouter();
-  const [saving, setSaving] = useState(false);
+  const { mutate, isSubmitting } = useTenantMutation({
+    refresh: false,
+    onSuccess: () => {
+      idempotencyKeyRef.current = createIdempotencyKey();
+      onClose();
+    },
+  });
   const [error, setError] = useState("");
   const idempotencyKeyRef = useRef(createIdempotencyKey());
   const [productId, setProductId] = useState(defaultProductId ?? "");
@@ -72,58 +77,41 @@ export function WarehouseTransferModal({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSaving(true);
     setError("");
 
     const parsedQuantity = Number(quantity);
 
     if (!productId || !fromWarehouseId || !toWarehouseId) {
       setError("Ürün ve depoları seçin.");
-      setSaving(false);
       return;
     }
 
     if (fromWarehouseId === toWarehouseId) {
       setError("Çıkış ve giriş deposu aynı olamaz.");
-      setSaving(false);
       return;
     }
 
     if (Number.isNaN(parsedQuantity) || parsedQuantity <= 0) {
       setError("Geçerli bir miktar girin.");
-      setSaving(false);
       return;
     }
 
-    try {
-      const response = await fetch("/api/stocks/transfers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          productId,
-          fromWarehouseId,
-          toWarehouseId,
-          quantity: parsedQuantity,
-          note: note.trim() || undefined,
-          transferDate,
-          idempotencyKey: idempotencyKeyRef.current,
-        }),
-      });
+    const result = await mutate("/api/stocks/transfers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        productId,
+        fromWarehouseId,
+        toWarehouseId,
+        quantity: parsedQuantity,
+        note: note.trim() || undefined,
+        transferDate,
+        idempotencyKey: idempotencyKeyRef.current,
+      }),
+    });
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        setError(data.message || TRANSFER_FAILED_MESSAGE);
-        return;
-      }
-
-      idempotencyKeyRef.current = createIdempotencyKey();
-      onClose();
-      router.refresh();
-    } catch {
-      setError("Sunucuya bağlanırken bir hata oluştu.");
-    } finally {
-      setSaving(false);
+    if (!result.ok && result.error !== "duplicate_submit") {
+      setError(result.error || TRANSFER_FAILED_MESSAGE);
     }
   }
 
@@ -239,10 +227,10 @@ export function WarehouseTransferModal({
           <div className="flex gap-3 pt-2">
             <button
               type="submit"
-              disabled={saving}
+              disabled={isSubmitting}
               className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-violet-600 text-[13px] font-black text-white disabled:opacity-60"
             >
-              {saving ? <Loader2 className="animate-spin" size={18} /> : null}
+              {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : null}
               Transferi Başlat
             </button>
             <button

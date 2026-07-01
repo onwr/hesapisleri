@@ -62,6 +62,27 @@ describe("employee utils", () => {
     assert.equal(balance.netPayable, 800);
   });
 
+  it("avans payable bakiyeye dahil edilmez", () => {
+    const balance = calculateEmployeeBalance([
+      {
+        amount: 3000,
+        status: "PAID",
+        direction: "PAID",
+        type: "ADVANCE",
+      },
+      {
+        amount: 10000,
+        status: "PENDING",
+        direction: "PAYABLE",
+        type: "SALARY",
+      },
+    ] as never);
+
+    assert.equal(balance.totalPending, 10000);
+    assert.equal(balance.totalPaid, 0);
+    assert.equal(balance.netPayable, 10000);
+  });
+
   it("fullName ile normalize eder", () => {
     const normalized = normalizeEmployeeInput({ fullName: "Ayşe Yılmaz" });
     assert.equal(normalized.firstName, "Ayşe");
@@ -156,7 +177,7 @@ describe("employee utils", () => {
 
   it("getPaymentTypeLabel Türkçe etiket döner", () => {
     assert.equal(getPaymentTypeLabel("SALARY"), "Maaş");
-    assert.equal(getPaymentTypeLabel("ADVANCE"), "Avans");
+    assert.equal(getPaymentTypeLabel("ADVANCE"), "Çalışana Avans");
   });
 
   it("getPaymentStatusBadgeClass durum sınıfı döner", () => {

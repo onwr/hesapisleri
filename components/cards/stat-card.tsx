@@ -56,38 +56,41 @@ export function StatCard({
         ) : null}
       </div>
 
-      <p className="mt-4 text-[12px] font-bold text-[#24345f]/80">{title}</p>
+      <p className="mt-4 text-xs font-bold text-[#24345f]">{title}</p>
 
       <p className="mt-1 text-[20px] font-extrabold tracking-[-0.03em] text-[#0f1f4d]">
         {value}
       </p>
 
       {highlight ? (
-        <p className="mt-2 text-[11px] font-bold text-rose-500">
+        <p className="mt-2 text-xs font-bold text-rose-600">
           {highlight}
         </p>
       ) : null}
 
       {showChange ? (
         <div className="mt-3 flex items-center gap-2">
-          <span className="text-[11px] font-medium text-slate-500">
+          <span className="text-xs font-medium text-slate-600">
             {comparisonLabel}
           </span>
 
           <span
-            className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold ${
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-bold ${
               isPositive
-                ? "bg-emerald-50 text-emerald-600"
-                : "bg-rose-50 text-rose-600"
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-rose-50 text-rose-700"
             }`}
+            aria-label={`${isPositive ? "Artış" : "Azalış"} yüzde ${Math.abs(changePercent ?? 0)}`}
           >
-            {isPositive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-            {isPositive ? "+" : ""}
-            %{Math.abs(changePercent ?? 0)}
+            {isPositive ? <TrendingUp size={12} aria-hidden="true" /> : <TrendingDown size={12} aria-hidden="true" />}
+            <span aria-hidden="true">
+              {isPositive ? "+" : ""}
+              %{Math.abs(changePercent ?? 0)}
+            </span>
           </span>
         </div>
       ) : subtitle ? (
-        <p className="mt-3 text-[11px] font-medium text-slate-500">
+        <p className="mt-3 text-xs font-medium text-slate-600">
           {subtitle}
         </p>
       ) : null}

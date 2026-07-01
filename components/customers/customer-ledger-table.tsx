@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { CustomerLedgerEntry } from "@/lib/customer-detail-data";
 import { formatCustomerMoney } from "@/lib/customers-page-utils";
+import { formatDisplayDate } from "@/lib/format-utils";
 
 type CustomerLedgerTableProps = {
   entries: CustomerLedgerEntry[];
@@ -10,6 +11,7 @@ const typeLabels: Record<CustomerLedgerEntry["type"], string> = {
   SALE: "Satış",
   INVOICE: "Fatura",
   COLLECTION: "Tahsilat",
+  PAYMENT: "Ödeme",
   CANCEL_SALE: "Satış İptali",
   CANCEL_INVOICE: "Fatura İptali",
 };
@@ -18,19 +20,10 @@ const typeClassMap: Record<CustomerLedgerEntry["type"], string> = {
   SALE: "bg-blue-50 text-blue-600",
   INVOICE: "bg-violet-50 text-violet-600",
   COLLECTION: "bg-emerald-50 text-emerald-600",
+  PAYMENT: "bg-orange-50 text-orange-600",
   CANCEL_SALE: "bg-rose-50 text-rose-600",
   CANCEL_INVOICE: "bg-rose-50 text-rose-600",
 };
-
-function formatShortDate(date: Date) {
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
-}
 
 export function CustomerLedgerTable({ entries }: CustomerLedgerTableProps) {
   if (entries.length === 0) {
@@ -67,7 +60,7 @@ export function CustomerLedgerTable({ entries }: CustomerLedgerTableProps) {
               className="text-[12px] font-semibold text-[#24345f]"
             >
               <td className="px-3 py-3 text-slate-500">
-                {formatShortDate(entry.date)}
+                {formatDisplayDate(entry.occurredAt ?? entry.date)}
               </td>
 
               <td className="px-3 py-3">

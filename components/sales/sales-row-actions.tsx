@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import {
   ArrowRightLeft,
   Download,
@@ -28,14 +27,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { SalesRowActionData } from "@/lib/sales-page-utils";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
+import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 
 type SalesRowActionsProps = {
   row: SalesRowActionData;
 };
 
 export function SalesRowActions({ row }: SalesRowActionsProps) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const { mutate, isSubmitting } = useTenantMutation({ refresh: false });
   const [message, setMessage] = useState<string | null>(null);
   const [collectTarget, setCollectTarget] = useState<CollectPaymentTarget | null>(
     null
@@ -124,37 +124,28 @@ export function SalesRowActions({ row }: SalesRowActionsProps) {
       return;
     }
 
-    startTransition(async () => {
-      try {
-        const response = await fetch(endpoint, {
-          method,
-          headers: body
-            ? {
-                "Content-Type": "application/json",
-              }
-            : undefined,
-          body,
-        });
-
-        const result = (await response.json()) as {
-          success?: boolean;
-          message?: string;
-        };
-
-        if (!response.ok || !result.success) {
-          setMessage(result.message ?? "İptal işlemi başarısız.");
-          return;
-        }
-
-        router.refresh();
-      } catch {
-        setMessage("İptal işlemi sırasında bir hata oluştu.");
-      }
+    const result = await mutate(endpoint, {
+      method,
+      headers: body
+        ? {
+            "Content-Type": "application/json",
+          }
+        : undefined,
+      body,
     });
+
+    if (!result.ok) {
+      if (result.error !== "duplicate_submit") {
+        setMessage(result.error);
+      }
+      return;
+    }
+
+    notifyTenantCacheSync();
   }
 
   const canDownload = Boolean(row.pdfUrl || row.downloadHref);
-  const isBusy = isPending;
+  const isBusy = isSubmitting;
 
   if (row.isQuote) {
     return (
@@ -338,7 +329,7 @@ export function SalesRowActions({ row }: SalesRowActionsProps) {
           open={cancelDialogOpen}
           onOpenChange={setCancelDialogOpen}
           onSuccess={() => {
-            router.refresh();
+            notifyTenantCacheSync();
           }}
         />
       ) : null}

@@ -7,6 +7,7 @@ import {
   updateProductCategory,
 } from "@/lib/product-category-service";
 import { PRODUCT_CATEGORY_COLORS } from "@/lib/product-category-utils";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -59,11 +60,13 @@ export async function PATCH(req: Request, { params }: Props) {
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      message: "Kategori başarıyla güncellendi.",
-      data: category,
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(companyId, {
+        reason: "product-category-change",
+        entity: category as Record<string, unknown>,
+        message: "Kategori başarıyla güncellendi.",
+      }),
+    );
   } catch (error) {
     console.error("UPDATE_PRODUCT_CATEGORY_ERROR", error);
 
@@ -100,10 +103,13 @@ export async function DELETE(_req: Request, { params }: Props) {
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      message: "Kategori silindi.",
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(companyId, {
+        reason: "product-category-change",
+        entity: { id },
+        message: "Kategori silindi.",
+      }),
+    );
   } catch (error) {
     console.error("DELETE_PRODUCT_CATEGORY_ERROR", error);
 

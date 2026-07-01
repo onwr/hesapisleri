@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Edit3, Eye, MoreVertical, Truck } from "lucide-react";
 import type { OrderStatus } from "@prisma/client";
 import { OrderShippingModal } from "@/components/orders/order-shipping-modal";
+import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 
 type OrdersRowActionsProps = {
   orderId: string;
@@ -20,7 +20,6 @@ export function OrdersRowActions({
   orderStatus,
   detailHref,
 }: OrdersRowActionsProps) {
-  const router = useRouter();
   const [shippingOpen, setShippingOpen] = useState(false);
   const canAddShipping =
     orderStatus === "APPROVED" || orderStatus === "SHIPPING";
@@ -73,7 +72,7 @@ export function OrdersRowActions({
         orderNo={orderNo}
         open={shippingOpen}
         onClose={() => setShippingOpen(false)}
-        onSuccess={() => router.refresh()}
+        onSuccess={() => notifyTenantCacheSync()}
       />
     </>
   );

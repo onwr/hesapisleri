@@ -41,7 +41,36 @@ type OverviewData = {
   }>;
 };
 
-export function AdminPlanOverviewTab({ data, planId }: { data: OverviewData; planId: string }) {
+function isOverviewData(data: unknown): data is OverviewData {
+  if (!data || typeof data !== "object") return false;
+  const candidate = data as Partial<OverviewData>;
+  return (
+    candidate.basics != null &&
+    typeof candidate.basics === "object" &&
+    Array.isArray(candidate.intervalSummaries) &&
+    candidate.legacyPrices != null &&
+    candidate.subscriptionImpact != null &&
+    Array.isArray(candidate.issues)
+  );
+}
+
+export function AdminPlanOverviewTab({
+  data,
+  planId,
+}: {
+  data: OverviewData | null | undefined;
+  planId: string;
+}) {
+  if (!isOverviewData(data)) {
+    return (
+      <div className={`${appPanelClass} p-4`}>
+        <p className="text-[12px] text-slate-500">
+          Genel bakış verisi yüklenemedi. Sayfayı yenileyin veya sekmeyi tekrar seçin.
+        </p>
+      </div>
+    );
+  }
+
   const b = data.basics;
 
   return (

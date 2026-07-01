@@ -29,6 +29,8 @@ import {
   getExpensesPageData,
   parseExpenseCategoryFilter,
 } from "@/lib/expenses-page-data";
+import { getCachedExpensesPageData } from "@/lib/tenant-cache/cached-tenant-page-data";
+import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
 import {
   buildExpensesExportQuery,
   formatExpenseDate,
@@ -129,7 +131,8 @@ const now = new Date();
     totalRecords,
     totalPages,
     currentPage: page,
-  } = await getExpensesPageData(company.id, {
+  } = await getCachedExpensesPageData({
+    companyId: company.id,
     tab: activeTab,
     page: currentPage,
     from,
@@ -156,6 +159,7 @@ const now = new Date();
 
   return (
     <AppShell>
+      <TenantPageSync />
       <div className="space-y-5">
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {actionCards.map((card) => {

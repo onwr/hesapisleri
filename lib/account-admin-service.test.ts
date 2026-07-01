@@ -74,10 +74,10 @@ describe("account UI integration", () => {
     assert.match(actions, /AccountFormDialog/);
   });
 
-  it("account form dialog API kullanır", () => {
+  it("account form dialog noValidate ve Türkçe validasyon kullanır", () => {
     const dialog = read("components/cash-bank/account-form-dialog.tsx");
-    assert.match(dialog, /\/api\/cash-bank\/accounts/);
-    assert.match(dialog, /Hesap adı zorunludur/);
+    assert.match(dialog, /noValidate/);
+    assert.match(dialog, /validateAccountCreateForm/);
   });
 
   it("account API handlers yetki kontrolü içerir", () => {
@@ -86,11 +86,11 @@ describe("account UI integration", () => {
     assert.match(handlers, /requireApiCashBankRead/);
   });
 
-  it("activity log mesajları gerçek hesap adını içerir", () => {
+  it("activity log mesajları güvenli helper kullanır", () => {
     const service = read("lib/account-admin-service.ts");
-    assert.match(service, /Hesap oluşturuldu: \$\{account\.name\}/);
-    assert.match(service, /Hesap güncellendi: \$\{updated\.name\}/);
-    assert.match(service, /Varsayılan hesap değiştirildi: \$\{account\.name\}/);
+    assert.match(service, /buildSafeActivityMessage/);
+    assert.match(service, /createActivityLog/);
+    assert.doesNotMatch(service, /Hesap oluşturuldu: \$\{account\.name\}/);
   });
 
   it("options endpoint sadece aktif hesapları döndürür", () => {
@@ -109,8 +109,8 @@ describe("account UI integration", () => {
     assert.match(service, /Bu isimde bir hesap zaten var/);
   });
 
-  it("varsayılan hesap pasif yapılamaz", () => {
+  it("varsayılan hesap arşivlenemez", () => {
     const service = read("lib/account-admin-service.ts");
-    assert.match(service, /Varsayılan hesap pasif yapılamaz/);
+    assert.match(service, /Varsayılan hesap arşivlenemez/);
   });
 });

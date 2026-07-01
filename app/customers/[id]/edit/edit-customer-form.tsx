@@ -16,6 +16,7 @@ import {
   User,
 } from "lucide-react";
 import { AppLoadingScreen } from "@/components/layout/app-loading-screen";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 import { CustomerGroupSelect } from "@/components/customers/customer-group-select";
 import {
   CustomerTaxCertificateField,
@@ -45,8 +46,8 @@ type CustomerRecord = {
 
 export function EditCustomerForm({ customer }: { customer: CustomerRecord }) {
   const router = useRouter();
+  const { mutate, isSubmitting } = useTenantMutation({ refresh: false });
 
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -77,7 +78,6 @@ export function EditCustomerForm({ customer }: { customer: CustomerRecord }) {
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setSaving(true);
     setError("");
     setFieldErrors({});
 
@@ -86,42 +86,37 @@ export function EditCustomerForm({ customer }: { customer: CustomerRecord }) {
     if (payload.name.length < 2) {
       setFieldErrors({ name: "Müşteri adı en az 2 karakter olmalıdır." });
       setError("Müşteri adı en az 2 karakter olmalıdır.");
-      setSaving(false);
       return;
     }
 
-    try {
-      const res = await fetch(`/api/customers/${customer.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+    const result = await mutate(`/api/customers/${customer.id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
 
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        setFieldErrors(mapCustomerFieldErrors(data.errors));
-        setError(
-          getFirstCustomerErrorMessage(data.message, data.errors) ||
-            "Müşteri güncellenemedi."
-        );
-        return;
+    if (!result.ok) {
+      if (result.error === "duplicate_submit") return;
+      if ("errors" in result && result.errors) {
+        setFieldErrors(mapCustomerFieldErrors(result.errors));
       }
-
-      router.push(`/customers/${customer.id}?updated=1`);
-      router.refresh();
-    } catch {
-      setError("Sunucuya bağlanırken bir hata oluştu.");
-    } finally {
-      setSaving(false);
+      setError(
+        getFirstCustomerErrorMessage(
+          result.error === "duplicate_submit" ? undefined : result.error,
+          "errors" in result ? result.errors : undefined
+        ) || "Müşteri güncellenemedi."
+      );
+      return;
     }
+
+    router.push(`/customers/${customer.id}?updated=1`);
   }
 
   return (
     <main className="min-h-screen bg-[#f7f8ff] px-5 py-6">
-      {saving ? (
+      {isSubmitting ? (
         <AppLoadingScreen
           preset="customers"
           title="Müşteri güncelleniyor"
@@ -295,15 +290,15 @@ export function EditCustomerForm({ customer }: { customer: CustomerRecord }) {
           <div className="flex flex-col gap-3 sm:flex-row">
             <button
               type="submit"
-              disabled={saving}
+              disabled={isSubmitting}
               className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-linear-to-br from-blue-600 to-violet-600 text-[13px] font-black text-white shadow-lg shadow-blue-100 transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {saving ? (
+              {isSubmitting ? (
                 <Loader2 className="animate-spin" size={18} />
               ) : (
                 <Save size={18} />
               )}
-              {saving ? "Kaydediliyor..." : "Değişiklikleri Kaydet"}
+              {isSubmitting ? "Kaydediliyor..." : "Değişiklikleri Kaydet"}
             </button>
 
             <Link

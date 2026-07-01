@@ -1,9 +1,10 @@
 "use client";
 
 import type { FormEvent, ReactNode } from "react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 import {
   ArrowLeft,
   Building2,
@@ -22,9 +23,14 @@ import {
 } from "lucide-react";
 import { AppLoadingScreen } from "@/components/layout/app-loading-screen";
 import { SUPPLIER_CATEGORIES } from "@/lib/supplier-utils";
+import {
+  SUPPLIER_OPENING_DIRECTION_LABELS,
+  type SupplierOpeningBalanceDirection,
+} from "@/lib/supplier-balance-utils";
 
 export default function NewSupplierPage() {
   const router = useRouter();
+  const clientRequestIdRef = useRef(crypto.randomUUID());
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -47,7 +53,10 @@ export default function NewSupplierPage() {
     country: "Türkiye",
     category: "",
     iban: "",
-    openingBalance: "0",
+    openingBalanceAmount: "",
+    openingBalanceDirection: "SETTLED" as SupplierOpeningBalanceDirection,
+    openingBalanceDate: new Date().toISOString().slice(0, 10),
+    openingBalanceDescription: "",
     currency: "TRY",
     paymentTermDays: "",
     notes: "",
@@ -77,6 +86,25 @@ export default function NewSupplierPage() {
 
     try {
       const paymentTermDays = form.paymentTermDays.trim();
+      const rawAmount = form.openingBalanceAmount.trim();
+      const openingBalanceAmount =
+        rawAmount === "" ? 0 : Number.parseFloat(rawAmount.replace(",", "."));
+
+      if (
+        rawAmount !== "" &&
+        (!Number.isFinite(openingBalanceAmount) ||
+          Number.isNaN(openingBalanceAmount) ||
+          openingBalanceAmount < 0)
+      ) {
+        setFieldErrors({
+          openingBalanceAmount:
+            "Açılış tutarı geçerli ve negatif olmayan bir sayı olmalıdır.",
+        });
+        setError("Açılış tutarı geçerli ve negatif olmayan bir sayı olmalıdır.");
+        setSaving(false);
+        return;
+      }
+
       const payload: Record<string, unknown> = {
         name: name || undefined,
         companyName: companyName || undefined,
@@ -99,7 +127,12 @@ export default function NewSupplierPage() {
           .map((tag) => tag.trim())
           .filter(Boolean),
         notes: form.notes.trim() || undefined,
-        openingBalance: Number.parseFloat(form.openingBalance) || 0,
+        openingBalanceAmount,
+        openingBalanceDirection:
+          openingBalanceAmount === 0 ? "SETTLED" : form.openingBalanceDirection,
+        openingBalanceDate: form.openingBalanceDate || undefined,
+        openingBalanceDescription: form.openingBalanceDescription.trim() || undefined,
+        clientRequestId: clientRequestIdRef.current,
         currency: form.currency.trim() || "TRY",
         paymentTermDays: paymentTermDays
           ? Number.parseInt(paymentTermDays, 10)
@@ -121,10 +154,10 @@ export default function NewSupplierPage() {
       }
 
       const supplierId = data.data?.id as string | undefined;
+      notifyTenantCacheSync();
       router.push(
         supplierId ? `/suppliers/${supplierId}?created=1` : "/suppliers"
       );
-      router.refresh();
     } catch {
       setError("Sunucuya bağlanırken bir hata oluştu.");
     } finally {
@@ -377,41 +410,101 @@ export default function NewSupplierPage() {
 
             <FormSection
               title="Finansal Bilgiler"
-              description="Açılış bakiyesi ve ödeme koşulları."
+              description="Açılış cari bakiyesi ve ödeme koşulları."
               icon={<Wallet size={20} strokeWidth={2.4} />}
               iconClass="bg-emerald-50 text-emerald-600"
             >
-              <div className="grid gap-4 md:grid-cols-2">
-                <InputField
-                  label="Açılış Bakiyesi"
-                  type="number"
-                  icon={<Wallet size={18} />}
-                  value={form.openingBalance}
-                  onChange={(value) => updateForm("openingBalance", value)}
-                  placeholder="0"
-                />
-                <InputField
-                  label="Para Birimi"
-                  icon={<Wallet size={18} />}
-                  value={form.currency}
-                  onChange={(value) => updateForm("currency", value)}
-                  placeholder="TRY"
-                />
-                <InputField
-                  label="Vade (gün)"
-                  type="number"
-                  icon={<ReceiptText size={18} />}
-                  value={form.paymentTermDays}
-                  onChange={(value) => updateForm("paymentTermDays", value)}
-                  placeholder="30"
-                />
-                <InputField
-                  label="IBAN"
-                  icon={<Wallet size={18} />}
-                  value={form.iban}
-                  onChange={(value) => updateForm("iban", value)}
-                  placeholder="TR..."
-                />
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[12px] font-black text-[#24345f]">
+                    Açılış Cari Yönü
+                  </label>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                    {(
+                      ["SETTLED", "PAYABLE", "RECEIVABLE"] as SupplierOpeningBalanceDirection[]
+                    ).map((direction) => (
+                      <label
+                        key={direction}
+                        className={[
+                          "flex cursor-pointer items-center gap-2 rounded-2xl border px-4 py-3 text-[12px] font-bold transition",
+                          form.openingBalanceDirection === direction
+                            ? "border-blue-200 bg-blue-50 text-blue-700"
+                            : "border-slate-200 bg-white text-[#24345f] hover:bg-slate-50",
+                        ].join(" ")}
+                      >
+                        <input
+                          type="radio"
+                          name="openingBalanceDirection"
+                          value={direction}
+                          checked={form.openingBalanceDirection === direction}
+                          onChange={() =>
+                            updateForm("openingBalanceDirection", direction)
+                          }
+                          className="sr-only"
+                        />
+                        {SUPPLIER_OPENING_DIRECTION_LABELS[direction]}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <InputField
+                    label="Açılış Tutarı"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    icon={<Wallet size={18} />}
+                    value={form.openingBalanceAmount}
+                    onChange={(value) => {
+                      if (value.startsWith("-")) return;
+                      updateForm("openingBalanceAmount", value);
+                    }}
+                    placeholder="0"
+                    error={fieldErrors.openingBalanceAmount}
+                    disabled={form.openingBalanceDirection === "SETTLED"}
+                  />
+                  <InputField
+                    label="Açılış Tarihi"
+                    type="date"
+                    icon={<ReceiptText size={18} />}
+                    value={form.openingBalanceDate}
+                    onChange={(value) => updateForm("openingBalanceDate", value)}
+                    disabled={form.openingBalanceDirection === "SETTLED"}
+                  />
+                  <InputField
+                    label="Para Birimi"
+                    icon={<Wallet size={18} />}
+                    value={form.currency}
+                    onChange={(value) => updateForm("currency", value)}
+                    placeholder="TRY"
+                  />
+                  <InputField
+                    label="Vade (gün)"
+                    type="number"
+                    icon={<ReceiptText size={18} />}
+                    value={form.paymentTermDays}
+                    onChange={(value) => updateForm("paymentTermDays", value)}
+                    placeholder="30"
+                  />
+                  <div className="md:col-span-2">
+                    <InputField
+                      label="Açılış Açıklaması"
+                      icon={<FileText size={18} />}
+                      value={form.openingBalanceDescription}
+                      onChange={(value) => updateForm("openingBalanceDescription", value)}
+                      placeholder="Opsiyonel açıklama"
+                      disabled={form.openingBalanceDirection === "SETTLED"}
+                    />
+                  </div>
+                  <InputField
+                    label="IBAN"
+                    icon={<Wallet size={18} />}
+                    value={form.iban}
+                    onChange={(value) => updateForm("iban", value)}
+                    placeholder="TR..."
+                  />
+                </div>
               </div>
             </FormSection>
 
@@ -524,8 +617,14 @@ export default function NewSupplierPage() {
                       value={form.city || "Belirtilmedi"}
                     />
                     <SummaryLine
-                      label="Açılış Bakiyesi"
-                      value={`${form.openingBalance || "0"} ${form.currency}`}
+                      label="Açılış Cari"
+                      value={
+                        form.openingBalanceDirection === "SETTLED" ||
+                        !form.openingBalanceAmount ||
+                        form.openingBalanceAmount === "0"
+                          ? SUPPLIER_OPENING_DIRECTION_LABELS.SETTLED
+                          : `${form.openingBalanceAmount} ${form.currency} · ${SUPPLIER_OPENING_DIRECTION_LABELS[form.openingBalanceDirection]}`
+                      }
                     />
                   </div>
 
@@ -602,6 +701,9 @@ function InputField({
   icon,
   type = "text",
   error,
+  disabled,
+  min,
+  step,
 }: {
   label: string;
   value: string;
@@ -610,6 +712,9 @@ function InputField({
   icon: ReactNode;
   type?: string;
   error?: string;
+  disabled?: boolean;
+  min?: string;
+  step?: string;
 }) {
   return (
     <div>
@@ -622,8 +727,11 @@ function InputField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           type={type}
+          min={min}
+          step={step}
+          disabled={disabled}
           className={[
-            "h-12 w-full rounded-2xl border bg-white pl-11 pr-4 text-[13px] font-medium text-[#24345f] outline-none transition placeholder:text-slate-400 focus:ring-4",
+            "h-12 w-full rounded-2xl border bg-white pl-11 pr-4 text-[13px] font-medium text-[#24345f] outline-none transition placeholder:text-slate-400 focus:ring-4 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400",
             error
               ? "border-rose-300 focus:border-rose-300 focus:ring-rose-50"
               : "border-slate-200 focus:border-blue-200 focus:ring-blue-50",

@@ -20,6 +20,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { AppLoadingScreen } from "@/components/layout/app-loading-screen";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 import type { ExpensePaymentStatus } from "@/lib/expense-utils";
 import { formatExpenseMoney } from "@/lib/expenses-page-utils";
 
@@ -47,7 +48,9 @@ export function NewExpenseForm({
   initialSupplierId = "",
 }: NewExpenseFormProps) {
   const router = useRouter();
-  const [saving, setSaving] = useState(false);
+  const { mutate, isSubmitting } = useTenantMutation<{ id: string }>({
+    refresh: false,
+  });
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [supplierOptions, setSupplierOptions] = useState<SupplierOption[]>([]);
@@ -102,61 +105,59 @@ export function NewExpenseForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSaving(true);
     setError("");
     setFieldErrors({});
 
     const parsedAmount = Number(form.amount);
     if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
       setError("Geçerli bir tutar girin.");
-      setSaving(false);
       return;
     }
 
     if (form.paymentStatus === "PAID" && !form.accountId) {
       setFieldErrors({ accountId: "Ödenmiş gider için hesap seçin." });
       setError("Ödenmiş gider için ödeme hesabı seçilmelidir.");
-      setSaving(false);
       return;
     }
 
-    try {
-      const response = await fetch("/api/expenses/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: form.title.trim(),
-          category: form.category.trim() || undefined,
-          supplier: form.supplier.trim() || undefined,
-          supplierId: form.supplierId || undefined,
-          amount: parsedAmount,
-          date: form.date,
-          note: form.note.trim() || undefined,
-          paymentStatus: form.paymentStatus,
-          accountId: form.paymentStatus === "PAID" ? form.accountId : undefined,
-        }),
-      });
+    const result = await mutate("/api/expenses/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: form.title.trim(),
+        category: form.category.trim() || undefined,
+        supplier: form.supplier.trim() || undefined,
+        supplierId: form.supplierId || undefined,
+        amount: parsedAmount,
+        date: form.date,
+        note: form.note.trim() || undefined,
+        paymentStatus: form.paymentStatus,
+        accountId: form.paymentStatus === "PAID" ? form.accountId : undefined,
+      }),
+    });
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        setFieldErrors(data.errors ?? {});
-        setError(data.message || "Gider oluşturulamadı.");
-        return;
+    if (!result.ok) {
+      if (result.error === "duplicate_submit") return;
+      if ("errors" in result && result.errors) {
+        setFieldErrors(
+          Object.fromEntries(
+            Object.entries(result.errors).map(([key, value]) => [
+              key,
+              value?.[0] ?? "",
+            ])
+          )
+        );
       }
-
-      router.push(`/expenses/${data.data.id}`);
-      router.refresh();
-    } catch {
-      setError("Sunucuya bağlanırken bir hata oluştu.");
-    } finally {
-      setSaving(false);
+      setError(result.error || "Gider oluşturulamadı.");
+      return;
     }
+
+    router.push(`/expenses/${result.data.id}`);
   }
 
   return (
     <>
-      {saving ? (
+      {isSubmitting ? (
         <AppLoadingScreen
           preset="expenses"
           title="Gider kaydediliyor"
@@ -375,11 +376,11 @@ export function NewExpenseForm({
             <div className="flex flex-col gap-3">
               <button
                 type="submit"
-                disabled={saving}
+                disabled={isSubmitting}
                 className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-linear-to-r from-orange-500 to-amber-600 text-[13px] font-black text-white shadow-lg shadow-orange-100 disabled:opacity-60"
               >
-                {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                {saving ? "Kaydediliyor..." : "Gideri Kaydet"}
+                {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+                {isSubmitting ? "Kaydediliyor..." : "Gideri Kaydet"}
               </button>
 
               <Link

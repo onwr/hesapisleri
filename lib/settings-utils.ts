@@ -12,6 +12,7 @@ export const DEFAULT_COMPANY_SETTINGS = {
   defaultExpenseAccountId: null as string | null,
   autoCreateCashAccount: true,
   hideInactiveAccounts: true,
+  allowNegativeStockSales: false,
   notifyLowStock: true,
   notifyDueInvoices: true,
   notifyLateCollections: true,
@@ -63,6 +64,10 @@ export const updateNotificationSettingsSchema = z.object({
   notifyEmployeePayments: z.boolean().default(true),
 });
 
+export const updateSalesSettingsSchema = z.object({
+  allowNegativeStockSales: z.boolean().default(false),
+});
+
 export type UpdateCompanySettingsInput = z.infer<
   typeof updateCompanySettingsSchema
 >;
@@ -75,12 +80,15 @@ export type UpdateCashBankSettingsInput = z.infer<
 export type UpdateNotificationSettingsInput = z.infer<
   typeof updateNotificationSettingsSchema
 >;
+export type UpdateSalesSettingsInput = z.infer<
+  typeof updateSalesSettingsSchema
+>;
 
 const ROLE_LABELS: Record<UserRole, string> = {
-  OWNER: "Sahip",
+  OWNER: "Şirket Sahibi",
   ADMIN: "Yönetici",
   ACCOUNTANT: "Muhasebeci",
-  STAFF: "Personel",
+  STAFF: "Çalışan",
   POS_STAFF: "POS Personeli",
   SUPER_ADMIN: "Süper Admin",
 };

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { guardPageModule } from "@/lib/module-access";
+import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
 
 import { MarketplaceLogo } from "@/components/orders/marketplace-logo";
 import { OrderDetailActions } from "@/components/orders/order-detail-actions";
@@ -54,6 +55,7 @@ export default async function OrderDetailPage({ params }: Props) {
 
   return (
     <AppShell>
+      <TenantPageSync />
       <div className="space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>

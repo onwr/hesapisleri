@@ -3,6 +3,7 @@ import { z } from "zod";
 import { EntitlementError } from "@/lib/billing/entitlements/entitlement-errors";
 import { submitInvoiceDocument } from "@/lib/efaturam/efaturam-document-service";
 import { requireApiModuleAccess } from "@/lib/module-access";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 const schema = z.object({
   documentType: z.enum(["E_INVOICE", "E_ARCHIVE"]),
@@ -36,19 +37,23 @@ export async function POST(req: Request, { params }: Props) {
       internetSale: parsed.data.internetSale,
     });
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        submission: result.submission,
-        provider: {
-          invoiceUuid: result.response.invoiceUuid ?? null,
-          invoiceId: result.response.invoiceId ?? null,
-          status: result.response.status ?? null,
-          gibStatus: result.response.gibStatus ?? null,
+    return NextResponse.json(
+      buildTenantMutationSuccess(auth.companyId, {
+        reason: "invoice-e-document-action",
+        entity: { id },
+        message: "E-belge gönderildi.",
+        entityIds: { invoiceId: id },
+        extra: {
+          submission: result.submission,
+          provider: {
+            invoiceUuid: result.response.invoiceUuid ?? null,
+            invoiceId: result.response.invoiceId ?? null,
+            status: result.response.status ?? null,
+            gibStatus: result.response.gibStatus ?? null,
+          },
         },
-      },
-      message: "E-belge gönderildi.",
-    });
+      }),
+    );
   } catch (error) {
     if (error instanceof EntitlementError) {
       return NextResponse.json(

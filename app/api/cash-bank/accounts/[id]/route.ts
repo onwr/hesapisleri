@@ -18,7 +18,7 @@ export async function PATCH(req: Request, context: RouteContext) {
   return accountUpdateHandler(req, id);
 }
 
-export async function DELETE(_req: Request, context: RouteContext) {
+export async function DELETE(req: Request, context: RouteContext) {
   const { id } = await context.params;
-  return accountDeactivateHandler(id);
+  return accountDeactivateHandler(req, id);
 }

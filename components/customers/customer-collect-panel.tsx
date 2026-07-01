@@ -1,10 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Loader2, Wallet } from "lucide-react";
 import { CollectionAccountSelect } from "@/components/cash-bank/collection-account-select";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 import {
   resolveDefaultCollectionAccountId,
   type CollectionAccountOption,
@@ -58,8 +58,7 @@ function CustomerSaleCollectCard({
   sale: OpenSale;
   accounts: CollectionAccountOption[];
 }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const { mutate, isSubmitting } = useTenantMutation({ refresh: false });
   const [amount, setAmount] = useState(sale.remainingAmount.toFixed(2));
   const [accountId, setAccountId] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -69,7 +68,7 @@ function CustomerSaleCollectCard({
     setAccountId(resolveDefaultCollectionAccountId(accounts));
   }, [accounts]);
 
-  function handleCollect() {
+  async function handleCollect() {
     setMessage(null);
     setError(null);
 
@@ -85,35 +84,17 @@ function CustomerSaleCollectCard({
       return;
     }
 
-    startTransition(async () => {
-      try {
-        const response = await fetch(`/api/sales/${sale.id}/collect`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            amount: parsedAmount,
-            accountId,
-          }),
-        });
-
-        const result = (await response.json()) as {
-          success?: boolean;
-          message?: string;
-        };
-
-        if (!response.ok || !result.success) {
-          setError(result.message ?? "Tahsilat kaydedilemedi.");
-          return;
-        }
-
-        setMessage(result.message ?? "Tahsilat kaydedildi.");
-        router.refresh();
-      } catch {
-        setError("Tahsilat sırasında bir hata oluştu.");
-      }
+    const result = await mutate(`/api/sales/${sale.id}/collect`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount: parsedAmount, accountId }),
     });
+
+    if (result.ok) {
+      setMessage(result.message ?? "Tahsilat kaydedildi.");
+    } else if (result.error !== "duplicate_submit") {
+      setError(result.error);
+    }
   }
 
   return (
@@ -160,7 +141,7 @@ function CustomerSaleCollectCard({
             accounts={accounts}
             value={accountId}
             onChange={setAccountId}
-            disabled={isPending}
+            disabled={isSubmitting}
             className="h-10 w-full rounded-xl border border-orange-200 bg-white px-3 text-[13px] font-bold text-[#0f1f4d] outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-100"
           />
         </div>
@@ -169,10 +150,10 @@ function CustomerSaleCollectCard({
           <button
             type="button"
             onClick={handleCollect}
-            disabled={isPending || accounts.length === 0}
+            disabled={isSubmitting || accounts.length === 0}
             className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-orange-600 px-4 text-[12px] font-black text-white disabled:opacity-60"
           >
-            {isPending ? <Loader2 size={15} className="animate-spin" /> : null}
+            {isSubmitting ? <Loader2 size={15} className="animate-spin" /> : null}
             Tahsil Et
           </button>
         </div>

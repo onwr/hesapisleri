@@ -270,12 +270,14 @@ describe("Faz 19 — mass assignment", () => {
 
 describe("Faz 19 — production güvenlik başlıkları", () => {
   it("next.config güvenlik başlıkları", () => {
-    const src = readSrc("next.config.ts");
-    assert.ok(src.includes("poweredByHeader: false"));
-    assert.ok(src.includes("X-Content-Type-Options"));
-    assert.ok(src.includes("Referrer-Policy"));
-    assert.ok(src.includes("X-Frame-Options"));
-    assert.ok(src.includes("Strict-Transport-Security"));
+    const config = readSrc("next.config.ts");
+    const headers = readSrc("lib/security-headers.ts");
+    assert.ok(config.includes("poweredByHeader: false"));
+    assert.ok(config.includes("securityHeaders"));
+    assert.ok(headers.includes("X-Content-Type-Options"));
+    assert.ok(headers.includes("Referrer-Policy"));
+    assert.ok(headers.includes("X-Frame-Options"));
+    assert.ok(headers.includes("Strict-Transport-Security"));
   });
 
   it("upload API response token sızdırmaz", () => {

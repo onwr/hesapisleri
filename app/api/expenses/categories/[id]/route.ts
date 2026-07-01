@@ -7,6 +7,7 @@ import {
   updateExpenseCategory,
 } from "@/lib/expense-category-service";
 import { EXPENSE_CATEGORY_COLORS } from "@/lib/expense-category-utils";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 const updateCategorySchema = z.object({
   name: z.string().trim().min(1).optional(),
@@ -51,11 +52,13 @@ export async function PATCH(req: Request, context: RouteContext) {
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      message: "Kategori güncellendi.",
-      data: category,
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(auth.companyId, {
+        reason: "expense-category-change",
+        entity: category as Record<string, unknown>,
+        message: "Kategori güncellendi.",
+      }),
+    );
   } catch (error) {
     console.error("UPDATE_EXPENSE_CATEGORY_ERROR", error);
 
@@ -90,10 +93,13 @@ export async function DELETE(_req: Request, context: RouteContext) {
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      message: "Kategori silindi.",
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(auth.companyId, {
+        reason: "expense-category-change",
+        entity: { id },
+        message: "Kategori silindi.",
+      }),
+    );
   } catch (error) {
     console.error("DELETE_EXPENSE_CATEGORY_ERROR", error);
 

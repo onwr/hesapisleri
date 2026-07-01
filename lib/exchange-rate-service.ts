@@ -12,41 +12,55 @@ import {
 const EXCHANGE_API_URL = "https://open.er-api.com/v6/latest/TRY";
 const EXCHANGE_SOURCE = "open.er-api.com";
 const WINDOW_MS = 6 * 60 * 60 * 1000;
+const FETCH_TIMEOUT_MS = 5_000;
 
 let refreshInFlight: Promise<ExchangeRateDisplay | null> | null = null;
 
 async function fetchExternalExchangeRates(): Promise<ExchangeRates> {
-  const response = await fetch(EXCHANGE_API_URL, {
-    next: { revalidate: 0 },
-    headers: { Accept: "application/json" },
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
-  if (!response.ok) {
-    throw new Error(`Döviz API hatası: ${response.status}`);
+  try {
+    const response = await fetch(EXCHANGE_API_URL, {
+      next: { revalidate: 0 },
+      headers: { Accept: "application/json" },
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Döviz API hatası: ${response.status}`);
+    }
+
+    const payload = (await response.json()) as {
+      result?: string;
+      rates?: Record<string, number>;
+    };
+
+    if (payload.result !== "success" || !payload.rates) {
+      throw new Error("Döviz API yanıtı geçersiz.");
+    }
+
+    const tryPerUsd = payload.rates.USD;
+    const tryPerEur = payload.rates.EUR;
+    const tryPerGbp = payload.rates.GBP;
+
+    if (!tryPerUsd || !tryPerEur || !tryPerGbp) {
+      throw new Error("Gerekli para birimleri API yanıtında yok.");
+    }
+
+    return normalizeExchangeRates({
+      USD: 1 / tryPerUsd,
+      EUR: 1 / tryPerEur,
+      GBP: 1 / tryPerGbp,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Döviz API zaman aşımına uğradı.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
   }
-
-  const payload = (await response.json()) as {
-    result?: string;
-    rates?: Record<string, number>;
-  };
-
-  if (payload.result !== "success" || !payload.rates) {
-    throw new Error("Döviz API yanıtı geçersiz.");
-  }
-
-  const tryPerUsd = payload.rates.USD;
-  const tryPerEur = payload.rates.EUR;
-  const tryPerGbp = payload.rates.GBP;
-
-  if (!tryPerUsd || !tryPerEur || !tryPerGbp) {
-    throw new Error("Gerekli para birimleri API yanıtında yok.");
-  }
-
-  return normalizeExchangeRates({
-    USD: 1 / tryPerUsd,
-    EUR: 1 / tryPerEur,
-    GBP: 1 / tryPerGbp,
-  });
 }
 
 function mapSnapshotToDisplay(
@@ -189,6 +203,11 @@ export async function getDashboardExchangeRates(): Promise<ExchangeRateDisplay |
       return null;
     }
 
-    return null;
+    try {
+      const fallback = await getLatestSuccessfulSnapshot();
+      return fallback ? mapSnapshotToDisplay(fallback, now) : null;
+    } catch {
+      return null;
+    }
   }
 }

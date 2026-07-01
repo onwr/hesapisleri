@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -105,15 +105,15 @@ export function AppUserMenu({ userName, companyName }: AppUserMenuProps) {
           type="button"
           className="flex h-[52px] items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 shadow-sm shadow-slate-100/70 transition hover:border-blue-100 hover:bg-blue-50/40"
         >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-blue-600 to-violet-600 text-[13px] font-black text-white shadow-[0_10px_22px_rgba(37,99,235,0.24)]">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-blue-600 to-violet-600 text-[14px] font-black text-white shadow-[0_10px_22px_rgba(37,99,235,0.24)]">
             {initials}
           </div>
 
           <div className="hidden min-w-[110px] text-left sm:block">
-            <p className="max-w-[130px] truncate text-[13px] font-bold leading-5 text-[#0f1f4d]">
+            <p className="max-w-[130px] truncate text-[14px] font-bold leading-5 text-[#0f1f4d]">
               {userName}
             </p>
-            <p className="max-w-[130px] truncate text-[11px] font-medium text-slate-500">
+            <p className="max-w-[130px] truncate text-[12px] font-medium text-slate-500">
               {companyName}
             </p>
           </div>
@@ -128,14 +128,14 @@ export function AppUserMenu({ userName, companyName }: AppUserMenuProps) {
       >
         <DropdownMenuLabel className="px-2 py-2">
           <p className="text-sm font-black text-[#0f1f4d]">{userName}</p>
-          <p className="mt-0.5 text-xs font-medium text-slate-500">
+          <p className="mt-0.5 text-[13px] font-medium text-slate-500">
             {currentCompany?.roleLabel ?? "Kullanıcı"} · {companyName}
           </p>
         </DropdownMenuLabel>
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuLabel className="px-2 text-[11px] font-black uppercase tracking-wide text-slate-400">
+        <DropdownMenuLabel className="px-2 text-[12px] font-black uppercase tracking-wide text-slate-400">
           Firmalarım
         </DropdownMenuLabel>
 
@@ -144,7 +144,7 @@ export function AppUserMenu({ userName, companyName }: AppUserMenuProps) {
             <Loader2 className="size-5 animate-spin text-blue-600" />
           </div>
         ) : companies.length === 0 ? (
-          <div className="px-2 py-3 text-xs font-medium text-slate-500">
+          <div className="px-2 py-3 text-[13px] font-medium text-slate-500">
             Bağlı firma bulunamadı.
           </div>
         ) : (
@@ -166,7 +166,7 @@ export function AppUserMenu({ userName, companyName }: AppUserMenuProps) {
                   <p className="truncate text-sm font-bold text-[#0f1f4d]">
                     {company.companyName}
                   </p>
-                  <p className="text-[11px] font-medium text-slate-500">
+                  <p className="text-[12px] font-medium text-slate-500">
                     {company.roleLabel}
                     {company.isOwner ? " · Sahip" : ""}
                   </p>

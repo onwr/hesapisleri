@@ -22,6 +22,15 @@ function read(relativePath: string) {
   return readFileSync(join(webRoot, relativePath), "utf8");
 }
 
+const mockSupplierRow = {
+  payableAmount: 0,
+  receivableAmount: 0,
+  netStatusLabel: "Hesap Kapalı",
+  totalPurchases: 0,
+  hasCustomerRole: false,
+  linkedCustomerId: null,
+} as const;
+
 describe("supplier-utils", () => {
   it("getSupplierDisplayName firma adını önceler", () => {
     assert.equal(
@@ -54,6 +63,7 @@ describe("supplier-utils", () => {
           city: null,
           district: null,
           currentBalance: 0,
+          ...mockSupplierRow,
           overdueAmount: 0,
           overdueCount: 0,
           productCount: 0,
@@ -86,6 +96,7 @@ describe("supplier-utils", () => {
         city: "Malatya",
         district: "Merkez",
         currentBalance: 100,
+        ...mockSupplierRow,
         overdueAmount: 0,
         overdueCount: 0,
         productCount: 0,
@@ -142,7 +153,8 @@ describe("supplier routes/ui", () => {
 
   it("yeni tedarikçi sayfası bölümlü form içerir", () => {
     const page = read("app/suppliers/new/page.tsx");
-    assert.match(page, /Temel Bilgiler/);
+    assert.match(page, /Açılış Cari Yönü/);
+    assert.match(page, /openingBalanceDirection/);
     assert.match(page, /Tedarikçiyi Kaydet/);
   });
 

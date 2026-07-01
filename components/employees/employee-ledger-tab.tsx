@@ -7,7 +7,6 @@ import { FinanceAccountSelect } from "@/components/cash-bank/finance-account-sel
 import { TEAM_CARD_CLASS } from "@/components/team/team-ui-tokens";
 import { buildEmployeePaymentTransactionHref } from "@/lib/employee-payment-finance-utils";
 import {
-  EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_LINK_LABEL,
   EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_MESSAGE,
   type FinanceAccountOption,
 } from "@/lib/finance-account-utils";
@@ -39,7 +38,7 @@ type AccountOption = FinanceAccountOption;
 const ACTION_LABELS: Record<LedgerActionType, string> = {
   SALARY_ACCRUAL: "Maaş Tahakkuk Et",
   SALARY_PAYMENT: "Ödeme Yap",
-  ADVANCE: "Avans Ver",
+  ADVANCE: "Çalışana Avans Ver",
   BONUS: "Prim Öde",
   DEDUCTION: "Kesinti Ekle",
   ADJUSTMENT: "Düzeltme Ekle",
@@ -106,7 +105,7 @@ export function EmployeeLedgerTab({
   async function submitMovement() {
     if (!modalType) return;
     if (needsAccount && !accountId.trim()) {
-      setError("Ödeme hesabı seçilmelidir.");
+      setError("Ödeme yapılacak kasa veya banka hesabını seçin.");
       return;
     }
 
@@ -192,8 +191,8 @@ export function EmployeeLedgerTab({
                   <th className="px-4 py-3">Tarih</th>
                   <th className="px-4 py-3">Hareket Tipi</th>
                   <th className="px-4 py-3">Açıklama</th>
-                  <th className="px-4 py-3">Borç</th>
-                  <th className="px-4 py-3">Alacak</th>
+                  <th className="px-4 py-3">Şirket Borcu</th>
+                  <th className="px-4 py-3">Mahsup</th>
                   <th className="px-4 py-3">Bakiye</th>
                   <th className="px-4 py-3">Hesap</th>
                 </tr>
@@ -290,8 +289,8 @@ export function EmployeeLedgerTab({
                   onChange={setAccountId}
                   disabled={financeAccountsLoading}
                   required
+                  showSetupLink={false}
                   emptyMessage={EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_MESSAGE}
-                  emptyLinkLabel={EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_LINK_LABEL}
                   className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold"
                 />
               ) : null}
@@ -306,8 +305,8 @@ export function EmployeeLedgerTab({
                     }
                     className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold"
                   >
-                    <option value="DEBIT">Borç artır (şirket borcu)</option>
-                    <option value="CREDIT">Alacak artır (borç azalt)</option>
+                    <option value="DEBIT">Şirket borcu artır</option>
+                    <option value="CREDIT">Mahsup / ödeme</option>
                   </select>
                 </label>
               ) : null}

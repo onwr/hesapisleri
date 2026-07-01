@@ -1,10 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, Wallet } from "lucide-react";
 import { CollectionAccountSelect } from "@/components/cash-bank/collection-account-select";
 import { useCollectionAccounts } from "@/hooks/use-collection-accounts";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 import { resolveDefaultCollectionAccountId } from "@/lib/collection-account-utils";
 import { formatMoney } from "@/lib/invoice-form-utils";
 
@@ -19,9 +19,8 @@ export function SaleCollectPayment({
   saleNo,
   remainingAmount,
 }: SaleCollectPaymentProps) {
-  const router = useRouter();
+  const { mutate, isSubmitting } = useTenantMutation({ refresh: false });
   const { accounts, loading: accountsLoading } = useCollectionAccounts();
-  const [isPending, startTransition] = useTransition();
   const [amount, setAmount] = useState(remainingAmount.toFixed(2));
   const [accountId, setAccountId] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -41,7 +40,7 @@ export function SaleCollectPayment({
     );
   }, [accounts, accountsLoading]);
 
-  function handleCollect() {
+  async function handleCollect() {
     setMessage(null);
     setError(null);
 
@@ -62,39 +61,26 @@ export function SaleCollectPayment({
       return;
     }
 
-    startTransition(async () => {
-      try {
-        const response = await fetch(`/api/sales/${saleId}/collect`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            amount: parsedAmount,
-            accountId,
-          }),
-        });
-
-        const result = (await response.json()) as {
-          success?: boolean;
-          message?: string;
-        };
-
-        if (!response.ok || !result.success) {
-          setError(result.message ?? "Tahsilat kaydedilemedi.");
-          return;
-        }
-
-        setMessage(result.message ?? "Tahsilat kaydedildi.");
-        router.refresh();
-      } catch {
-        setError("Tahsilat sırasında bir hata oluştu.");
-      }
+    const result = await mutate(`/api/sales/${saleId}/collect`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        amount: parsedAmount,
+        accountId,
+      }),
     });
+
+    if (result.ok) {
+      setMessage(result.message ?? "Tahsilat kaydedildi.");
+    } else if (result.error !== "duplicate_submit") {
+      setError(result.error);
+    }
   }
 
   const canSubmit =
-    !isPending &&
+    !isSubmitting &&
     !accountsLoading &&
     accounts.length > 0 &&
     Boolean(accountId);
@@ -141,7 +127,7 @@ export function SaleCollectPayment({
             loading={accountsLoading}
             value={accountId}
             onChange={setAccountId}
-            disabled={isPending || accountsLoading}
+            disabled={isSubmitting || accountsLoading}
             required
             className="h-11 w-full rounded-xl border border-orange-200 bg-white px-4 text-[13px] font-bold text-[#0f1f4d] outline-none focus:border-orange-300 focus:ring-4 focus:ring-orange-100"
           />
@@ -154,8 +140,8 @@ export function SaleCollectPayment({
             disabled={!canSubmit}
             className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-orange-600 px-5 text-[12px] font-black text-white disabled:opacity-60"
           >
-            {isPending ? <Loader2 size={16} className="animate-spin" /> : null}
-            {isPending ? "Kaydediliyor..." : "Tahsil Et"}
+            {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : null}
+            {isSubmitting ? "Kaydediliyor..." : "Tahsil Et"}
           </button>
         </div>
       </div>

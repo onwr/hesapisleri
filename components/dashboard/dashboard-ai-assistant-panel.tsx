@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -121,10 +121,10 @@ export function DashboardAiAssistantPanel({
         />
 
         <div className="min-w-0">
-          <h3 className="text-[15px] font-extrabold text-[#0f1f4d]">
+          <h3 className="text-[16px] font-extrabold text-[#0f1f4d]">
             Akıllı Asistan
           </h3>
-          <p className="text-[10px] font-semibold text-slate-400">
+          <p className="text-[11px] font-semibold text-slate-400">
             İşletme verilerinize göre öneriler
           </p>
         </div>
@@ -132,25 +132,25 @@ export function DashboardAiAssistantPanel({
 
       <div className="rounded-2xl bg-linear-to-br from-blue-50 via-slate-50 to-violet-50 p-4">
         {isLoading ? (
-          <div className="flex items-center gap-2 text-[12px] font-semibold text-slate-500">
+          <div className="flex items-center gap-2 text-[13px] font-semibold text-slate-500">
             <Loader2 size={14} className="animate-spin text-blue-600" />
             Yanıt hazırlanıyor...
           </div>
         ) : (
-          <p className="text-[12px] font-medium leading-5 text-[#24345f]">
+          <p className="text-[13px] font-medium leading-5 text-[#24345f]">
             {displayText}
           </p>
         )}
 
         {lastQuestion && assistantReply ? (
-          <p className="mt-2 text-[10px] font-semibold text-slate-400">
+          <p className="mt-2 text-[11px] font-semibold text-slate-400">
             Soru: {lastQuestion}
           </p>
         ) : null}
       </div>
 
       {error ? (
-        <p className="mt-2 text-[11px] font-semibold text-rose-600">{error}</p>
+        <p className="mt-2 text-[12px] font-semibold text-rose-600">{error}</p>
       ) : null}
 
       <div className="mt-3 flex flex-wrap gap-1.5">
@@ -160,7 +160,7 @@ export function DashboardAiAssistantPanel({
             type="button"
             onClick={() => void askAssistant(question)}
             disabled={isLoading}
-            className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold text-[#24345f] transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-wait disabled:opacity-60"
+            className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-[#24345f] transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 disabled:cursor-wait disabled:opacity-60"
           >
             {question}
           </button>
@@ -182,7 +182,7 @@ export function DashboardAiAssistantPanel({
           }}
           placeholder="Bir soru sorun..."
           disabled={isLoading}
-          className="h-9 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-[12px] font-medium text-[#24345f] outline-none transition focus:border-blue-200 focus:ring-2 focus:ring-blue-50 disabled:opacity-60"
+          className="h-9 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-medium text-[#24345f] outline-none transition focus:border-blue-200 focus:ring-2 focus:ring-blue-50 disabled:opacity-60"
         />
 
         <button
@@ -198,7 +198,7 @@ export function DashboardAiAssistantPanel({
       <div className="mt-3 flex items-center justify-between gap-2">
         <Link
           href={detailHref}
-          className="inline-flex h-8 items-center justify-center rounded-lg border border-blue-100 bg-white px-4 text-[11px] font-bold text-blue-600 shadow-sm transition hover:bg-blue-50"
+          className="inline-flex h-8 items-center justify-center rounded-lg border border-blue-100 bg-white px-4 text-[12px] font-bold text-blue-600 shadow-sm transition hover:bg-blue-50"
         >
           {assistantReply ? "Sohbete devam et" : "Detayları Gör"}
         </Link>
@@ -211,7 +211,7 @@ export function DashboardAiAssistantPanel({
               setLastQuestion(null);
               setError(null);
             }}
-            className="text-[10px] font-bold text-slate-500 transition hover:text-slate-700"
+            className="text-[11px] font-bold text-slate-500 transition hover:text-slate-700"
           >
             Önerilere dön
           </button>
@@ -236,7 +236,7 @@ export function DashboardAiAssistantPanel({
           ))}
         </div>
       ) : (
-        <p className="mt-3 flex items-center justify-center gap-1 text-[10px] font-semibold text-slate-400">
+        <p className="mt-3 flex items-center justify-center gap-1 text-[11px] font-semibold text-slate-400">
           <Sparkles size={11} />
           Enter ile hızlı soru gönderebilirsiniz
         </p>

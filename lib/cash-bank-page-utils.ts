@@ -98,7 +98,12 @@ export function parseSearchQuery(value?: string | null) {
 
 export { formatMoney as formatCashMoney } from "@/lib/format-utils";
 
-export function formatCashDate(date: Date) {
+export function formatCashDate(value: Date | string | number | null | undefined) {
+  if (value == null) return "-";
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+
   return new Intl.DateTimeFormat("tr-TR", {
     day: "2-digit",
     month: "2-digit",
@@ -135,7 +140,7 @@ export function getAccountStatusBadge(status: string) {
   }
 
   return {
-    label: "Pasif",
+    label: "Arşivde",
     className: "bg-slate-100 text-slate-600",
   };
 }

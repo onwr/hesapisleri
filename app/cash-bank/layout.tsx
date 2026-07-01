@@ -1,4 +1,7 @@
 import { ModuleGuardLayout } from "@/lib/guard-layout";
+import { privateRouteMetadata } from "@/lib/route-seo";
+
+export const metadata = privateRouteMetadata;
 
 export default function CashBankLayout({
   children,

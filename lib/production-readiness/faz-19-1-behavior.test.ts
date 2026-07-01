@@ -321,7 +321,7 @@ describe("Faz 19.1 — production security headers (next.config çıktısı)", (
   });
 
   it("HSTS yalnız production branch'inde tanımlı", () => {
-    const src = readSrc("next.config.ts");
+    const src = readSrc("lib/security-headers.ts");
     assert.ok(src.includes("Strict-Transport-Security"));
     assert.ok(src.includes("isProduction"));
   });

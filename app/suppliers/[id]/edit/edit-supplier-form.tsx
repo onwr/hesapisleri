@@ -18,6 +18,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { AppLoadingScreen } from "@/components/layout/app-loading-screen";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 import { SUPPLIER_CATEGORIES } from "@/lib/supplier-utils";
 
 type SupplierRecord = {
@@ -48,8 +49,11 @@ type SupplierRecord = {
 
 export function EditSupplierForm({ supplier }: { supplier: SupplierRecord }) {
   const router = useRouter();
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const { mutate: mutateSave, isSubmitting } = useTenantMutation({ refresh: false });
+  const { mutate: mutateDelete, isSubmitting: deleting } = useTenantMutation({
+    refresh: false,
+    onSuccess: () => router.push("/suppliers"),
+  });
   const [error, setError] = useState("");
 
   const [form, setForm] = useState({
@@ -84,7 +88,6 @@ export function EditSupplierForm({ supplier }: { supplier: SupplierRecord }) {
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setSaving(true);
     setError("");
 
     const name = form.name.trim();
@@ -92,62 +95,54 @@ export function EditSupplierForm({ supplier }: { supplier: SupplierRecord }) {
 
     if (!name && !companyName) {
       setError("Tedarikçi adı veya firma adı zorunludur.");
-      setSaving(false);
       return;
     }
 
-    try {
-      const paymentTermDays = form.paymentTermDays.trim();
-      const payload: Record<string, unknown> = {
-        name: name || undefined,
-        companyName: companyName || undefined,
-        code: form.code.trim() || undefined,
-        contactName: form.contactName.trim() || undefined,
-        phone: form.phone.trim() || undefined,
-        mobilePhone: form.mobilePhone.trim() || undefined,
-        email: form.email.trim() || undefined,
-        website: form.website.trim() || undefined,
-        taxOffice: form.taxOffice.trim() || undefined,
-        taxNumber: form.taxNumber.trim() || undefined,
-        iban: form.iban.trim() || undefined,
-        address: form.address.trim() || undefined,
-        city: form.city.trim() || undefined,
-        district: form.district.trim() || undefined,
-        country: form.country.trim() || "Türkiye",
-        category: form.category.trim() || undefined,
-        tags: form.tags
-          .split(",")
-          .map((tag) => tag.trim())
-          .filter(Boolean),
-        notes: form.notes.trim() || undefined,
-        currency: form.currency.trim() || "TRY",
-        paymentTermDays: paymentTermDays
-          ? Number.parseInt(paymentTermDays, 10)
-          : null,
-        isFavorite: form.isFavorite,
-        isActive: form.isActive,
-      };
+    const paymentTermDays = form.paymentTermDays.trim();
+    const payload: Record<string, unknown> = {
+      name: name || undefined,
+      companyName: companyName || undefined,
+      code: form.code.trim() || undefined,
+      contactName: form.contactName.trim() || undefined,
+      phone: form.phone.trim() || undefined,
+      mobilePhone: form.mobilePhone.trim() || undefined,
+      email: form.email.trim() || undefined,
+      website: form.website.trim() || undefined,
+      taxOffice: form.taxOffice.trim() || undefined,
+      taxNumber: form.taxNumber.trim() || undefined,
+      iban: form.iban.trim() || undefined,
+      address: form.address.trim() || undefined,
+      city: form.city.trim() || undefined,
+      district: form.district.trim() || undefined,
+      country: form.country.trim() || "Türkiye",
+      category: form.category.trim() || undefined,
+      tags: form.tags
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean),
+      notes: form.notes.trim() || undefined,
+      currency: form.currency.trim() || "TRY",
+      paymentTermDays: paymentTermDays
+        ? Number.parseInt(paymentTermDays, 10)
+        : null,
+      isFavorite: form.isFavorite,
+      isActive: form.isActive,
+    };
 
-      const res = await fetch(`/api/suppliers/${supplier.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+    const result = await mutateSave(`/api/suppliers/${supplier.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        setError(data.message || "Tedarikçi güncellenemedi.");
-        return;
+    if (!result.ok) {
+      if (result.error !== "duplicate_submit") {
+        setError(result.error || "Tedarikçi güncellenemedi.");
       }
-
-      router.push(`/suppliers/${supplier.id}`);
-      router.refresh();
-    } catch {
-      setError("Sunucuya bağlanırken bir hata oluştu.");
-    } finally {
-      setSaving(false);
+      return;
     }
+
+    router.push(`/suppliers/${supplier.id}`);
   }
 
   async function handleDelete() {
@@ -157,32 +152,20 @@ export function EditSupplierForm({ supplier }: { supplier: SupplierRecord }) {
 
     if (!confirmed) return;
 
-    setDeleting(true);
     setError("");
 
-    try {
-      const response = await fetch(`/api/suppliers/${supplier.id}`, {
-        method: "DELETE",
-      });
-      const data = await response.json();
+    const result = await mutateDelete(`/api/suppliers/${supplier.id}`, {
+      method: "DELETE",
+    });
 
-      if (!response.ok || !data.success) {
-        setError(data.message || "Tedarikçi silinemedi.");
-        return;
-      }
-
-      router.push("/suppliers");
-      router.refresh();
-    } catch {
-      setError("Tedarikçi silinirken bir hata oluştu.");
-    } finally {
-      setDeleting(false);
+    if (!result.ok && result.error !== "duplicate_submit") {
+      setError(result.error || "Tedarikçi silinemedi.");
     }
   }
 
   return (
     <main className="min-h-screen bg-[#f7f8ff] px-5 py-6">
-      {saving ? (
+      {isSubmitting ? (
         <AppLoadingScreen
           preset="customers"
           title="Tedarikçi güncelleniyor"
@@ -263,9 +246,9 @@ export function EditSupplierForm({ supplier }: { supplier: SupplierRecord }) {
           {error ? <div className="rounded-2xl bg-rose-50 px-4 py-3 text-[12px] font-bold text-rose-600">{error}</div> : null}
 
           <div className="flex flex-col gap-3 sm:flex-row">
-            <button type="submit" disabled={saving || deleting} className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-linear-to-br from-blue-600 to-violet-600 text-[13px] font-black text-white shadow-lg shadow-blue-100 disabled:opacity-60">
-              {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-              {saving ? "Kaydediliyor..." : "Kaydet"}
+            <button type="submit" disabled={isSubmitting || deleting} className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-linear-to-br from-blue-600 to-violet-600 text-[13px] font-black text-white shadow-lg shadow-blue-100 disabled:opacity-60">
+              {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+              {isSubmitting ? "Kaydediliyor..." : "Kaydet"}
             </button>
             <Link href={`/suppliers/${supplier.id}`} className="flex h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 text-[13px] font-black text-[#24345f]">
               Vazgeç
@@ -280,7 +263,7 @@ export function EditSupplierForm({ supplier }: { supplier: SupplierRecord }) {
             <button
               type="button"
               onClick={() => void handleDelete()}
-              disabled={saving || deleting}
+              disabled={isSubmitting || deleting}
               className="mt-3 inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-4 text-[12px] font-black text-rose-600 disabled:opacity-60"
             >
               {deleting ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}

@@ -1,5 +1,10 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/prisma";
+import {
+  buildSafeActivityMessage,
+  createActivityLog,
+  getDemoActivityCleanupWhere,
+} from "@/lib/activity-log-utils";
 import { roundCashMoney } from "@/lib/cash-bank-account-utils";
 import {
   createAccountSchema,
@@ -54,31 +59,19 @@ async function applyOpeningBalance(
 ) {
   const balance = roundCashMoney(input.openingBalance);
 
-  if (balance === 0) {
+  if (balance <= 0) {
     return 0;
   }
 
-  if (balance > 0) {
-    await tx.accountTransaction.create({
-      data: {
-        accountId: input.accountId,
-        type: "INCOME",
-        title: "Açılış bakiyesi",
-        amount: balance,
-        note: "Açılış bakiyesi",
-      },
-    });
-  } else {
-    await tx.accountTransaction.create({
-      data: {
-        accountId: input.accountId,
-        type: "EXPENSE",
-        title: "Açılış bakiyesi",
-        amount: Math.abs(balance),
-        note: "Açılış bakiyesi",
-      },
-    });
-  }
+  await tx.accountTransaction.create({
+    data: {
+      accountId: input.accountId,
+      type: "INCOME",
+      title: "Açılış bakiyesi",
+      amount: balance,
+      note: "Açılış bakiyesi",
+    },
+  });
 
   await tx.account.update({
     where: { id: input.accountId },
@@ -169,14 +162,14 @@ export async function createCompanyAccount(
     });
   });
 
-  await db.activityLog.create({
-    data: {
-      companyId,
-      userId,
-      action: "CREATE",
-      module: "cash-bank",
-      message: `Hesap oluşturuldu: ${account.name}`,
-    },
+  await createActivityLog({
+    companyId,
+    userId,
+    action: "CREATE",
+    module: "cash-bank",
+    message: buildSafeActivityMessage("ACCOUNT_CREATED", {
+      accountName: account.name,
+    }),
   });
 
   return {
@@ -236,7 +229,7 @@ export async function updateCompanyAccount(
     return {
       ok: false,
       status: 400,
-      message: "Varsayılan hesap pasif yapılamaz. Önce başka bir hesabı varsayılan yapın.",
+      message: "Varsayılan hesap arşivlenemez. Önce başka bir hesabı varsayılan yapın.",
     };
   }
 
@@ -276,14 +269,14 @@ export async function updateCompanyAccount(
     });
   });
 
-  await db.activityLog.create({
-    data: {
-      companyId,
-      userId,
-      action: "UPDATE",
-      module: "cash-bank",
-      message: `Hesap güncellendi: ${updated.name}`,
-    },
+  await createActivityLog({
+    companyId,
+    userId,
+    action: "UPDATE",
+    module: "cash-bank",
+    message: buildSafeActivityMessage("ACCOUNT_UPDATED", {
+      accountName: updated.name,
+    }),
   });
 
   return {
@@ -317,29 +310,34 @@ export async function deactivateCompanyAccount(
     return {
       ok: false,
       status: 400,
-      message: "Varsayılan hesap pasif yapılamaz. Önce başka bir hesabı varsayılan yapın.",
+      message: "Varsayılan hesap arşivlenemez. Önce başka bir hesabı varsayılan yapın.",
     };
   }
+
+  const balance = roundCashMoney(Number(account.balance));
 
   await db.account.update({
     where: { id: accountId },
     data: { status: "PASSIVE" },
   });
 
-  await db.activityLog.create({
-    data: {
-      companyId,
-      userId,
-      action: "UPDATE",
-      module: "cash-bank",
-      message: `Hesap pasife alındı: ${account.name}`,
-    },
+  await createActivityLog({
+    companyId,
+    userId,
+    action: "UPDATE",
+    module: "cash-bank",
+    message: buildSafeActivityMessage("ACCOUNT_ARCHIVED", {
+      accountName: account.name,
+    }),
   });
 
   return {
     ok: true,
-    message: "Hesap pasife alındı.",
-    data: { id: accountId },
+    message:
+      balance !== 0
+        ? `Hesap arşivlendi. Bakiye ${balance} TRY olarak kayıtlarda kalır.`
+        : "Hesap arşivlendi.",
+    data: { id: accountId, balanceWarning: balance !== 0 },
   };
 }
 
@@ -387,14 +385,14 @@ export async function setDefaultCompanyAccount(
     });
   });
 
-  await db.activityLog.create({
-    data: {
-      companyId,
-      userId,
-      action: "UPDATE",
-      module: "cash-bank",
-      message: `Varsayılan hesap değiştirildi: ${account.name}`,
-    },
+  await createActivityLog({
+    companyId,
+    userId,
+    action: "UPDATE",
+    module: "cash-bank",
+    message: buildSafeActivityMessage("DEFAULT_ACCOUNT_CHANGED", {
+      accountName: account.name,
+    }),
   });
 
   return {

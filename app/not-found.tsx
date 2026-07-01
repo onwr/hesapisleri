@@ -1,5 +1,14 @@
+import type { Metadata } from "next";
 import Link from "next/link";
-import { Home, SearchX } from "lucide-react";
+import { Home, LogIn, SearchX } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "Sayfa bulunamadı | Hesapişleri",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default function NotFoundPage() {
   return (
@@ -14,17 +23,26 @@ export default function NotFoundPage() {
         </h1>
 
         <p className="mt-3 text-sm leading-7 text-slate-500">
-          Açmaya çalıştığınız sayfa silinmiş, taşınmış veya bu sayfaya erişim
-          yetkiniz olmayabilir.
+          Aradığınız sayfa mevcut değil veya taşınmış olabilir. Adresi kontrol
+          edin veya ana sayfaya dönün.
         </p>
 
-        <Link
-          href="/dashboard"
-          className="mt-6 inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-linear-to-r from-blue-600 to-violet-600 px-6 text-sm font-black text-white shadow-lg shadow-blue-100"
-        >
-          <Home size={18} />
-          Panele Dön
-        </Link>
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+          <Link
+            href="/"
+            className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-linear-to-r from-blue-600 to-violet-600 px-6 text-sm font-black text-white shadow-lg shadow-blue-100"
+          >
+            <Home size={18} />
+            Ana Sayfa
+          </Link>
+          <Link
+            href="/login"
+            className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 text-sm font-black text-[#0f1f4d] transition hover:bg-slate-50"
+          >
+            <LogIn size={18} />
+            Giriş Yap
+          </Link>
+        </div>
       </div>
     </main>
   );

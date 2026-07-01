@@ -198,6 +198,129 @@ export async function createPlanPriceVersion(input: {
   return created;
 }
 
+export async function updatePlanPriceDraft(input: {
+  planId: string;
+  priceId: string;
+  userId: string;
+  data: PlanPriceInput & {
+    billingInterval?: MembershipPeriod;
+    currency?: string;
+  };
+}) {
+  const price = await db.membershipPlanPrice.findFirst({
+    where: { id: input.priceId, planId: input.planId },
+    include: { plan: true },
+  });
+
+  if (!price) {
+    throw new MembershipPlanPriceError("Fiyat kaydı bulunamadı.", 404);
+  }
+
+  if (price.status !== "DRAFT" && price.status !== "SCHEDULED") {
+    throw new MembershipPlanPriceError(
+      "Yalnızca taslak veya zamanlanmış fiyat düzenlenebilir. Aktif fiyat için yeni versiyon oluşturun.",
+      400
+    );
+  }
+
+  const plan = price.plan;
+  const billingInterval = input.data.billingInterval ?? price.billingInterval;
+  const currency = input.data.currency ?? price.currency;
+
+  const listPriceMinor =
+    input.data.listPriceMinor != null || input.data.listPrice != null
+      ? resolveMinor(input.data.listPriceMinor, input.data.listPrice)
+      : price.listPriceMinor;
+
+  let salePriceMinor =
+    input.data.salePriceMinor != null || input.data.salePrice != null
+      ? resolveMinor(input.data.salePriceMinor, input.data.salePrice)
+      : price.salePriceMinor;
+
+  if (input.data.discountPercent != null) {
+    salePriceMinor = salePriceFromPercent(listPriceMinor, input.data.discountPercent);
+  }
+
+  const vatRate = input.data.vatRate ?? price.vatRate;
+  const vatIncluded = input.data.vatIncluded ?? price.vatIncluded;
+  const totals = buildPriceTotals({
+    listPriceMinor,
+    salePriceMinor,
+    interval: billingInterval,
+    vatRate,
+    vatIncluded,
+    discountPercent: input.data.discountPercent,
+  });
+
+  const effectiveFrom = input.data.effectiveFrom
+    ? new Date(input.data.effectiveFrom)
+    : price.effectiveFrom;
+  const effectiveUntil =
+    input.data.effectiveUntil !== undefined
+      ? input.data.effectiveUntil
+        ? new Date(input.data.effectiveUntil)
+        : null
+      : price.effectiveUntil;
+
+  if (effectiveUntil && effectiveUntil <= effectiveFrom) {
+    throw new MembershipPlanPriceError(
+      "Bitiş tarihi başlangıçtan sonra olmalıdır.",
+      400
+    );
+  }
+
+  await validatePriceOverlap({
+    planId: input.planId,
+    billingInterval,
+    currency,
+    effectiveFrom,
+    effectiveUntil,
+    excludePriceId: price.id,
+  });
+
+  const updated = await db.$transaction(async (tx) => {
+    const row = await tx.membershipPlanPrice.update({
+      where: { id: price.id },
+      data: {
+        billingInterval,
+        currency,
+        listPriceMinor: totals.listPriceMinor,
+        salePriceMinor: totals.salePriceMinor,
+        monthlyEquivalentMinor: totals.monthlyEquivalentMinor,
+        vatRate,
+        vatIncluded,
+        effectiveFrom,
+        effectiveUntil,
+        isAutoRenewEnabled:
+          input.data.isAutoRenewEnabled ?? price.isAutoRenewEnabled,
+        isPublic: input.data.isPublic ?? price.isPublic,
+        priceChangePolicy:
+          input.data.priceChangePolicy ?? price.priceChangePolicy,
+        adminNote:
+          input.data.adminNote !== undefined
+            ? input.data.adminNote
+            : price.adminNote,
+      },
+    });
+
+    await tx.activityLog.create({
+      data: {
+        userId: input.userId,
+        action: "PRICE_VERSION_UPDATED",
+        module: "admin-plans",
+        message: `${plan.name} ${billingInterval} fiyat v${row.version} güncellendi.`,
+      },
+    });
+
+    return row;
+  });
+
+  const { invalidateAdminPlanCaches } = await import("@/lib/admin/plans/admin-plan-cache");
+  invalidateAdminPlanCaches(input.planId);
+
+  return updated;
+}
+
 export async function publishPlanPrice(input: {
   priceId: string;
   userId: string;

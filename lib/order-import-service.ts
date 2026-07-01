@@ -173,6 +173,12 @@ export async function importOrdersFromRows(input: {
   userId: string;
   rows: OrderImportRow[];
 }) {
+  const companySettings = await db.companySettings.findUnique({
+    where: { companyId: input.companyId },
+    select: { allowNegativeStockSales: true },
+  });
+  const allowNegativeStock = companySettings?.allowNegativeStockSales ?? false;
+
   const previewErrors: string[] = [];
   const grouped = new Map<string, OrderImportRow[]>();
 
@@ -242,7 +248,8 @@ export async function importOrdersFromRows(input: {
           tx,
           input.companyId,
           saleItems,
-          warehouseId
+          warehouseId,
+          allowNegativeStock
         );
 
         const subtotal = saleItems.reduce(
@@ -298,7 +305,8 @@ export async function importOrdersFromRows(input: {
           input.companyId,
           sale.saleNo,
           saleItems,
-          warehouseId
+          warehouseId,
+          allowNegativeStock
         );
 
         await tx.activityLog.create({

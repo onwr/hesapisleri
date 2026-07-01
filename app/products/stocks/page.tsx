@@ -23,6 +23,8 @@ import { endOfMonth, startOfMonth } from "@/lib/dashboard-metrics";
 import { StocksPageActions } from "@/components/stocks/stocks-page-actions";
 import { TransferCancelButton } from "@/components/stocks/transfer-cancel-button";
 import { getStockFormOptions, getStocksPageData } from "@/lib/stocks-page-data";
+import { getCachedStocksPageData } from "@/lib/tenant-cache/cached-tenant-page-data";
+import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
 import {
   getTransferStatusClass,
   getTransferStatusLabel,
@@ -87,7 +89,8 @@ const now = new Date();
   );
 
   const [pageData, formOptions] = await Promise.all([
-    getStocksPageData(company.id, {
+    getCachedStocksPageData({
+      companyId: company.id,
       tab: activeTab,
       page: currentPage,
       from,
@@ -127,6 +130,7 @@ const now = new Date();
 
   return (
     <AppShell>
+      <TenantPageSync />
       <StocksPageShell>
         <div className="space-y-5">
         <StocksPageActions

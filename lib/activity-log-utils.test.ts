@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   buildActivitySubtitle,
+  buildSafeActivityMessage,
   buildTransferActivityMessage,
   createActivityLog,
   extractAmountLabelFromMessage,
@@ -9,6 +10,7 @@ import {
   isDemoActivityMessage,
   isTransferActivityLog,
   mapActivityLogToDashboardItem,
+  normalizeAuditDisplayText,
   resolveTransferActivityTitle,
 } from "./activity-log-utils";
 import { getActivityTag } from "./dashboard-metrics";
@@ -170,5 +172,56 @@ describe("activity log utils", () => {
     const tag = getActivityTag("cash-bank", "UPDATE");
     assert.equal(tag.label, "Kasa/Banka");
     assert.notEqual(tag.label, "Tahsilat");
+  });
+
+  it("legacy XSS activity güvenli serialize edilir", () => {
+    const payload = '<img src=x onerror=alert(1)>';
+    const item = mapActivityLogToDashboardItem(
+      {
+        id: "log-xss",
+        action: "CREATE",
+        module: "expenses",
+        message: payload,
+        createdAt: new Date(),
+      },
+      () => "Az önce"
+    );
+
+    assert.ok(item);
+    assert.equal(item?.title, "[Geçersiz kayıt]");
+    assert.doesNotMatch(item?.title ?? "", /<|onerror|script/i);
+  });
+
+  it("normalizeAuditDisplayText kontrol karakterlerini temizler", () => {
+    assert.equal(normalizeAuditDisplayText("Kasa\u0007"), "Kasa");
+  });
+
+  it("buildSafeActivityMessage hesap adını normalize eder", () => {
+    const message = buildSafeActivityMessage("ACCOUNT_CREATED", {
+      accountName: "Merkez Kasa",
+    });
+    assert.equal(message, "Hesap oluşturuldu: Merkez Kasa");
+  });
+
+  it("createActivityLog XSS içeren mesajı reddeder", async () => {
+    await assert.rejects(
+      () =>
+        createActivityLog(
+          {
+            companyId: "company-1",
+            module: "cash-bank",
+            action: "CREATE",
+            message: '<script>alert(1)</script>',
+          },
+          {
+            activityLog: {
+              create: async () => {
+                throw new Error("should not be called");
+              },
+            },
+          } as never
+        ),
+      /invalid content/i
+    );
   });
 });

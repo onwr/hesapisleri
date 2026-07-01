@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
+import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 import {
   AlertTriangle,
   Boxes,
@@ -50,7 +50,6 @@ export function ProductCategoriesManager({
   categories,
   summary,
 }: ProductCategoriesManagerProps) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [modalMode, setModalMode] = useState<
@@ -118,7 +117,7 @@ export function ProductCategoriesManager({
         }
 
         closeModal();
-        router.refresh();
+        notifyTenantCacheSync();
       } catch {
         setError("Sunucuya bağlanırken bir hata oluştu.");
       }
@@ -147,7 +146,7 @@ export function ProductCategoriesManager({
         }
 
         closeModal();
-        router.refresh();
+        notifyTenantCacheSync();
       } catch {
         setError("Sunucuya bağlanırken bir hata oluştu.");
       }
@@ -172,7 +171,7 @@ export function ProductCategoriesManager({
         }
 
         closeModal();
-        router.refresh();
+        notifyTenantCacheSync();
       } catch {
         setError("Sunucuya bağlanırken bir hata oluştu.");
       }
@@ -198,7 +197,7 @@ export function ProductCategoriesManager({
           return;
         }
 
-        router.refresh();
+        notifyTenantCacheSync();
       } catch {
         setError("Sunucuya bağlanırken bir hata oluştu.");
       }

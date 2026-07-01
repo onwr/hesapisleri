@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
+import { verifyApiMutationOrigin } from "@/lib/api-origin-guard";
 import { requireApiModuleAccess } from "@/lib/module-access";
 import {
   applyAccountTransfer,
   transferSchema,
 } from "@/lib/cash-bank-account-service";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 export async function POST(req: Request) {
   try {
+    const originError = verifyApiMutationOrigin(req);
+    if (originError) return originError;
+
     const auth = await requireApiModuleAccess("cash-bank");
     if ("error" in auth) return auth.error;
 
@@ -45,15 +50,26 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "Transfer tamamlandı.",
-      data: {
-        fromBalance: result.data.fromBalance,
-        toBalance: result.data.toBalance,
-        negativeBalanceWarning: result.data.negativeBalanceWarning,
-      },
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(companyId, {
+        reason: "account-transfer",
+        entityIds: {
+          accountId: parsed.data.fromAccountId,
+        },
+        entity: {
+          fromBalance: result.data.fromBalance,
+          toBalance: result.data.toBalance,
+        },
+        message: "Transfer tamamlandı.",
+        balances: {
+          [parsed.data.fromAccountId]: result.data.fromBalance,
+          [parsed.data.toAccountId]: result.data.toBalance,
+        },
+        extra: {
+          negativeBalanceWarning: result.data.negativeBalanceWarning,
+        },
+      }),
+    );
   } catch (error) {
     console.error("CASH_BANK_TRANSFER_ERROR", error);
 

@@ -57,10 +57,10 @@ describe("settings utils", () => {
   });
 
   it("rol etiketleri Türkçe döner", () => {
-    assert.equal(getUserRoleLabel("OWNER"), "Sahip");
+    assert.equal(getUserRoleLabel("OWNER"), "Şirket Sahibi");
     assert.equal(getUserRoleLabel("ADMIN"), "Yönetici");
     assert.equal(getUserRoleLabel("ACCOUNTANT"), "Muhasebeci");
-    assert.equal(getUserRoleLabel("STAFF"), "Personel");
+    assert.equal(getUserRoleLabel("STAFF"), "Çalışan");
   });
 
   it("fatura tipi etiketleri doğru döner", () => {

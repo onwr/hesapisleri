@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { DashboardContent } from "@/components/dashboard/dashboard-content";
+import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
 import { db } from "@/lib/prisma";
 import { requireCompanyUser } from "@/lib/auth/auth-dal";
 import { formatRelativeTime } from "@/lib/dashboard-metrics";
@@ -76,6 +77,7 @@ export default async function DashboardPage() {
 
   return (
     <AppShell>
+      <TenantPageSync />
       <DashboardContent
         onboardingChecklist={
           onboardingChecklist.showChecklist

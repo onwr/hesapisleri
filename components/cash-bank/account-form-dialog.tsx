@@ -17,6 +17,7 @@ import {
   accountShowsBankFields,
   getAccountTypeLabel,
 } from "@/lib/account-utils";
+import { validateAccountCreateForm } from "@/lib/account-validation";
 
 export type AccountFormValues = {
   name: string;
@@ -101,12 +102,14 @@ export function AccountFormDialog({
 }: AccountFormDialogProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [form, setForm] = useState<AccountFormValues>(emptyForm);
 
   useEffect(() => {
     if (!open) return;
 
     setError("");
+    setFieldErrors({});
     setForm(mode === "edit" && account ? fromAccount(account) : emptyForm());
   }, [open, mode, account]);
 
@@ -122,6 +125,12 @@ export function AccountFormDialog({
     value: AccountFormValues[K]
   ) {
     setForm((current) => ({ ...current, [key]: value }));
+    setFieldErrors((current) => {
+      if (!current[key]) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -129,60 +138,113 @@ export function AccountFormDialog({
 
     if (!canManage) return;
 
-    const name = form.name.trim();
-    if (!name) {
-      setError("Hesap adı zorunludur.");
+    setSaving(true);
+    setError("");
+    setFieldErrors({});
+
+    if (mode === "create") {
+      const validated = validateAccountCreateForm({
+        name: form.name,
+        type: form.type,
+        bankName: form.bankName,
+        openingBalance: form.openingBalance,
+        currency: form.currency,
+      });
+
+      if (!validated.ok) {
+        setFieldErrors(validated.errors);
+        setSaving(false);
+        return;
+      }
+
+      try {
+        const response = await fetch(ACCOUNT_API, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...validated.payload,
+            branchName: form.branchName.trim() || undefined,
+            iban: form.iban.trim() || undefined,
+            accountNumber: form.accountNumber.trim() || undefined,
+            isDefault: form.isDefault,
+            description: form.description.trim() || undefined,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          if (data.errors && typeof data.errors === "object") {
+            const mapped: Record<string, string> = {};
+            for (const [key, value] of Object.entries(data.errors)) {
+              const msg = Array.isArray(value) ? value[0] : String(value);
+              if (msg) mapped[key] = msg;
+            }
+            setFieldErrors(mapped);
+          }
+          setError(data.message || "Hesap kaydedilemedi.");
+          return;
+        }
+
+        onSuccess(data.message || "Hesap oluşturuldu.");
+        onClose();
+      } catch {
+        setError("Sunucuya bağlanırken bir hata oluştu.");
+      } finally {
+        setSaving(false);
+      }
+
       return;
     }
 
-    setSaving(true);
-    setError("");
+    const validated = validateAccountCreateForm({
+      name: form.name,
+      type: form.type,
+      bankName: form.bankName,
+      openingBalance: "0",
+      currency: form.currency,
+    });
+
+    if (!validated.ok) {
+      setFieldErrors(validated.errors);
+      setSaving(false);
+      return;
+    }
 
     try {
-      const payload =
-        mode === "create"
-          ? {
-              name,
-              type: form.type,
-              bankName: form.bankName.trim() || undefined,
-              branchName: form.branchName.trim() || undefined,
-              iban: form.iban.trim() || undefined,
-              accountNumber: form.accountNumber.trim() || undefined,
-              currency: form.currency.trim() || "TRY",
-              openingBalance: Number(form.openingBalance) || 0,
-              isDefault: form.isDefault,
-              description: form.description.trim() || undefined,
-            }
-          : {
-              name,
-              type: form.type,
-              bankName: form.bankName.trim() || null,
-              branchName: form.branchName.trim() || null,
-              iban: form.iban.trim() || null,
-              accountNumber: form.accountNumber.trim() || null,
-              currency: form.currency.trim() || "TRY",
-              isDefault: form.isDefault,
-              description: form.description.trim() || null,
-              status: form.status,
-            };
-
-      const response = await fetch(
-        mode === "create" ? ACCOUNT_API : `${ACCOUNT_API}/${account?.id}`,
-        {
-          method: mode === "create" ? "POST" : "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }
-      );
+      const response = await fetch(`${ACCOUNT_API}/${account?.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: validated.payload.name,
+          type: form.type,
+          bankName: form.bankName.trim() || null,
+          branchName: form.branchName.trim() || null,
+          iban: form.iban.trim() || null,
+          accountNumber: form.accountNumber.trim() || null,
+          currency: form.currency.trim() || "TRY",
+          isDefault: form.isDefault,
+          description: form.description.trim() || null,
+          status: form.status,
+        }),
+      });
 
       const data = await response.json();
 
       if (!response.ok || !data.success) {
+        if (data.errors && typeof data.errors === "object") {
+          const mapped: Record<string, string> = {};
+          for (const [key, value] of Object.entries(data.errors)) {
+            const msg = Array.isArray(value) ? value[0] : String(value);
+            if (msg) mapped[key] = msg;
+          }
+          setFieldErrors(mapped);
+        }
         setError(data.message || "Hesap kaydedilemedi.");
         return;
       }
 
-      onSuccess(data.message || (mode === "create" ? "Hesap oluşturuldu." : "Hesap güncellendi."));
+      onSuccess(data.message || "Hesap güncellendi.");
       onClose();
     } catch {
       setError("Sunucuya bağlanırken bir hata oluştu.");
@@ -203,14 +265,16 @@ export function AccountFormDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Field label="Hesap adı" required>
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
+          <Field label="Hesap adı" required error={fieldErrors.name}>
             <input
               value={form.name}
               onChange={(event) => updateField("name", event.target.value)}
               className={PRODUCT_INPUT_CLASS}
               placeholder="Örn: Merkez Kasa"
               disabled={!canManage}
+              aria-invalid={!!fieldErrors.name}
+              aria-describedby={fieldErrors.name ? "account-name-error" : undefined}
             />
           </Field>
 
@@ -235,6 +299,7 @@ export function AccountFormDialog({
             <Field
               label="Banka adı"
               required={form.type === "BANK"}
+              error={fieldErrors.bankName}
             >
               <input
                 value={form.bankName}
@@ -242,6 +307,7 @@ export function AccountFormDialog({
                 className={PRODUCT_INPUT_CLASS}
                 placeholder="Örn: Garanti BBVA"
                 disabled={!canManage}
+                aria-invalid={!!fieldErrors.bankName}
               />
             </Field>
           )}
@@ -291,16 +357,17 @@ export function AccountFormDialog({
             </Field>
 
             {mode === "create" ? (
-              <Field label="Açılış bakiyesi">
+              <Field label="Açılış bakiyesi" error={fieldErrors.openingBalance}>
                 <input
-                  type="number"
-                  step="0.01"
+                  inputMode="decimal"
                   value={form.openingBalance}
                   onChange={(event) =>
                     updateField("openingBalance", event.target.value)
                   }
                   className={PRODUCT_INPUT_CLASS}
                   disabled={!canManage}
+                  placeholder="0"
+                  aria-invalid={!!fieldErrors.openingBalance}
                 />
               </Field>
             ) : (
@@ -317,7 +384,7 @@ export function AccountFormDialog({
                   disabled={!canManage}
                 >
                   <option value="ACTIVE">Aktif</option>
-                  <option value="PASSIVE">Pasif</option>
+                  <option value="PASSIVE">Arşivde</option>
                 </select>
               </Field>
             )}
@@ -374,10 +441,12 @@ export function AccountFormDialog({
 function Field({
   label,
   required = false,
+  error,
   children,
 }: {
   label: string;
   required?: boolean;
+  error?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -387,6 +456,11 @@ function Field({
         {required ? <span className="ml-1 text-rose-500">*</span> : null}
       </label>
       {children}
+      {error ? (
+        <p className="mt-1 text-xs font-semibold text-rose-600" role="alert">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

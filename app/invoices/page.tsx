@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { guardPageModule } from "@/lib/module-access";
+import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
 
 import { InvoicesRowActions } from "@/components/invoices/invoices-row-actions";
 import {
@@ -111,6 +112,7 @@ const now = new Date();
 
   return (
     <AppShell>
+      <TenantPageSync />
       <div className="space-y-5">
         <div className="flex justify-end">
           <AiPageTriggerButton moduleKey="invoices" />

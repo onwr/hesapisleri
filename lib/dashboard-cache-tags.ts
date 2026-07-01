@@ -1,3 +1,1 @@
-export function getDashboardCacheTag(companyId: string) {
-  return `dashboard:${companyId}`;
-}
+export { getDashboardCacheTag } from "@/lib/tenant-cache/tenant-cache-tags";

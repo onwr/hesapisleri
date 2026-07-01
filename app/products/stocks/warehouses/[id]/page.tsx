@@ -6,6 +6,7 @@ import { WarehouseDetailClient } from "@/components/stocks/warehouse-detail-clie
 import { canManageWarehouses } from "@/lib/permission-utils";
 import { getStockFormOptions } from "@/lib/stocks-page-data";
 import { getWarehouseDetailData } from "@/lib/warehouse-page-data";
+import { getCachedWarehouseDetailData } from "@/lib/tenant-cache/cached-tenant-page-data";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -19,7 +20,7 @@ export default async function WarehouseDetailPage({ params }: Props) {
   const canManage = canManageWarehouses(effectiveRole, membership?.isOwner ?? false);
 
   const [data, transferOptions] = await Promise.all([
-    getWarehouseDetailData(company.id, id),
+    getCachedWarehouseDetailData({ companyId: company.id, warehouseId: id }),
     canManage ? getStockFormOptions(company.id) : Promise.resolve(null),
   ]);
 

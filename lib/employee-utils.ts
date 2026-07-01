@@ -182,7 +182,7 @@ export const PAYMENT_TYPE_HINTS: Record<
   string
 > = {
   SALARY: "Dönemsel maaş ödemesi",
-  ADVANCE: "Maaştan mahsup edilebilir avans",
+  ADVANCE: "Maaştan mahsup edilecek avans (Çalışana Avans)",
   BONUS: "Performans veya ek ödeme primi",
   DEDUCTION: "Maaştan düşülecek kesinti",
   EXPENSE_REIMBURSEMENT: "Personel masraf iadesi",
@@ -219,6 +219,10 @@ export function calculateEmployeeBalance(
 
     if (payment.status === "CANCELLED") continue;
 
+    if (payment.type === "ADVANCE") {
+      continue;
+    }
+
     if (payment.direction === "DEDUCTED" || payment.type === "DEDUCTION") {
       totalDeductions += amount;
       continue;
@@ -251,7 +255,7 @@ const PAYMENT_TYPE_LABELS: Record<
   string
 > = {
   SALARY: "Maaş",
-  ADVANCE: "Avans",
+  ADVANCE: "Çalışana Avans",
   BONUS: "Prim",
   DEDUCTION: "Kesinti",
   EXPENSE_REIMBURSEMENT: "Masraf iadesi",

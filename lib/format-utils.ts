@@ -27,6 +27,50 @@ export function formatNumber(value: number | string | null | undefined): string 
   }).format(numericValue);
 }
 
+export function toIsoString(
+  value: Date | string | number | null | undefined
+): string | null {
+  if (value == null) return null;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const parsed = new Date(trimmed);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toISOString();
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
+export function coerceValidDate(
+  value: Date | string | number | null | undefined
+): Date | null {
+  const iso = toIsoString(value);
+  if (!iso) return null;
+  return new Date(iso);
+}
+
+export function getTimeMs(
+  value: Date | string | number | null | undefined
+): number | null {
+  const date = coerceValidDate(value);
+  return date ? date.getTime() : null;
+}
+
+export function formatDisplayDate(
+  value: Date | string | number | null | undefined,
+  fallback = "—"
+): string {
+  const date = coerceValidDate(value);
+  if (!date) return fallback;
+
+  return new Intl.DateTimeFormat("tr-TR", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
 export function formatPercent(value: number | string | null | undefined): string {
   const numericValue = Number(value ?? 0);
 

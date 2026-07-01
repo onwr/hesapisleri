@@ -85,9 +85,9 @@ describe("dashboard page architecture", () => {
     assert.doesNotMatch(source, /Decimal/);
   });
 
-  it("invalidation helper revalidateTag kullanır", () => {
+  it("invalidation helper tenant cache delegasyonu", () => {
     const source = read("lib/dashboard-cache-invalidation.ts");
-    assert.match(source, /revalidateTag/);
+    assert.match(source, /invalidateTenantCachesByLegacyReason/);
     assert.match(source, /server-only/);
   });
 });

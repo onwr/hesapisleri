@@ -13,6 +13,8 @@ import {
   getProductsPageData,
   parseProductsListOptions,
 } from "@/lib/products-page-data";
+import { getCachedProductsPageData } from "@/lib/tenant-cache/cached-tenant-page-data";
+import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
 
 type ProductsPageProps = {
   searchParams: Promise<{
@@ -55,7 +57,10 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
     totalRecords,
     totalPages,
     currentPage: page,
-  } = await getProductsPageData(company.id, listOptions);
+  } = await getCachedProductsPageData({
+    companyId: company.id,
+    ...listOptions,
+  });
 
   const exportHref = buildProductsExportQuery(listOptions);
 
@@ -69,6 +74,7 @@ export default async function ProductsPage({ searchParams }: ProductsPageProps) 
 
   return (
     <AppShell>
+      <TenantPageSync />
       <ProductsShell stats={stats} canSyncStock={canSyncStock} permissions={permissions}>
         <ProductsFilters
           activeTab={listOptions.tab}

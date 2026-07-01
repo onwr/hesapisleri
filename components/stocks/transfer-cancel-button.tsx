@@ -1,8 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Loader2, XCircle } from "lucide-react";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 
 type TransferCancelButtonProps = {
   transferId: string;
@@ -13,8 +13,7 @@ export function TransferCancelButton({
   transferId,
   transferNo,
 }: TransferCancelButtonProps) {
-  const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  const { mutate, isSubmitting } = useTenantMutation({ refresh: false });
   const [error, setError] = useState("");
 
   async function handleCancel() {
@@ -26,26 +25,15 @@ export function TransferCancelButton({
       return;
     }
 
-    setLoading(true);
     setError("");
 
-    try {
-      const response = await fetch(
-        `/api/stocks/transfers/${transferId}/cancel`,
-        { method: "POST" }
-      );
-      const data = await response.json();
+    const result = await mutate(
+      `/api/stocks/transfers/${transferId}/cancel`,
+      { method: "POST" }
+    );
 
-      if (!response.ok || !data.success) {
-        setError(data.message || "İptal edilemedi.");
-        return;
-      }
-
-      router.refresh();
-    } catch {
-      setError("Sunucu hatası.");
-    } finally {
-      setLoading(false);
+    if (!result.ok && result.error !== "duplicate_submit") {
+      setError(result.error || "İptal edilemedi.");
     }
   }
 
@@ -54,10 +42,10 @@ export function TransferCancelButton({
       <button
         type="button"
         onClick={handleCancel}
-        disabled={loading}
+        disabled={isSubmitting}
         className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[11px] font-black text-rose-600 hover:bg-rose-100 disabled:opacity-60"
       >
-        {loading ? (
+        {isSubmitting ? (
           <Loader2 className="animate-spin" size={12} />
         ) : (
           <XCircle size={12} />

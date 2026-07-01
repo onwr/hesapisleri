@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { roundCashMoney } from "@/lib/cash-bank-account-utils";
+import { resolveSupplierBalanceView } from "@/lib/supplier-balance-utils";
 
 export const SUPPLIER_CATEGORIES = [
   "Hammadde",
@@ -63,6 +64,12 @@ export type SupplierRow = {
   city: string | null;
   district: string | null;
   currentBalance: number;
+  payableAmount: number;
+  receivableAmount: number;
+  netStatusLabel: string;
+  totalPurchases: number;
+  hasCustomerRole: boolean;
+  linkedCustomerId: string | null;
   overdueAmount: number;
   overdueCount: number;
   productCount: number;
@@ -94,7 +101,13 @@ export const supplierFormSchema = z
     category: z.string().optional(),
     tags: z.array(z.string()).optional(),
     notes: z.string().optional(),
-    openingBalance: z.number().optional(),
+    openingBalanceAmount: z.number().nonnegative().optional(),
+    openingBalance: z.number().nonnegative().optional(),
+    openingBalanceDirection: z.enum(["PAYABLE", "RECEIVABLE", "SETTLED"]).optional(),
+    openingBalanceDate: z.string().optional(),
+    openingBalanceNote: z.string().optional(),
+    openingBalanceDescription: z.string().optional(),
+    clientRequestId: z.string().uuid().optional(),
     currency: z.string().optional(),
     paymentTermDays: z.number().int().positive().optional().nullable(),
     isFavorite: z.boolean().optional(),
@@ -218,6 +231,42 @@ export function parseSupplierSort(value?: string | null): SupplierSortOption {
   return "recent";
 }
 
+export type SupplierListBalanceDirection = "all" | "PAYABLE" | "RECEIVABLE" | "SETTLED";
+
+export function parseSupplierListBalanceDirection(
+  value?: string | null
+): SupplierListBalanceDirection {
+  if (value === "PAYABLE" || value === "RECEIVABLE" || value === "SETTLED") {
+    return value;
+  }
+  return "all";
+}
+
+export function parseSupplierCustomerRoleFilter(value?: string | null) {
+  if (value === "with" || value === "without") return value;
+  return "all" as const;
+}
+
+export function parseSupplierLastActivityFrom(value?: string | null) {
+  if (!value?.trim()) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function resolveOpeningBalanceAmountInput(form: {
+  openingBalanceAmount?: number;
+  openingBalance?: number;
+}) {
+  return roundCashMoney(form.openingBalanceAmount ?? form.openingBalance ?? 0);
+}
+
+export function resolveOpeningBalanceDescription(form: {
+  openingBalanceDescription?: string;
+  openingBalanceNote?: string;
+}) {
+  return form.openingBalanceDescription?.trim() || form.openingBalanceNote?.trim() || null;
+}
+
 export function parseSupplierBalanceStatus(
   value?: string | null
 ): SupplierBalanceStatus {
@@ -273,10 +322,14 @@ export function buildSupplierCsvRow(row: SupplierRow & { notes?: string | null; 
 }
 
 export function escapeCsvCell(value: string) {
-  if (/[",\n]/.test(value)) {
-    return `"${value.replace(/"/g, '""')}"`;
+  const trimmed = value.trimStart();
+  const needsFormulaGuard = /^[=+\-@]/.test(trimmed);
+  const guarded = needsFormulaGuard ? `'${value}` : value;
+
+  if (/[",\n\r]/.test(guarded)) {
+    return `"${guarded.replace(/"/g, '""')}"`;
   }
-  return value;
+  return guarded;
 }
 
 export function buildSuppliersCsv(rows: Array<ReturnType<typeof buildSupplierCsvRow>>) {

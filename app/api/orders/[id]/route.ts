@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireApiModuleAccess } from "@/lib/module-access";
 import { updateOrderById, updateOrderSchema } from "@/lib/order-service";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -40,11 +41,15 @@ export async function PATCH(req: Request, { params }: Props) {
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "Sipariş güncellendi.",
-      data: result.data,
-    });
+    const reason = parsed.data.orderStatus === "CANCELLED" ? "order-cancel" : "order-status-update";
+    return NextResponse.json(
+      buildTenantMutationSuccess(auth.companyId, {
+        reason,
+        entity: { id, ...(result.data as Record<string, unknown>) },
+        message: "Sipariş güncellendi.",
+        entityIds: { orderId: id },
+      }),
+    );
   } catch {
     return NextResponse.json(
       { success: false, message: "Sipariş güncellenemedi." },

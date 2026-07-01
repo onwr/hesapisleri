@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import {
   ArrowLeft,
   ArrowDownLeft,
@@ -25,10 +25,14 @@ import { AppShell } from "@/components/layout/app-shell";
 import { guardPageModule } from "@/lib/module-access";
 
 import { CustomerCollectPanel } from "@/components/customers/customer-collect-panel";
+import { CustomerFinanceActions } from "@/components/customers/customer-finance-actions";
 import { CustomerLedgerTable } from "@/components/customers/customer-ledger-table";
 import { getCollectionAccountOptions } from "@/lib/account-read-service";
-import { db } from "@/lib/prisma";
-import { getCustomerDetailLedgerData } from "@/lib/customer-detail-data";
+import {
+  getCachedCustomerDetailData,
+  getCachedCustomerLedgerData,
+} from "@/lib/tenant-cache/cached-tenant-page-data";
+import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
 import { getCustomerGroupColorMap } from "@/lib/customer-group-service";
 import { normalizeGroupName } from "@/lib/customer-group-utils";
 import {
@@ -39,6 +43,7 @@ import {
   getInitials,
 } from "@/lib/customers-page-utils";
 import { hasCustomerTaxCertificate } from "@/lib/customer-form-utils";
+import { formatDisplayDate } from "@/lib/format-utils";
 
 type Props = {
   params: Promise<{
@@ -49,16 +54,6 @@ type Props = {
     updated?: string;
   }>;
 };
-
-function formatDate(date: Date) {
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
-}
 
 function InfoCard({
   label,
@@ -114,11 +109,9 @@ export default async function CustomerDetailPage({ params,
 const { id } = await params;
   const query = await searchParams;
 
-  const customer = await db.customer.findFirst({
-    where: {
-      id,
-      companyId: company.id,
-    },
+  const customer = await getCachedCustomerDetailData({
+    companyId: company.id,
+    customerId: id,
   });
 
   if (!customer) notFound();
@@ -128,7 +121,10 @@ const { id } = await params;
   const customerGroupColor = groupColorMap[customerGroupName] ?? null;
 
   const { summary, ledger, openSales, recentSales, recentInvoices } =
-    await getCustomerDetailLedgerData(company.id, customer.id);
+    await getCachedCustomerLedgerData({
+      companyId: company.id,
+      customerId: customer.id,
+    });
 
   const collectionAccounts = await getCollectionAccountOptions(company.id);
 
@@ -138,6 +134,7 @@ const { id } = await params;
 
   return (
     <AppShell>
+      <TenantPageSync />
       <div className="space-y-5">
         {showCreatedBanner ? (
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-[13px] font-bold text-emerald-700">
@@ -198,7 +195,7 @@ const { id } = await params;
                   </h1>
 
                   <p className="mt-1 text-[13px] font-medium text-slate-500">
-                    Kayıt tarihi: {formatDate(customer.createdAt)}
+                    Kayıt tarihi: {formatDisplayDate(customer.createdAt)}
                   </p>
                 </div>
               </div>
@@ -376,7 +373,7 @@ const { id } = await params;
                               {sale.saleNo}
                             </p>
                             <p className="text-[11px] font-medium text-slate-500">
-                              {formatDate(sale.createdAt)}
+                              {formatDisplayDate(sale.createdAt)}
                             </p>
                           </div>
                           <p className="text-[12px] font-black text-[#0f1f4d]">
@@ -410,7 +407,7 @@ const { id } = await params;
                               {invoice.invoiceNo}
                             </p>
                             <p className="text-[11px] font-medium text-slate-500">
-                              {formatDate(invoice.createdAt)}
+                              {formatDisplayDate(invoice.createdAt)}
                             </p>
                           </div>
                           <p className="text-[12px] font-black text-[#0f1f4d]">
@@ -479,12 +476,29 @@ const { id } = await params;
                   label="Son Tahsilat"
                   value={
                     summary.lastCollectionDate
-                      ? formatDate(summary.lastCollectionDate)
+                      ? formatDisplayDate(summary.lastCollectionDate)
                       : "Henüz yok"
                   }
                   icon={<CalendarClock size={15} />}
                 />
               </div>
+            </section>
+
+            <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Wallet size={18} className="text-blue-500" />
+                  <h3 className="text-[15px] font-black text-[#0f1f4d]">
+                    Cari Finans İşlemleri
+                  </h3>
+                </div>
+              </div>
+
+              <CustomerFinanceActions
+                customerId={customer.id}
+                customerName={customer.name}
+                currentBalance={summary.currentBalance}
+              />
             </section>
 
             <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">

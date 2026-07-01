@@ -61,7 +61,7 @@ describe("employee payment finance utils", () => {
   it("validateEmployeePaymentMarkPaidForm requires account", () => {
     assert.equal(
       validateEmployeePaymentMarkPaidForm({ relatedAccountId: "" }),
-      "Ödeme hesabı seçilmelidir."
+      "Ödeme yapılacak kasa veya banka hesabını seçin."
     );
     assert.equal(
       validateEmployeePaymentMarkPaidForm({ relatedAccountId: "acc-1" }),

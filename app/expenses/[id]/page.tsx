@@ -17,7 +17,9 @@ import { AppShell } from "@/components/layout/app-shell";
 import { guardPageModule } from "@/lib/module-access";
 
 import { getExpenseDisplayPaymentBadge } from "@/lib/expense-utils";
-import { getExpenseDetail, getExpenseFormAccounts } from "@/lib/expense-service";
+import { getExpenseFormAccounts } from "@/lib/expense-service";
+import { getCachedExpenseDetailData } from "@/lib/tenant-cache/cached-tenant-page-data";
+import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
 import {
   formatExpenseDate,
   formatExpenseMoney,
@@ -56,7 +58,10 @@ export default async function ExpenseDetailPage({ params }: Props) {
   const company = session.company;
 const { id } = await params;
 
-  const expense = await getExpenseDetail(company.id, id);
+  const expense = await getCachedExpenseDetailData({
+    companyId: company.id,
+    expenseId: id,
+  });
   if (!expense) notFound();
 
   const canPay =
@@ -69,6 +74,7 @@ const { id } = await params;
 
   return (
     <AppShell>
+      <TenantPageSync />
       <div className="space-y-5">
         <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">

@@ -50,7 +50,8 @@ export async function validateSaleItemsStock(
   tx: TransactionClient,
   companyId: string,
   items: SaleItemInput[],
-  saleWarehouseId?: string | null
+  saleWarehouseId?: string | null,
+  allowNegativeStock = false
 ): Promise<StockWarningItem[]> {
   const quantitiesByProduct = aggregateQuantitiesByProduct(items);
   const warnings: StockWarningItem[] = [];
@@ -101,7 +102,7 @@ export async function validateSaleItemsStock(
           availableQty: quantity,
           requestedQty,
         }),
-        productId,
+        productId: allowNegativeStock ? undefined : productId,
       });
     }
   }
@@ -120,7 +121,8 @@ export async function applySaleStockDecrement(
   companyId: string,
   saleNo: string,
   items: StockItemInput[],
-  saleWarehouseId?: string | null
+  saleWarehouseId?: string | null,
+  allowNegativeStock = false
 ) {
   const stockItems = items.filter((item) => item.productId);
 
@@ -168,25 +170,32 @@ export async function applySaleStockDecrement(
 
     const product = products.find((entry) => entry.id === item.productId);
 
-    const claim = await tx.warehouseStock.updateMany({
-      where: {
-        id: warehouseStock.id,
-        companyId,
-        quantity: { gte: item.quantity },
-      },
-      data: {
-        quantity: { decrement: item.quantity },
-      },
-    });
-
-    if (claim.count === 0) {
-      const named = await tx.product.findFirst({
-        where: { id: item.productId, companyId },
-        select: { name: true },
+    if (allowNegativeStock) {
+      await tx.warehouseStock.update({
+        where: { id: warehouseStock.id },
+        data: { quantity: { decrement: item.quantity } },
       });
-      throw new SaleStockValidationError(
-        `${named?.name ?? product?.name ?? "Ürün"} için yeterli stok bulunmuyor.`
-      );
+    } else {
+      const claim = await tx.warehouseStock.updateMany({
+        where: {
+          id: warehouseStock.id,
+          companyId,
+          quantity: { gte: item.quantity },
+        },
+        data: {
+          quantity: { decrement: item.quantity },
+        },
+      });
+
+      if (claim.count === 0) {
+        const named = await tx.product.findFirst({
+          where: { id: item.productId, companyId },
+          select: { name: true },
+        });
+        throw new SaleStockValidationError(
+          `${named?.name ?? product?.name ?? "Ürün"} için yeterli stok bulunmuyor.`
+        );
+      }
     }
 
     await tx.stockMovement.create({

@@ -5,6 +5,7 @@ import {
   createCustomerGroup,
   getCustomerGroupsWithStats,
 } from "@/lib/customer-group-service";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 const groupColorSchema = z.enum([
   "slate",
   "blue",
@@ -70,11 +71,13 @@ export async function POST(req: Request) {
 
     const group = await createCustomerGroup(companyId, parsed.data);
 
-    return NextResponse.json({
-      success: true,
-      message: "Grup başarıyla oluşturuldu.",
-      data: group,
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(companyId, {
+        reason: "customer-group-change",
+        entity: group as Record<string, unknown>,
+        message: "Grup başarıyla oluşturuldu.",
+      }),
+    );
   } catch (error) {
     console.error("CREATE_CUSTOMER_GROUP_ERROR", error);
 

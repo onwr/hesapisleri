@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireApiModuleAccess } from "@/lib/module-access";
 import { db } from "@/lib/prisma";
 import { isQuoteSaleStatus } from "@/lib/sale-query-utils";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 type Props = {
   params: Promise<{
@@ -67,10 +68,14 @@ export async function POST(_req: Request, { params }: Props) {
       });
     });
 
-    return NextResponse.json({
-      success: true,
-      message: "Teklif iptal edildi.",
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(companyId, {
+        reason: "quote-cancel",
+        entity: { id },
+        message: "Teklif iptal edildi.",
+        entityIds: { saleId: id },
+      }),
+    );
   } catch (error) {
     console.error("CANCEL_QUOTE_ERROR", error);
 

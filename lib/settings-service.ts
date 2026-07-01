@@ -15,6 +15,7 @@ import {
   type UpdateCompanySettingsInput,
   type UpdateInvoiceSettingsInput,
   type UpdateNotificationSettingsInput,
+  type UpdateSalesSettingsInput,
 } from "@/lib/settings-utils";
 import {
   serializeCompany,
@@ -394,6 +395,40 @@ export async function updateNotificationSettings(input: {
         action: "UPDATE",
         module: "settings",
         message: "Bildirim ayarları güncellendi.",
+      },
+    });
+
+    return updated;
+  });
+
+  return settings;
+}
+
+export async function updateSalesSettings(input: {
+  companyId: string;
+  userId: string;
+  data: UpdateSalesSettingsInput;
+}) {
+  await assertCompanyAccess(input.userId, input.companyId);
+
+  const settings = await db.$transaction(async (tx) => {
+    const updated = await tx.companySettings.upsert({
+      where: { companyId: input.companyId },
+      create: {
+        companyId: input.companyId,
+        ...DEFAULT_COMPANY_SETTINGS,
+        ...input.data,
+      },
+      update: input.data,
+    });
+
+    await tx.activityLog.create({
+      data: {
+        companyId: input.companyId,
+        userId: input.userId,
+        action: "UPDATE",
+        module: "settings",
+        message: "Satış ayarları güncellendi.",
       },
     });
 

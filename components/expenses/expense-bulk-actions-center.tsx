@@ -37,6 +37,8 @@ import {
 import { formatDateInputValue } from "@/lib/sales-page-utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
+import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 
 type AccountOption = {
   id: string;
@@ -104,6 +106,7 @@ export function ExpenseBulkActionsCenter({
   initialSummary,
 }: ExpenseBulkActionsCenterProps) {
   const router = useRouter();
+  const { mutate, isSubmitting: actionLoading } = useTenantMutation({ refresh: false });
   const [isPending, startTransition] = useTransition();
   const [filters, setFilters] = useState(initialFilters);
   const [filterForm, setFilterForm] = useState(() => toFilterFormState(initialFilters));
@@ -118,7 +121,6 @@ export function ExpenseBulkActionsCenter({
   const [categoryValue, setCategoryValue] = useState("");
   const [customCategory, setCustomCategory] = useState("");
   const [payAccountId, setPayAccountId] = useState("");
-  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     setExpenses(initialExpenses);
@@ -292,7 +294,7 @@ export function ExpenseBulkActionsCenter({
 
   async function refreshAfterAction(message: string) {
     setFeedback({ message, tone: "success" });
-    router.refresh();
+    notifyTenantCacheSync();
 
     try {
       await fetchExpenses(filters);
@@ -321,41 +323,27 @@ export function ExpenseBulkActionsCenter({
       return;
     }
 
-    setActionLoading(true);
+    const result = await mutate("/api/expenses/bulk/cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ids: selectedExpenses.map((expense) => expense.id),
+      }),
+    });
 
-    try {
-      const response = await fetch("/api/expenses/bulk/cancel", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ids: selectedExpenses.map((expense) => expense.id),
-        }),
-      });
-
-      const result = (await response.json()) as {
-        success?: boolean;
-        message?: string;
-      };
-
-      if (!response.ok || !result.success) {
+    if (!result.ok) {
+      if (result.error !== "duplicate_submit") {
         setFeedback({
-          message: result.message || "Toplu iptal başarısız.",
+          message: result.error || "Toplu iptal başarısız.",
           tone: "error",
         });
-        return;
       }
-
-      await refreshAfterAction(
-        result.message || `${selectedExpenses.length} gider iptal edildi.`
-      );
-    } catch {
-      setFeedback({
-        message: "Toplu iptal sırasında bir hata oluştu.",
-        tone: "error",
-      });
-    } finally {
-      setActionLoading(false);
+      return;
     }
+
+    await refreshAfterAction(
+      result.message || `${selectedExpenses.length} gider iptal edildi.`
+    );
   }
 
   function openCategoryModal() {
@@ -385,43 +373,29 @@ export function ExpenseBulkActionsCenter({
       return;
     }
 
-    setActionLoading(true);
+    const result = await mutate("/api/expenses/bulk/change-category", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ids: selectedExpenses.map((expense) => expense.id),
+        category,
+      }),
+    });
 
-    try {
-      const response = await fetch("/api/expenses/bulk/change-category", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ids: selectedExpenses.map((expense) => expense.id),
-          category,
-        }),
-      });
-
-      const result = (await response.json()) as {
-        success?: boolean;
-        message?: string;
-      };
-
-      if (!response.ok || !result.success) {
+    if (!result.ok) {
+      if (result.error !== "duplicate_submit") {
         setFeedback({
-          message: result.message || "Kategori güncelleme başarısız.",
+          message: result.error || "Kategori güncelleme başarısız.",
           tone: "error",
         });
-        return;
       }
-
-      setCategoryModalOpen(false);
-      await refreshAfterAction(
-        result.message || "Seçili giderlerin kategorisi güncellendi."
-      );
-    } catch {
-      setFeedback({
-        message: "Kategori güncelleme sırasında bir hata oluştu.",
-        tone: "error",
-      });
-    } finally {
-      setActionLoading(false);
+      return;
     }
+
+    setCategoryModalOpen(false);
+    await refreshAfterAction(
+      result.message || "Seçili giderlerin kategorisi güncellendi."
+    );
   }
 
   function openPayModal() {
@@ -448,41 +422,27 @@ export function ExpenseBulkActionsCenter({
       return;
     }
 
-    setActionLoading(true);
+    const result = await mutate("/api/expenses/bulk/pay", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ids: payableSelectedIds,
+        accountId: payAccountId,
+      }),
+    });
 
-    try {
-      const response = await fetch("/api/expenses/bulk/pay", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ids: payableSelectedIds,
-          accountId: payAccountId,
-        }),
-      });
-
-      const result = (await response.json()) as {
-        success?: boolean;
-        message?: string;
-      };
-
-      if (!response.ok || !result.success) {
+    if (!result.ok) {
+      if (result.error !== "duplicate_submit") {
         setFeedback({
-          message: result.message || "Toplu ödeme başarısız.",
+          message: result.error || "Toplu ödeme başarısız.",
           tone: "error",
         });
-        return;
       }
-
-      setPayModalOpen(false);
-      await refreshAfterAction(result.message || "Seçili giderler ödendi.");
-    } catch {
-      setFeedback({
-        message: "Toplu ödeme sırasında bir hata oluştu.",
-        tone: "error",
-      });
-    } finally {
-      setActionLoading(false);
+      return;
     }
+
+    setPayModalOpen(false);
+    await refreshAfterAction(result.message || "Seçili giderler ödendi.");
   }
 
   function handlePrint() {

@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
+import { verifyApiMutationOrigin } from "@/lib/api-origin-guard";
 import {
   applyManualAccountTransaction,
   manualTransactionSchema,
 } from "@/lib/cash-bank-account-service";
 import { requireApiModuleAccess } from "@/lib/module-access";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -11,6 +13,9 @@ type Props = {
 
 export async function POST(req: Request, { params }: Props) {
   try {
+    const originError = verifyApiMutationOrigin(req);
+    if (originError) return originError;
+
     const auth = await requireApiModuleAccess("cash-bank");
     if ("error" in auth) return auth.error;
 
@@ -50,14 +55,18 @@ export async function POST(req: Request, { params }: Props) {
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "Hareket kaydedildi.",
-      data: {
-        newBalance: result.data.newBalance,
-        negativeBalanceWarning: result.data.negativeBalanceWarning,
-      },
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(companyId, {
+        reason: "cash-bank-manual-transaction",
+        entityIds: { accountId: id },
+        entity: { newBalance: result.data.newBalance },
+        message: "Hareket kaydedildi.",
+        balances: { [id]: result.data.newBalance },
+        extra: {
+          negativeBalanceWarning: result.data.negativeBalanceWarning,
+        },
+      }),
+    );
   } catch (error) {
     console.error("CASH_BANK_MANUAL_TRANSACTION_ERROR", error);
 

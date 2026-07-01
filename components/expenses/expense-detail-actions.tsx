@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Loader2, Trash2, Wallet } from "lucide-react";
 import { ExpensePayModal } from "@/components/expenses/expense-pay-modal";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 
 type AccountOption = {
   id: string;
@@ -30,7 +31,10 @@ export function ExpenseDetailActions({
   accounts,
 }: ExpenseDetailActionsProps) {
   const router = useRouter();
-  const [cancelling, setCancelling] = useState(false);
+  const { mutate, isSubmitting } = useTenantMutation({
+    refresh: false,
+    onSuccess: () => router.push("/expenses"),
+  });
   const [payOpen, setPayOpen] = useState(false);
   const [error, setError] = useState("");
 
@@ -40,26 +44,14 @@ export function ExpenseDetailActions({
       return;
     }
 
-    setCancelling(true);
     setError("");
 
-    try {
-      const response = await fetch(`/api/expenses/${expenseId}/cancel`, {
-        method: "POST",
-      });
-      const data = await response.json();
+    const result = await mutate(`/api/expenses/${expenseId}/cancel`, {
+      method: "POST",
+    });
 
-      if (!response.ok || !data.success) {
-        setError(data.message || "Gider iptal edilemedi.");
-        return;
-      }
-
-      router.push("/expenses");
-      router.refresh();
-    } catch {
-      setError("Sunucuya bağlanırken bir hata oluştu.");
-    } finally {
-      setCancelling(false);
+    if (!result.ok && result.error !== "duplicate_submit") {
+      setError(result.error || "Gider iptal edilemedi.");
     }
   }
 
@@ -85,10 +77,10 @@ export function ExpenseDetailActions({
           <button
             type="button"
             onClick={handleCancel}
-            disabled={cancelling}
+            disabled={isSubmitting}
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 text-[12px] font-black text-rose-700 disabled:opacity-60"
           >
-            {cancelling ? (
+            {isSubmitting ? (
               <Loader2 className="animate-spin" size={15} />
             ) : (
               <Trash2 size={15} />

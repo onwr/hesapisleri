@@ -14,6 +14,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { AppLoadingScreen } from "@/components/layout/app-loading-screen";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 import { ProductFormFields } from "@/components/products/product-form-fields";
 import { ProductImageUpload } from "@/components/products/product-image-upload";
 import { ProductPreviewPanel } from "@/components/products/product-preview-panel";
@@ -44,7 +45,9 @@ export function NewProductForm({
   returnTo = null,
 }: NewProductFormProps) {
   const router = useRouter();
-  const [saving, setSaving] = useState(false);
+  const { mutate, isSubmitting } = useTenantMutation<{ id: string }>({
+    refresh: false,
+  });
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [form, setForm] = useState<ProductFormValues>(() => ({
@@ -83,7 +86,6 @@ export function NewProductForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSaving(true);
     setError("");
     setFieldErrors({});
 
@@ -97,51 +99,46 @@ export function NewProductForm({
     if (payload.name.length < 2) {
       setFieldErrors({ name: "Ürün adı en az 2 karakter olmalıdır." });
       setError("Ürün adı en az 2 karakter olmalıdır.");
-      setSaving(false);
       return;
     }
 
-    try {
-      const response = await fetch("/api/products/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-      });
+    const result = await mutate("/api/products/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        setFieldErrors(mapProductFieldErrors(data.errors));
-        setError(
-          getFirstProductErrorMessage(data.message, data.errors) ||
-            "Ürün oluşturulamadı."
-        );
-        return;
+    if (!result.ok) {
+      if (result.error === "duplicate_submit") return;
+      if ("errors" in result && result.errors) {
+        setFieldErrors(mapProductFieldErrors(result.errors));
       }
-
-      const productId = data.data?.id as string | undefined;
-      const defaultDestination = productId
-        ? `/products/${productId}?created=1`
-        : "/products";
-      router.push(
-        resolvePostCreateRedirect({
-          returnTo,
-          defaultDestination,
-        })
+      setError(
+        getFirstProductErrorMessage(
+          result.error === "duplicate_submit" ? undefined : result.error,
+          "errors" in result ? result.errors : undefined
+        ) || "Ürün oluşturulamadı."
       );
-      router.refresh();
-    } catch {
-      setError("Sunucuya bağlanırken bir hata oluştu.");
-    } finally {
-      setSaving(false);
+      return;
     }
+
+    const productId = result.data?.id;
+    const defaultDestination = productId
+      ? `/products/${productId}?created=1`
+      : "/products";
+    router.push(
+      resolvePostCreateRedirect({
+        returnTo,
+        defaultDestination,
+      })
+    );
   }
 
   const filledFields = Object.values(form).filter((value) => Boolean(value)).length;
 
   return (
     <main className="min-h-screen bg-[#f7f8ff] px-5 py-6">
-      {saving ? (
+      {isSubmitting ? (
         <AppLoadingScreen
           preset="products"
           title="Ürün kaydediliyor"
@@ -234,15 +231,15 @@ export function NewProductForm({
             <div className="flex flex-col gap-3 sm:flex-row">
               <button
                 type="submit"
-                disabled={saving}
+                disabled={isSubmitting}
                 className="flex h-12 p-2 flex-1 items-center justify-center gap-2 rounded-2xl bg-linear-to-r from-rose-500 to-pink-600 text-[13px] font-black text-white shadow-lg shadow-pink-100 transition hover:opacity-95 disabled:opacity-60"
               >
-                {saving ? (
+                {isSubmitting ? (
                   <Loader2 className="animate-spin" size={20} />
                 ) : (
                   <Save size={19} />
                 )}
-                {saving ? "Kaydediliyor..." : "Ürünü Kaydet"}
+                {isSubmitting ? "Kaydediliyor..." : "Ürünü Kaydet"}
               </button>
 
               <Link

@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   Barcode,
   CheckCircle2,
@@ -28,6 +27,7 @@ import { PosProductGrid } from "@/components/pos/pos-product-grid";
 import { PosQuickActions } from "@/components/pos/pos-quick-actions";
 import { PosReceipt, printPosReceipt } from "@/components/pos/pos-receipt";
 import { PosStaffHeader } from "@/components/pos/pos-staff-header";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 import { PosSummaryMetrics } from "@/components/pos/pos-summary-metrics";
 import {
   POS_BARCODE_INPUT_CLASS,
@@ -109,7 +109,17 @@ type PosStats = {
 };
 
 export default function PosPage() {
-  const router = useRouter();
+  const { mutate, isSubmitting: checkingOut } = useTenantMutation<{
+    id?: string;
+    saleNo?: string;
+    paymentStatus?: string;
+    payments?: Array<{
+      paymentMethod: string;
+      amount: number | string;
+      account?: { name?: string };
+    }>;
+    warning?: string;
+  }>({ refresh: false });
   const barcodeRef = useRef<HTMLInputElement>(null);
   const checkoutIdempotencyKeyRef = useRef<string | null>(null);
 
@@ -145,7 +155,6 @@ export default function PosPage() {
   const [note, setNote] = useState("");
 
   const [loading, setLoading] = useState(true);
-  const [checkingOut, setCheckingOut] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [error, setError] = useState("");
   const [successReceipt, setSuccessReceipt] = useState<SuccessReceipt | null>(
@@ -456,12 +465,10 @@ export default function PosPage() {
   }, [cart.length, totals.total]);
 
   async function handleCheckout() {
-    setCheckingOut(true);
     setError("");
 
     if (cart.length === 0) {
       setError("Satışı tamamlamak için sepete ürün ekleyin.");
-      setCheckingOut(false);
       return;
     }
 
@@ -478,7 +485,6 @@ export default function PosPage() {
 
     if (validationError) {
       setError(validationError);
-      setCheckingOut(false);
       return;
     }
 
@@ -495,98 +501,87 @@ export default function PosPage() {
     }
     const idempotencyKey = checkoutIdempotencyKeyRef.current;
 
-    try {
-      const res = await fetch("/api/pos/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          idempotencyKey,
-          customerId: selectedCustomerId || undefined,
-          warehouseId: useWarehouseStock ? selectedWarehouseId : undefined,
-          paymentStatus: "PAID",
-          discount: checkoutTotals.discount,
-          note,
-          payments: checkoutLines,
-          items: checkoutCart.map((item) => ({
-            productId: item.productId,
-            name: item.name,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            vatRate: item.vatRate,
-          })),
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setError(data.message || "Satış tamamlanamadı.");
-        return;
-      }
-
-      const responsePayments = Array.isArray(data.data?.payments)
-        ? data.data.payments.map(
-            (payment: {
-              paymentMethod: string;
-              amount: number | string;
-              account?: { name?: string };
-            }) => ({
-              paymentMethod: payment.paymentMethod,
-              accountName: payment.account?.name ?? "Hesap",
-              amount: Number(payment.amount),
-            })
-          )
-        : checkoutLines.map((line) => ({
-            paymentMethod: line.paymentMethod,
-            accountName:
-              getPosCollectionAccountName(accounts, line.accountId) ?? "Hesap",
-            amount: line.amount,
-          }));
-
-      setPaymentOpen(false);
-      setSuccessReceipt({
-        saleNo: data.data?.saleNo || "Satış tamamlandı",
-        saleId: data.data?.id || "",
-        date: new Date().toLocaleString("tr-TR"),
-        items: checkoutCart,
-        subtotal: checkoutTotals.subtotal,
-        vatTotal: checkoutTotals.vatTotal,
+    const result = await mutate("/api/pos/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        idempotencyKey,
+        customerId: selectedCustomerId || undefined,
+        warehouseId: useWarehouseStock ? selectedWarehouseId : undefined,
+        paymentStatus: "PAID",
         discount: checkoutTotals.discount,
-        total: checkoutTotals.total,
-        paymentStatus: data.data?.paymentStatus || "PAID",
-        payments: responsePayments,
-      });
+        note,
+        payments: checkoutLines,
+        items: checkoutCart.map((item) => ({
+          productId: item.productId,
+          name: item.name,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          vatRate: item.vatRate,
+        })),
+      }),
+    });
 
-      if (data.warning) {
-        setError(data.warning);
-      } else {
-        setError("");
+    if (!result.ok) {
+      if (result.error !== "duplicate_submit") {
+        setError(result.error || "Satış tamamlanamadı.");
       }
-
-      setCart([]);
-      checkoutIdempotencyKeyRef.current = null;
-      setDiscount("0");
-      setNote("");
-      setReceivedAmount("");
-      setPaymentLines([]);
-      setPaymentMode("single");
-      setMobileCartOpen(false);
-
-      const productsRes = await fetch(
-        useWarehouseStock
-          ? buildProductsListUrl(selectedWarehouseId)
-          : buildProductsListUrl()
-      );
-      const productsData = await productsRes.json();
-      if (productsData.success) setProducts(productsData.data);
-
-      void loadStats();
-      router.refresh();
-      barcodeRef.current?.focus();
-    } catch {
-      setError("Sunucuya bağlanırken bir hata oluştu.");
-    } finally {
-      setCheckingOut(false);
+      return;
     }
+
+    const data = result.data;
+    const responsePayments = Array.isArray(data?.payments)
+      ? data.payments.map((payment) => ({
+          paymentMethod: payment.paymentMethod,
+          accountName: payment.account?.name ?? "Hesap",
+          amount: Number(payment.amount),
+        }))
+      : checkoutLines.map((line) => ({
+          paymentMethod: line.paymentMethod,
+          accountName:
+            getPosCollectionAccountName(accounts, line.accountId) ?? "Hesap",
+          amount: line.amount,
+        }));
+
+    setPaymentOpen(false);
+    setSuccessReceipt({
+      saleNo: data?.saleNo || "Satış tamamlandı",
+      saleId: data?.id || "",
+      date: new Date().toLocaleString("tr-TR"),
+      items: checkoutCart,
+      subtotal: checkoutTotals.subtotal,
+      vatTotal: checkoutTotals.vatTotal,
+      discount: checkoutTotals.discount,
+      total: checkoutTotals.total,
+      paymentStatus: (data?.paymentStatus as PosPaymentStatus) || "PAID",
+      payments: responsePayments,
+    });
+
+    if (result.message?.includes("daha önce tamamlanmış")) {
+      setError(result.message);
+    } else {
+      setError("");
+    }
+
+    setCart([]);
+    checkoutIdempotencyKeyRef.current = null;
+    setDiscount("0");
+    setNote("");
+    setReceivedAmount("");
+    setPaymentLines([]);
+    setPaymentMode("single");
+    setMobileCartOpen(false);
+
+    const productsRes = await fetch(
+      useWarehouseStock
+        ? buildProductsListUrl(selectedWarehouseId)
+        : buildProductsListUrl()
+    );
+    const productsData = await productsRes.json();
+    if (productsData.success) setProducts(productsData.data);
+
+    void loadStats();
+    barcodeRef.current?.focus();
   }
 
   usePosKeyboardShortcuts({

@@ -47,7 +47,7 @@ export function AdminPaymentTabContent({ tab, data, paymentId, header, onReload 
     case "subscription":
       return <SubscriptionPanel data={data} />;
     case "refunds":
-      return <RefundsPanel data={data} paymentId={paymentId} />;
+      return <RefundsPanel data={data} paymentId={paymentId} onReload={onReload} />;
     case "events":
       return <EventsPanel data={data} />;
     case "activity":
@@ -184,7 +184,15 @@ function SubscriptionPanel({ data }: { data: unknown }) {
   );
 }
 
-function RefundsPanel({ data, paymentId }: { data: unknown; paymentId: string }) {
+function RefundsPanel({
+  data,
+  paymentId,
+  onReload,
+}: {
+  data: unknown;
+  paymentId: string;
+  onReload: () => Promise<void>;
+}) {
   const d = data as {
     refunds: Array<Record<string, unknown>>;
     gate: {
@@ -229,7 +237,7 @@ function RefundsPanel({ data, paymentId }: { data: unknown; paymentId: string })
       setMessage(`İade ${json.data.status}: ${json.data.referenceNo}`);
       setAmountMinor("");
       setReason("");
-      window.location.reload();
+      await onReload();
     } catch {
       setMessage("İade isteği gönderilemedi.");
     } finally {

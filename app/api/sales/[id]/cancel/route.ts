@@ -10,6 +10,7 @@ type Props = {
 const cancelSchema = z.object({
   reason: z.string().trim().min(1, "İptal nedeni zorunludur."),
   note: z.string().optional().nullable(),
+  revisionNumber: z.number().int().min(0).optional(),
 });
 
 export async function POST(req: Request, { params }: Props) {

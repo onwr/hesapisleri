@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiModuleAccess } from "@/lib/module-access";
 import { bulkPayExpenses } from "@/lib/expense-bulk-actions-service";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 const schema = z.object({
   ids: z.array(z.string().min(1)).min(1, "En az bir gider seçin."),
@@ -45,11 +46,16 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      message: `${result.data.paidCount} gider ödendi.`,
-      data: result.data,
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(auth.companyId, {
+        reason: "expense-pay",
+        entityIds: { expenseId: parsed.data.ids[0] },
+        affectedIds: parsed.data.ids,
+        entity: result.data as Record<string, unknown>,
+        message: `${result.data.paidCount} gider ödendi.`,
+        status: "bulk-paid",
+      }),
+    );
   } catch (error) {
     console.error("EXPENSE_BULK_PAY_ERROR", error);
 

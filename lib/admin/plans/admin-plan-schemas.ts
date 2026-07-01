@@ -125,6 +125,17 @@ export const adminPlanPricePublishSchema = z.object({
   price: adminPlanPricePreviewInputSchema,
 });
 
+export const adminPlanPricePatchSchema = adminPlanPricePreviewInputSchema
+  .partial()
+  .extend({
+    adminNote: z.string().max(2000).nullable().optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "Güncellenecek en az bir alan gerekli.",
+  });
+
+export type AdminPlanPricePatchInput = z.infer<typeof adminPlanPricePatchSchema>;
+
 export type AdminPlanPricePreviewInput = z.infer<typeof adminPlanPricePreviewInputSchema>;
 
 export type AdminPlanTab =

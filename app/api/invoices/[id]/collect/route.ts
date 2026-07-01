@@ -4,7 +4,7 @@ import {
   collectInvoicePayment,
   collectInvoiceSchema,
 } from "@/lib/invoice-service";
-import { invalidateDashboardCache } from "@/lib/dashboard-cache-invalidation";
+import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -50,16 +50,18 @@ export async function POST(req: Request, { params }: Props) {
       );
     }
 
-    invalidateDashboardCache(companyId, "invoice-collect");
-
-    return NextResponse.json({
-      success: true,
-      message:
-        result.data.paymentStatus === "PAID"
-          ? "Fatura tahsilatı tamamlandı."
-          : "Kısmi tahsilat kaydedildi.",
-      data: result.data,
-    });
+    return NextResponse.json(
+      buildTenantMutationSuccess(companyId, {
+        reason: "invoice-collect",
+        entity: { id },
+        message:
+          result.data.paymentStatus === "PAID"
+            ? "Fatura tahsilatı tamamlandı."
+            : "Kısmi tahsilat kaydedildi.",
+        entityIds: { invoiceId: id },
+        extra: result.data,
+      }),
+    );
   } catch (error) {
     console.error("INVOICE_COLLECT_API_ERROR", error);
 

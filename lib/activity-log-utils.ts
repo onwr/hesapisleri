@@ -2,6 +2,66 @@ import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/prisma";
 import { formatMoney } from "@/lib/format-utils";
 import { getActivityTag } from "@/lib/dashboard-metrics";
+import { isUnsafeDemoContent } from "@/lib/demo-tenant";
+
+export const MAX_AUDIT_DISPLAY_LENGTH = 200;
+
+const CONTROL_CHAR_PATTERN = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g;
+const HTML_TAG_PATTERN = /<[^>]*>/g;
+
+export type SafeActivityMessageTemplate =
+  | "ACCOUNT_CREATED"
+  | "ACCOUNT_UPDATED"
+  | "ACCOUNT_ARCHIVED"
+  | "DEFAULT_ACCOUNT_CHANGED"
+  | "PRODUCT_CREATED"
+  | "SERVICE_CREATED"
+  | "PRODUCT_STATUS_CHANGED";
+
+export function normalizeAuditDisplayText(value: string | null | undefined) {
+  if (!value) return "";
+
+  let text = value.replace(CONTROL_CHAR_PATTERN, "").trim();
+  if (!text) return "";
+
+  if (isUnsafeDemoContent(text)) {
+    text = text.replace(HTML_TAG_PATTERN, " ").replace(/\s+/g, " ").trim();
+  }
+
+  if (!text) {
+    return "[Geçersiz kayıt]";
+  }
+
+  if (text.length > MAX_AUDIT_DISPLAY_LENGTH) {
+    return `${text.slice(0, MAX_AUDIT_DISPLAY_LENGTH)}…`;
+  }
+
+  return text;
+}
+
+export function buildSafeActivityMessage(
+  template: SafeActivityMessageTemplate,
+  params: Record<string, string>
+) {
+  switch (template) {
+    case "ACCOUNT_CREATED":
+      return `Hesap oluşturuldu: ${normalizeAuditDisplayText(params.accountName)}`;
+    case "ACCOUNT_UPDATED":
+      return `Hesap güncellendi: ${normalizeAuditDisplayText(params.accountName)}`;
+    case "ACCOUNT_ARCHIVED":
+      return `Hesap arşivlendi: ${normalizeAuditDisplayText(params.accountName)}`;
+    case "DEFAULT_ACCOUNT_CHANGED":
+      return `Varsayılan hesap değiştirildi: ${normalizeAuditDisplayText(params.accountName)}`;
+    case "PRODUCT_CREATED":
+      return `${normalizeAuditDisplayText(params.productName)} ürünü oluşturuldu.`;
+    case "SERVICE_CREATED":
+      return `${normalizeAuditDisplayText(params.productName)} hizmeti oluşturuldu.`;
+    case "PRODUCT_STATUS_CHANGED":
+      return `${normalizeAuditDisplayText(params.productName)} ürün durumu güncellendi.`;
+    default:
+      return normalizeAuditDisplayText(params.message ?? "");
+  }
+}
 
 export type ActivityModule =
   | "dashboard"
@@ -108,6 +168,9 @@ export type DashboardActivityItem = {
   tagColor: "green" | "blue" | "orange" | "purple" | "slate";
   time: string;
   href: string | null;
+  module: string;
+  action: string;
+  createdAt: string;
 };
 
 export function isDemoActivityMessage(message: string | null | undefined) {
@@ -130,7 +193,9 @@ export function buildTransferActivityMessage(
   toAccountName: string,
   amount: number
 ) {
-  return `Hesaplar arası transfer: ${fromAccountName} → ${toAccountName} - ${formatMoney(amount)}`;
+  const from = normalizeAuditDisplayText(fromAccountName);
+  const to = normalizeAuditDisplayText(toAccountName);
+  return `Hesaplar arası transfer: ${from} → ${to} - ${formatMoney(amount)}`;
 }
 
 const LEGACY_TRANSFER_MESSAGE =
@@ -157,15 +222,17 @@ export function resolveTransferActivityTitle(message: string) {
   const trimmed = message.trim();
 
   if (trimmed.startsWith("Hesaplar arası transfer:")) {
-    return trimmed.replace(/\s*-\s*₺[\d.,]+(?:,\d{2})?$/, "").trim();
+    return normalizeAuditDisplayText(
+      trimmed.replace(/\s*-\s*₺[\d.,]+(?:,\d{2})?$/, "").trim()
+    );
   }
 
   const legacy = trimmed.match(LEGACY_TRANSFER_MESSAGE);
   if (legacy) {
-    return `Hesaplar arası transfer: ${legacy[1]} → ${legacy[2]}`;
+    return `Hesaplar arası transfer: ${normalizeAuditDisplayText(legacy[1])} → ${normalizeAuditDisplayText(legacy[2])}`;
   }
 
-  return trimmed;
+  return normalizeAuditDisplayText(trimmed);
 }
 
 export function resolveTransferActivitySubtitle() {
@@ -228,10 +295,17 @@ export function mapActivityLogToDashboardItem(
 
   const isTransfer = isTransferActivityLog(log);
   const tag = getActivityTag(log.module, log.action, { isTransfer });
+  const safeTitle = isTransfer
+    ? resolveTransferActivityTitle(message)
+    : normalizeAuditDisplayText(message);
+
+  if (!safeTitle) {
+    return null;
+  }
 
   return {
     id: log.id,
-    title: isTransfer ? resolveTransferActivityTitle(message) : message,
+    title: safeTitle,
     description: isTransfer
       ? resolveTransferActivitySubtitle()
       : buildActivitySubtitle(log.action, log.module),
@@ -240,6 +314,9 @@ export function mapActivityLogToDashboardItem(
     tagColor: tag.color,
     time: formatTime(log.createdAt),
     href: resolveActivityHref(log.module, log.action),
+    module: log.module,
+    action: log.action,
+    createdAt: log.createdAt.toISOString(),
   };
 }
 
@@ -256,17 +333,27 @@ export async function createActivityLog(
     throw new Error("Demo activity messages are not allowed.");
   }
 
+  if (isUnsafeDemoContent(message)) {
+    throw new Error("Activity log message contains invalid content.");
+  }
+
+  const normalized = normalizeAuditDisplayText(message);
+  if (!normalized || normalized === "[Geçersiz kayıt]") {
+    throw new Error("Activity log message contains invalid content.");
+  }
+
   return client.activityLog.create({
     data: {
       companyId: input.companyId,
       userId: input.userId ?? null,
       action: input.action,
       module: input.module,
-      message,
+      message: normalized,
       ip: input.ip ?? null,
     },
   });
 }
+
 
 export function getDemoActivityCleanupWhere() {
   return {

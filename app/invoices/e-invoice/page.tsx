@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -497,8 +498,8 @@ export default function EInvoicePage() {
         return;
       }
 
+      notifyTenantCacheSync();
       router.push("/invoices");
-      router.refresh();
     } catch {
       setError("Sunucuya bağlanırken bir hata oluştu.");
     } finally {

@@ -32,7 +32,7 @@ const sampleUsers = [
     name: "Zeynep Kaya",
     email: "zeynep@firma.com",
     role: "STAFF",
-    roleLabel: "Personel",
+    roleLabel: "Çalışan",
     status: "PASSIVE",
     statusLabel: "Pasif",
     isOwner: false,
@@ -45,7 +45,7 @@ const sampleUsers = [
     name: "Sahip User",
     email: "owner@firma.com",
     role: "OWNER",
-    roleLabel: "Sahip",
+    roleLabel: "Şirket Sahibi",
     status: "ACTIVE",
     statusLabel: "Aktif",
     isOwner: true,
@@ -104,7 +104,7 @@ describe("team page utils", () => {
         id: "i1",
         email: "new@firma.com",
         role: "STAFF",
-        roleLabel: "Personel",
+        roleLabel: "Çalışan",
         status: "PENDING",
         expiresAt: "2026-06-20T10:00:00.000Z",
         inviteLink: "http://localhost/invite?token=abc",
@@ -123,8 +123,8 @@ describe("team page utils", () => {
     assert.equal(getCompanyUserStatusLabel("INVITED"), "Davetli");
   });
 
-  it("getTeamDisplayRoleLabel owner için Sahip döner", () => {
-    assert.equal(getTeamDisplayRoleLabel("ADMIN", true), "Sahip");
+  it("getTeamDisplayRoleLabel owner için Şirket Sahibi döner", () => {
+    assert.equal(getTeamDisplayRoleLabel("ADMIN", true), "Şirket Sahibi");
   });
 
   it("getTeamMemberInitials baş harfleri üretir", () => {

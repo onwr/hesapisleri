@@ -17,6 +17,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { AppLoadingScreen } from "@/components/layout/app-loading-screen";
+import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 import { ProductStockSummaryPanel } from "@/components/products/product-stock-summary-panel";
 import { DEFAULT_CATEGORY_NAME, PRODUCT_UNIT_LABELS, type ProductUnitType } from "@/lib/product-form-utils";
 import {
@@ -58,7 +59,7 @@ export function ProductStockMovementForm({
   warehouseStocks,
 }: ProductStockMovementFormProps) {
   const router = useRouter();
-  const [saving, setSaving] = useState(false);
+  const { mutate, isSubmitting } = useTenantMutation({ refresh: false });
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [movementType, setMovementType] =
@@ -99,7 +100,6 @@ export function ProductStockMovementForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSaving(true);
     setError("");
     setFieldErrors({});
 
@@ -107,7 +107,6 @@ export function ProductStockMovementForm({
     if (quantity.trim() === "" || Number.isNaN(parsedQuantity)) {
       setFieldErrors({ quantity: "Geçerli bir miktar girin." });
       setError("Geçerli bir miktar girin.");
-      setSaving(false);
       return;
     }
 
@@ -120,47 +119,42 @@ export function ProductStockMovementForm({
     if ("error" in localCheck) {
       setFieldErrors({ quantity: localCheck.error });
       setError(localCheck.error);
-      setSaving(false);
       return;
     }
 
-    try {
-      const response = await fetch(`/api/products/${product.id}/stock-movement`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: movementType,
-          quantity: parsedQuantity,
-          warehouseId: warehouseId || undefined,
-          note: note.trim() || undefined,
-          warehouseLocation: warehouseLocation.trim() || undefined,
-          movementDate,
-        }),
-      });
+    const result = await mutate(`/api/products/${product.id}/stock-movement`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: movementType,
+        quantity: parsedQuantity,
+        warehouseId: warehouseId || undefined,
+        note: note.trim() || undefined,
+        warehouseLocation: warehouseLocation.trim() || undefined,
+        movementDate,
+      }),
+    });
 
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        setFieldErrors(mapStockMovementFieldErrors(data.errors));
-        setError(
-          getFirstStockMovementErrorMessage(data.message, data.errors) ||
-            "Stok hareketi kaydedilemedi."
-        );
-        return;
+    if (!result.ok) {
+      if (result.error === "duplicate_submit") return;
+      if ("errors" in result && result.errors) {
+        setFieldErrors(mapStockMovementFieldErrors(result.errors));
       }
-
-      router.push(`/products/${product.id}?stockUpdated=1`);
-      router.refresh();
-    } catch {
-      setError("Sunucuya bağlanırken bir hata oluştu.");
-    } finally {
-      setSaving(false);
+      setError(
+        getFirstStockMovementErrorMessage(
+          result.error === "duplicate_submit" ? undefined : result.error,
+          "errors" in result ? result.errors : undefined
+        ) || "Stok hareketi kaydedilemedi."
+      );
+      return;
     }
+
+    router.push(`/products/${product.id}?stockUpdated=1`);
   }
 
   return (
     <main className="min-h-screen bg-[#f7f8ff] px-5 py-6">
-      {saving ? (
+      {isSubmitting ? (
         <AppLoadingScreen
           preset="products"
           title="Stok hareketi kaydediliyor"
@@ -358,15 +352,15 @@ export function ProductStockMovementForm({
             <div className="flex flex-col gap-3 sm:flex-row">
               <button
                 type="submit"
-                disabled={saving || Boolean(previewError)}
+                disabled={isSubmitting || Boolean(previewError)}
                 className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-linear-to-r from-orange-500 to-amber-600 text-[13px] font-black text-white shadow-lg shadow-orange-100 transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {saving ? (
+                {isSubmitting ? (
                   <Loader2 className="animate-spin" size={20} />
                 ) : (
                   <Save size={19} />
                 )}
-                {saving ? "Kaydediliyor..." : "Stok Hareketini Kaydet"}
+                {isSubmitting ? "Kaydediliyor..." : "Stok Hareketini Kaydet"}
               </button>
 
               <Link

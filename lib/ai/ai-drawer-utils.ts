@@ -6,7 +6,7 @@ export type AiInsightModuleKey =
   | "invoices"
   | "customers";
 
-export type AiDrawerTab = "chat" | "insight";
+export type AiDrawerTab = "chat" | "insight" | "finance";
 
 export const AI_INSIGHT_TITLES: Record<AiInsightModuleKey, string> = {
   dashboard: "AI Yönetici Özeti",

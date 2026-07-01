@@ -29,6 +29,8 @@ import { ReportsPageControls } from "@/components/reports/reports-page-controls"
 import { endOfMonth, startOfMonth } from "@/lib/dashboard-metrics";
 import { formatNumber } from "@/lib/format-utils";
 import { getReportsPageData } from "@/lib/reports-page-data";
+import { getCachedReportsPageData } from "@/lib/tenant-cache/cached-tenant-page-data";
+import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
 import {
   buildReportCardHref,
   buildReportsExportQuery,
@@ -152,7 +154,8 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     parseDateParam(params.to) ?? endOfMonth(now)
   );
 
-  const data = await getReportsPageData(company.id, {
+  const data = await getCachedReportsPageData({
+    companyId: company.id,
     tab: activeTab,
     from,
     to,
@@ -173,6 +176,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
 
   return (
     <AppShell>
+      <TenantPageSync />
       <div className="space-y-5">
         <div className="grid gap-4 xl:grid-cols-[1fr_300px]">
           <main className="space-y-5">

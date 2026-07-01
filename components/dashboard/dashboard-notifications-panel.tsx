@@ -1,7 +1,12 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
+import {
+  hasSafeTenantActionUrl,
+  resolveSafeTenantActionUrl,
+} from "@/lib/tenant-action-url";
 import { AlertTriangle, Bell, Package, ReceiptText } from "lucide-react";
 
 export type DashboardNotificationItem = {
@@ -74,7 +79,7 @@ export function DashboardNotificationsPanel({
   async function markAllRead() {
     try {
       await fetch("/api/notifications/read-all", { method: "PATCH" });
-      router.refresh();
+      notifyTenantCacheSync();
     } catch {
       // ignore
     }
@@ -82,8 +87,9 @@ export function DashboardNotificationsPanel({
 
   async function handleAction(item: DashboardNotificationItem) {
     void markRead(item.id);
-    if (item.actionUrl) {
-      router.push(item.actionUrl);
+    const target = resolveSafeTenantActionUrl(item.actionUrl);
+    if (target) {
+      router.push(target);
     }
   }
 
@@ -91,10 +97,10 @@ export function DashboardNotificationsPanel({
     <div className="rounded-[22px] border border-slate-200/70 bg-white p-4 shadow-[0_10px_26px_rgba(15,23,42,0.035)]">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-[15px] font-extrabold tracking-[-0.02em] text-[#0f1f4d]">
+          <h3 className="text-[16px] font-extrabold tracking-[-0.02em] text-[#0f1f4d]">
             Bildirimler ve Aksiyonlar
           </h3>
-          <p className="mt-1 text-[11px] font-medium text-slate-500">
+          <p className="mt-1 text-[12px] font-medium text-slate-500">
             {summary.unread} okunmamış
             {summary.critical > 0 ? ` · ${summary.critical} kritik` : ""}
             {summary.high > 0 ? ` · ${summary.high} yüksek öncelik` : ""}
@@ -106,14 +112,14 @@ export function DashboardNotificationsPanel({
             <button
               type="button"
               onClick={() => void markAllRead()}
-              className="text-[12px] font-extrabold text-blue-600 transition hover:text-blue-700"
+              className="text-[13px] font-extrabold text-blue-600 transition hover:text-blue-700"
             >
               Tümünü okundu işaretle
             </button>
           ) : null}
           <Link
             href="/notifications"
-            className="inline-flex items-center gap-1 text-[12px] font-extrabold text-blue-600 transition hover:text-blue-700"
+            className="inline-flex items-center gap-1 text-[13px] font-extrabold text-blue-600 transition hover:text-blue-700"
           >
             Tümünü gör
           </Link>
@@ -146,12 +152,12 @@ export function DashboardNotificationsPanel({
 
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-[12px] font-extrabold text-[#0f1f4d]">
+                      <p className="truncate text-[13px] font-extrabold text-[#0f1f4d]">
                         {item.title}
                       </p>
                       <span
                         className={[
-                          "rounded-md px-2 py-0.5 text-[10px] font-black",
+                          "rounded-md px-2 py-0.5 text-[11px] font-black",
                           getPriorityClass(item.priority),
                         ].join(" ")}
                       >
@@ -159,20 +165,20 @@ export function DashboardNotificationsPanel({
                       </span>
                     </div>
 
-                    <p className="mt-1 line-clamp-2 text-[11px] font-medium text-slate-500">
+                    <p className="mt-1 line-clamp-2 text-[12px] font-medium text-slate-500">
                       {item.message}
                     </p>
 
                     <div className="mt-2 flex items-center justify-between gap-2">
-                      <span className="text-[10px] font-medium text-slate-400">
+                      <span className="text-[11px] font-medium text-slate-400">
                         {formatTime(item.createdAt)}
                       </span>
 
-                      {item.actionUrl ? (
+                      {hasSafeTenantActionUrl(item.actionUrl) ? (
                         <button
                           type="button"
                           onClick={() => void handleAction(item)}
-                          className="text-[11px] font-bold text-blue-600 hover:text-blue-700"
+                          className="text-[12px] font-bold text-blue-600 hover:text-blue-700"
                         >
                           Aksiyona git
                         </button>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, startTransition, type FormEvent, type ReactNode } from "react";
 import {
   BarChart3,
   CalendarClock,
@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { StatCard } from "@/components/cards/stat-card";
+import { FinanceAccountSelect } from "@/components/cash-bank/finance-account-select";
 import { EmployeeLedgerTab } from "@/components/employees/employee-ledger-tab";
 import { EmployeePaymentMarkPaidModal } from "@/components/employees/employee-payment-mark-paid-modal";
 import { EmployeePayrollSummaryTab } from "@/components/employees/employee-payroll-summary-tab";
@@ -32,7 +33,13 @@ import {
   EMPLOYEE_PAYMENT_FINANCE_BADGE_CLASS,
   shouldShowMarkPaidButton,
 } from "@/lib/employee-payment-finance-utils";
-import { useFinanceAccounts } from "@/hooks/use-finance-accounts";
+import {
+  employeePaymentDisbursesCash,
+  getEmployeePaymentTypeBehavior,
+} from "@/lib/employee-payment-type-mapping";
+import {
+  EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_MESSAGE,
+} from "@/lib/finance-account-utils";
 import {
   formatEmployeeLedgerBalanceLabel,
   getEmployeeLedgerBalanceTone,
@@ -44,12 +51,14 @@ import {
   ResetUserPasswordModal,
 } from "@/components/settings/create-user-from-employee-modal";
 import type { AssignableCompanyUserRole } from "@/lib/company-user-from-employee-utils";
+import { useTenantCacheSync } from "@/hooks/use-tenant-cache-sync";
 import {
   getPaymentStatusBadgeClass,
   getPaymentTypeLabel,
   isEmployeeLeaveVisibleOnCalendar,
   PAYMENT_TYPE_HINTS,
 } from "@/lib/employee-utils";
+import { useFinanceAccounts } from "@/hooks/use-finance-accounts";
 
 type DetailTab =
   | "overview"
@@ -113,10 +122,17 @@ export function EmployeeDetailClient({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  useTenantCacheSync(() => {}, { refresh: true });
+
   const [salaryAmount, setSalaryAmount] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentType, setPaymentType] = useState("SALARY");
   const [paymentDueDate, setPaymentDueDate] = useState("");
+  const [paymentAccountId, setPaymentAccountId] = useState("");
+  const [paymentFilterType, setPaymentFilterType] = useState("");
+  const [paymentFilterAccount, setPaymentFilterAccount] = useState("");
+  const [paymentFilterDateFrom, setPaymentFilterDateFrom] = useState("");
+  const [paymentFilterDateTo, setPaymentFilterDateTo] = useState("");
   const [leaveStart, setLeaveStart] = useState("");
   const [leaveEnd, setLeaveEnd] = useState("");
   const [leaveType, setLeaveType] = useState("ANNUAL");
@@ -132,6 +148,51 @@ export function EmployeeDetailClient({
   const [markPaidFormError, setMarkPaidFormError] = useState("");
   const { accounts: financeAccounts, loading: accountsLoading } =
     useFinanceAccounts();
+
+  const paymentTypeBehavior = getEmployeePaymentTypeBehavior(
+    paymentType as Parameters<typeof getEmployeePaymentTypeBehavior>[0]
+  );
+  const showPaymentAccountField =
+    canProcessPayments && employeePaymentDisbursesCash(paymentType as never);
+  const paymentAccountRequired =
+    showPaymentAccountField && !paymentTypeBehavior.allowPendingWithoutAccount;
+
+  useEffect(() => {
+    if (paymentAccountId || financeAccounts.length === 0) return;
+    const defaultAccount =
+      financeAccounts.find((account) => account.isDefault) ?? financeAccounts[0];
+    if (defaultAccount) {
+      setPaymentAccountId(defaultAccount.id);
+    }
+  }, [financeAccounts, paymentAccountId]);
+
+  const filteredPayments = useMemo(() => {
+    return (employee.payments ?? []).filter((payment) => {
+      if (paymentFilterType && payment.type !== paymentFilterType) {
+        return false;
+      }
+      if (
+        paymentFilterAccount &&
+        payment.relatedAccountId !== paymentFilterAccount
+      ) {
+        return false;
+      }
+      const paymentDate = payment.paidAt ?? payment.dueDate ?? payment.createdAt;
+      if (paymentFilterDateFrom && paymentDate < paymentFilterDateFrom) {
+        return false;
+      }
+      if (paymentFilterDateTo && paymentDate.slice(0, 10) > paymentFilterDateTo) {
+        return false;
+      }
+      return true;
+    });
+  }, [
+    employee.payments,
+    paymentFilterType,
+    paymentFilterAccount,
+    paymentFilterDateFrom,
+    paymentFilterDateTo,
+  ]);
 
   async function reload() {
     const res = await fetch(`/api/employees/${employee.id}`);
@@ -279,7 +340,6 @@ export function EmployeeDetailClient({
       }
       setSuccess("Çalışan kaydı sonlandırıldı.");
       router.push("/team?tab=passive");
-      router.refresh();
     } finally {
       setSaving(false);
     }
@@ -352,7 +412,12 @@ export function EmployeeDetailClient({
 
   async function handlePaymentSubmit(e: FormEvent) {
     e.preventDefault();
+    if (paymentAccountRequired && !paymentAccountId.trim()) {
+      setError("Ödeme yapılacak kasa veya banka hesabını seçin.");
+      return;
+    }
     setSaving(true);
+    setError("");
     try {
       const res = await fetch(`/api/employees/${employee.id}/payments`, {
         method: "POST",
@@ -361,6 +426,7 @@ export function EmployeeDetailClient({
           type: paymentType,
           amount: Number(paymentAmount),
           dueDate: paymentDueDate || undefined,
+          relatedAccountId: paymentAccountId.trim() || undefined,
         }),
       });
       const json = await res.json();
@@ -368,7 +434,11 @@ export function EmployeeDetailClient({
         setError(json.message);
         return;
       }
-      setSuccess("Ödeme kaydı oluşturuldu.");
+      setSuccess(
+        paymentAccountId.trim()
+          ? "Ödeme kaydı oluşturuldu ve kasadan çıkış yapıldı."
+          : "Ödeme kaydı oluşturuldu."
+      );
       setPaymentAmount("");
       setPaymentDueDate("");
       await reload();
@@ -709,9 +779,9 @@ export function EmployeeDetailClient({
                   className="space-y-3 rounded-2xl border border-slate-100 p-4"
                 >
                   <p className="text-xs font-semibold text-slate-500">
-                    Bekleyen ödemeleri ödendi işaretlerken ödeme hesabı
-                    seçimi zorunludur; gider ve kasa/banka hareketi seçilen
-                    hesap üzerinde oluşturulur.
+                    Kasadan çıkış gerektiren ödemelerde hesap seçimi zorunludur.
+                    Hesap seçilirse ödeme anında kasa/banka hareketi oluşturulur;
+                    seçilmezse bekleyen kayıt olarak kalır (maaş ve avans).
                   </p>
                   <div className="flex flex-wrap items-end gap-3">
                     <label className="space-y-1">
@@ -724,7 +794,7 @@ export function EmployeeDetailClient({
                         className={inputClass}
                       >
                         <option value="SALARY">Maaş</option>
-                        <option value="ADVANCE">Avans</option>
+                        <option value="ADVANCE">Çalışana Avans</option>
                         <option value="BONUS">Prim</option>
                         <option value="DEDUCTION">Kesinti</option>
                         <option value="EXPENSE_REIMBURSEMENT">
@@ -764,9 +834,23 @@ export function EmployeeDetailClient({
                         className={inputClass}
                       />
                     </label>
+                    {showPaymentAccountField ? (
+                      <FinanceAccountSelect
+                        accounts={financeAccounts}
+                        value={paymentAccountId}
+                        onChange={setPaymentAccountId}
+                        disabled={accountsLoading || saving}
+                        required={paymentAccountRequired}
+                        showBalance
+                        showSetupLink={false}
+                        label="Ödeme Yapılacak Hesap"
+                        emptyMessage={EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_MESSAGE}
+                        className={inputClass}
+                      />
+                    ) : null}
                     <button
                       type="submit"
-                      disabled={saving}
+                      disabled={saving || (canProcessPayments === false && showPaymentAccountField)}
                       className="h-10 rounded-xl bg-blue-600 px-4 text-xs font-black text-white disabled:opacity-50"
                     >
                       Ödeme Ekle
@@ -774,6 +858,64 @@ export function EmployeeDetailClient({
                   </div>
                 </form>
               ) : null}
+
+              <div className="mb-4 flex flex-wrap items-end gap-3 rounded-2xl border border-slate-100 p-4">
+                <label className="space-y-1">
+                  <span className="text-xs font-bold text-slate-500">
+                    Ödeme türü
+                  </span>
+                  <select
+                    value={paymentFilterType}
+                    onChange={(e) => setPaymentFilterType(e.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="">Tümü</option>
+                    <option value="SALARY">Maaş</option>
+                    <option value="ADVANCE">Çalışana Avans</option>
+                    <option value="BONUS">Prim</option>
+                    <option value="DEDUCTION">Kesinti</option>
+                    <option value="EXPENSE_REIMBURSEMENT">Masraf iadesi</option>
+                    <option value="OTHER">Diğer</option>
+                  </select>
+                </label>
+                <label className="space-y-1">
+                  <span className="text-xs font-bold text-slate-500">
+                    Kasa / banka
+                  </span>
+                  <select
+                    value={paymentFilterAccount}
+                    onChange={(e) => setPaymentFilterAccount(e.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="">Tümü</option>
+                    {financeAccounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-1">
+                  <span className="text-xs font-bold text-slate-500">
+                    Başlangıç
+                  </span>
+                  <input
+                    type="date"
+                    value={paymentFilterDateFrom}
+                    onChange={(e) => setPaymentFilterDateFrom(e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-xs font-bold text-slate-500">Bitiş</span>
+                  <input
+                    type="date"
+                    value={paymentFilterDateTo}
+                    onChange={(e) => setPaymentFilterDateTo(e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+              </div>
 
               <div className="overflow-x-auto">
                 <table className="min-w-[720px] w-full text-left text-sm">
@@ -785,6 +927,7 @@ export function EmployeeDetailClient({
                       <th className="py-2 pr-4">Durum</th>
                       <th className="py-2 pr-4">Ödeme tarihi</th>
                       <th className="py-2 pr-4">Ödeme hesabı</th>
+                      <th className="py-2 pr-4">Mahsup</th>
                       <th className="py-2 pr-4">Yöntem</th>
                       <th className="py-2 pr-4">İşlemi yapan</th>
                       <th className="py-2 pr-4">Finans</th>
@@ -792,7 +935,7 @@ export function EmployeeDetailClient({
                     </tr>
                   </thead>
                   <tbody>
-                    {(employee.payments ?? []).map((p) => (
+                    {filteredPayments.map((p) => (
                       <tr key={p.id} className="border-b border-slate-50">
                         <td className="py-3 pr-4 font-semibold">
                           {getPaymentTypeLabel(
@@ -830,7 +973,29 @@ export function EmployeeDetailClient({
                           {p.paidAt ? formatEmployeeDate(p.paidAt) : "—"}
                         </td>
                         <td className="py-3 pr-4 text-slate-600">
-                          {p.paymentAccount?.name ?? "—"}
+                          {p.paymentAccount ? (
+                            <Link
+                              href={`/cash-bank/${p.paymentAccount.id}`}
+                              className="font-semibold text-blue-700 hover:underline"
+                            >
+                              {p.paymentAccount.name}
+                            </Link>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className="py-3 pr-4 text-slate-600">
+                          {p.type === "ADVANCE" && p.status === "PAID" ? (
+                            <span className="text-[11px] font-semibold text-amber-800">
+                              Mahsup Edilecek Avans:{" "}
+                              {formatMoney(
+                                (p as { advanceSettlementRemaining?: number })
+                                  .advanceSettlementRemaining ?? p.amount
+                              )}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
                         </td>
                         <td className="py-3 pr-4 text-slate-500">
                           {p.paymentMethodLabel ?? "—"}

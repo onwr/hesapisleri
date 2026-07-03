@@ -4,6 +4,7 @@ import {
   SIPAY_ALLOWED_ORIGINS,
   SIPAY_LIVE_API_BASE,
   SIPAY_TEST_API_BASE,
+  SIPAY_SANDBOX_MERCHANT_KEY,
   _resetSipayEnvCache,
   getSipayBaseUrl,
   normalizeSipayBaseUrl,
@@ -67,6 +68,7 @@ describe("sipay-env — getSipayEnv validation", () => {
 
   beforeEach(() => {
     _resetSipayEnvCache();
+    delete process.env.SIPAY_MERCHANT_KEY_B64;
   });
 
   afterEach(() => {
@@ -92,9 +94,12 @@ describe("sipay-env — getSipayEnv validation", () => {
   });
 
   it("SIPAY_ENV=production canonical live olur", async () => {
+    const fullKey = `$2y$10$${"0".repeat(53)}`;
+    assert.equal(fullKey.length, 60);
     process.env.SIPAY_APP_ID = "appid";
     process.env.SIPAY_APP_SECRET = "secret";
-    process.env.SIPAY_MERCHANT_KEY = "merchant_key_32bytes_padding_0000";
+    process.env.SIPAY_MERCHANT_KEY_B64 = Buffer.from(fullKey).toString("base64");
+    delete process.env.SIPAY_MERCHANT_KEY;
     process.env.SIPAY_MERCHANT_ID = "merchantid";
     process.env.SIPAY_RETURN_URL = "http://localhost:3000/api/billing/sipay/return";
     process.env.SIPAY_CANCEL_URL = "http://localhost:3000/api/billing/sipay/cancel";
@@ -103,6 +108,7 @@ describe("sipay-env — getSipayEnv validation", () => {
     const { getSipayEnv: getSipayEnvFresh } = await import("./sipay-env");
     const env = getSipayEnvFresh();
     assert.equal(env.SIPAY_ENV, "live");
+    assert.equal(env.SIPAY_MERCHANT_KEY.length, 60);
   });
 
   it("SIPAY_SALE_WEBHOOK_KEY boşken startup geçer", async () => {
@@ -129,10 +135,41 @@ describe("sipay-env — getSipayEnv validation", () => {
     assert.ok(meta.length >= 60);
   });
 
-  it("merchant key trim edilmeden okunur", async () => {
+  it("SIPAY_MERCHANT_KEY_B64 öncelikli çözülür", async () => {
+    const fullKey =
+      "$2y$10$HmRgYosneqcwHj.UH7upGuyCZqpQ1ITgSMj9Vvxn.t6f.Vdf2SQFO";
+    process.env.SIPAY_MERCHANT_KEY_B64 = Buffer.from(fullKey).toString("base64");
+    process.env.SIPAY_MERCHANT_KEY = "broken-plain-key";
     process.env.SIPAY_APP_ID = "appid";
     process.env.SIPAY_APP_SECRET = "secret";
-    const rawKey = "$2y$10$abcdefghijklmnopqrstuvwx0123456789012345678901234567890";
+    process.env.SIPAY_MERCHANT_ID = "merchantid";
+    process.env.SIPAY_RETURN_URL = "http://localhost:3000/return";
+    process.env.SIPAY_CANCEL_URL = "http://localhost:3000/cancel";
+
+    const { getSipayEnv: getSipayEnvFresh } = await import("./sipay-env");
+    const env = getSipayEnvFresh();
+    assert.equal(env.SIPAY_MERCHANT_KEY, fullKey);
+  });
+
+  it("canlıda kesik merchant key startup'ta reddedilir", async () => {
+    process.env.SIPAY_ENV = "live";
+    process.env.SIPAY_APP_ID = "appid";
+    process.env.SIPAY_APP_SECRET = "secret";
+    process.env.SIPAY_MERCHANT_KEY = ".tnPPz3FDQFcSXteMc8DVOYz8nobnBkl.F.1xCzbzOsdOKS";
+    process.env.SIPAY_MERCHANT_ID = "19297904";
+    process.env.SIPAY_RETURN_URL = "https://hesapisleri.com/return";
+    process.env.SIPAY_CANCEL_URL = "https://hesapisleri.com/cancel";
+
+    const { getSipayEnv: getSipayEnvFresh } = await import("./sipay-env");
+    assert.throws(() => getSipayEnvFresh(), /bozuk görünüyor|SIPAY_MERCHANT_KEY_B64/);
+  });
+
+  it("dış boşluklar merchant key'den temizlenir", async () => {
+    process.env.SIPAY_APP_ID = "appid";
+    process.env.SIPAY_APP_SECRET = "secret";
+    const rawKey =
+      "$2y$10$HmRgYosneqcwHj.UH7upGuyCZqpQ1ITgSMj9Vvxn.t6f.Vdf2SQFO";
+    assert.equal(rawKey.length, 60);
     process.env.SIPAY_MERCHANT_KEY = ` ${rawKey} `;
     process.env.SIPAY_MERCHANT_ID = "merchantid";
     process.env.SIPAY_RETURN_URL = "https://hesapisleri.com/return";
@@ -140,19 +177,20 @@ describe("sipay-env — getSipayEnv validation", () => {
 
     const { getSipayEnv: getSipayEnvFresh } = await import("./sipay-env");
     const env = getSipayEnvFresh();
-    assert.equal(env.SIPAY_MERCHANT_KEY, ` ${rawKey} `);
+    assert.equal(env.SIPAY_MERCHANT_KEY, rawKey);
   });
 
-  it("bcrypt prefix bozuksa hata fırlatır", async () => {
+  it("bcrypt uzunluğu 60 değilse hata fırlatır", async () => {
+    process.env.SIPAY_ENV = "live";
     process.env.SIPAY_APP_ID = "appid";
     process.env.SIPAY_APP_SECRET = "secret";
-    process.env.SIPAY_MERCHANT_KEY = "$2x$10$brokenmerchantkeypadding000000000";
+    process.env.SIPAY_MERCHANT_KEY = "$2y$10$shortmerchantkeypadding000000000";
     process.env.SIPAY_MERCHANT_ID = "merchantid";
     process.env.SIPAY_RETURN_URL = "https://hesapisleri.com/return";
     process.env.SIPAY_CANCEL_URL = "https://hesapisleri.com/cancel";
 
     const { getSipayEnv: getSipayEnvFresh } = await import("./sipay-env");
-    assert.throws(() => getSipayEnvFresh(), /\$2y\$10\$/);
+    assert.throws(() => getSipayEnvFresh(), /uzunluğu 60 olmalı|bozuk görünüyor/);
   });
 
   it("allowlist dışı SIPAY_BASE_URL reddedilir", async () => {

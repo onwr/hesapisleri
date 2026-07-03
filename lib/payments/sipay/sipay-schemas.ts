@@ -26,7 +26,7 @@ export const sipayPurchaseLinkInvoiceSchema = z.object({
       description: z.string().min(1),
       price: z.string(),
       quantity: z.number().int().positive(),
-      type: z.number(),
+      type: z.enum(["DIGITAL", "PHYSICAL"]),
     }),
   ).min(1),
   response_method: z.literal("POST"),
@@ -38,7 +38,6 @@ export const sipayPurchaseLinkInvoiceSchema = z.object({
 export const sipayPurchaseLinkRequestSchema = z
   .object({
     merchant_key: z.string().min(1),
-    merchant_id: z.string().min(1),
     name: z.string(),
     surname: z.string(),
     currency_code: z.literal("TRY"),

@@ -35,7 +35,7 @@ function parseInvoice(body: { invoice: string }) {
       description: string;
       price: string;
       quantity: number;
-      type: number;
+      type: "DIGITAL" | "PHYSICAL";
     }>;
     bill_email?: string;
     sale_web_hook_key?: string;
@@ -53,7 +53,7 @@ describe("sipay-purchase-payload", () => {
     const body = buildSipayPurchaseLinkBody(BASE_INPUT);
 
     assert.equal(body.merchant_key, ENV.SIPAY_MERCHANT_KEY);
-    assert.equal(body.merchant_id, ENV.SIPAY_MERCHANT_ID);
+    assert.equal((body as { merchant_id?: string }).merchant_id, undefined);
     assert.equal(body.currency_code, "TRY");
     assert.equal(body.name, "Test");
     assert.equal(body.surname, "User");
@@ -63,6 +63,7 @@ describe("sipay-purchase-payload", () => {
     const invoice = parseInvoice(body);
 
     assert.equal(invoice.items[0].quantity, 1);
+    assert.equal(invoice.items[0].type, "DIGITAL");
     assert.equal(invoice.total, "99.90");
     assert.equal(invoice.bill_email, "billing@example.com");
     assert.equal(invoice.sale_web_hook_key, ENV.SIPAY_SALE_WEBHOOK_KEY);

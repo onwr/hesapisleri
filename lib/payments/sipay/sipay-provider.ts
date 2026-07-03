@@ -22,6 +22,7 @@ import { buildSipayPurchaseLinkBody } from "./sipay-purchase-payload";
 import {
   sipayPurchaseLinkSuccessSchema,
   sipayPurchaseLinkErrorSchema,
+  sipayPurchaseLinkRequestSchema,
   sipayCheckStatusResponseSchema,
   sipayRefundResponseSchema,
   sipayWebhookPayloadSchema,
@@ -110,6 +111,14 @@ export function createSipayProvider(): CheckoutProvider {
         cancelUrl: input.cancelUrl,
       });
 
+      const requestValidation = sipayPurchaseLinkRequestSchema.safeParse(body);
+      if (!requestValidation.success) {
+        throw new SipayError(
+          `Sipay purchase/link request invalid: ${requestValidation.error.message}`,
+          "PURCHASE_REQUEST_INVALID",
+        );
+      }
+
       const raw = await sipayPost<SipayPurchaseLinkResponse>(
         baseUrl,
         SIPAY_ENDPOINTS.PURCHASE_LINK,
@@ -141,6 +150,18 @@ export function createSipayProvider(): CheckoutProvider {
           errorParsed.data.status_description ??
           errorParsed.data.success_message ??
           "unknown";
+        if (errorParsed.data.status_code === 14) {
+          logSipaySafeConfigDebug("purchase-link-merchant-not-found");
+          const hint =
+            env.SIPAY_MERCHANT_KEY.length !== 60 ||
+            !env.SIPAY_MERCHANT_KEY.startsWith("$2y$10$")
+              ? " Merchant key bozuk (Next.js $ expansion) — SIPAY_MERCHANT_KEY_B64 kullanın."
+              : "";
+          throw new SipayError(
+            `Sipay merchant bulunamadı (14). SIPAY_ENV, base URL ve merchant key canlı panel ile eşleşmeli.${hint}`,
+            "MERCHANT_NOT_FOUND",
+          );
+        }
         throw new SipayError(
           `Sipay purchase/link failed: ${errorParsed.data.status_code} — ${message}`,
           "PURCHASE_FAILED",

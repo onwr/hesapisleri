@@ -20,7 +20,6 @@ export type BuildSipayPurchaseLinkBodyInput = {
     | "SIPAY_APP_ID"
     | "SIPAY_APP_SECRET"
     | "SIPAY_MERCHANT_KEY"
-    | "SIPAY_MERCHANT_ID"
     | "SIPAY_SALE_WEBHOOK_KEY"
   >;
   invoiceId: string;
@@ -141,7 +140,7 @@ export function buildSipayPurchaseInvoice(
     description: resolveSipayItemDescription(item),
     price: formatDecimal(item.priceMinor),
     quantity: item.quantity,
-    type: 1,
+    type: "DIGITAL" as const,
   }));
 
   const itemsTotalMinor = input.items.reduce(
@@ -193,7 +192,6 @@ export function buildSipayPurchaseLinkBody(
 
   return {
     merchant_key: input.env.SIPAY_MERCHANT_KEY,
-    merchant_id: input.env.SIPAY_MERCHANT_ID,
     name,
     surname,
     currency_code: currencyCode,

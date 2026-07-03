@@ -24,12 +24,15 @@ export type SipayTokenResponse = {
 };
 
 // ─── Purchase/link (POST /ccpayment/purchase/link) ─────────────────────────────
+export const SIPAY_INVOICE_ITEM_TYPES = ["DIGITAL", "PHYSICAL"] as const;
+export type SipayInvoiceItemType = (typeof SIPAY_INVOICE_ITEM_TYPES)[number];
+
 export type SipayPurchaseLinkItem = {
   name: string;
   description: string;
   price: string; // "9.90" — 2 ondalık, string
   quantity: number;
-  type: number; // 1 = product
+  type: SipayInvoiceItemType;
 };
 
 /** Nested invoice object — API'ye JSON string olarak gönderilir. */
@@ -51,7 +54,6 @@ export type SipayPurchaseInvoice = {
 /** Top-level purchase/link request body. */
 export type SipayPurchaseLinkRequest = {
   merchant_key: string;
-  merchant_id: string;
   name: string;
   surname: string;
   currency_code: "TRY";

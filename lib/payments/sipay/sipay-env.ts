@@ -16,8 +16,12 @@ export const SIPAY_ALLOWED_BASE_URLS = SIPAY_ALLOWED_ORIGINS;
 export const SIPAY_TEST_API_BASE = "https://provisioning.sipay.com.tr/ccpayment";
 export const SIPAY_LIVE_API_BASE = "https://app.sipay.com.tr/ccpayment";
 
+/** Sipay dokümantasyonundaki sandbox merchant key — canlıda kullanılamaz. */
+export const SIPAY_SANDBOX_MERCHANT_KEY =
+  "$2y$10$HmRgYosneqcwHj.UH7upGuyCZqpQ1ITgSMj9Vvxn.t6f.Vdf2SQFO";
+
 const BCRYPT_MERCHANT_KEY_PREFIX = "$2y$10$";
-const BCRYPT_MERCHANT_KEY_MIN_LENGTH = 60;
+const BCRYPT_MERCHANT_KEY_EXACT_LENGTH = 60;
 
 const CANONICAL_SIPAY_ENV = ["test", "live"] as const;
 export type CanonicalSipayEnv = (typeof CANONICAL_SIPAY_ENV)[number];
@@ -64,9 +68,56 @@ const billingCallbackUrlSchema = z
       "Billing callback URL must be https:// or http://localhost (or 127.0.0.1)",
   });
 
-/** Raw env string — trim/encode yok; bcrypt $ karakterleri korunur. */
+/** Raw env string — içerideki $ karakterlerine dokunulmaz. */
 function readRawEnvString(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+/** Yalnızca dış boşluk/satır sonu temizlenir; bcrypt gövdesi korunur. */
+export function normalizeMerchantKey(value: unknown): string {
+  const raw = readRawEnvString(value);
+  return raw.replace(/^\s+/, "").replace(/\s+$/, "");
+}
+
+/** dotenv-expand: $$ → $ */
+export function unescapeMerchantKeyDollars(value: string): string {
+  return value.replace(/\$\$/g, "$");
+}
+
+export function isLikelyTruncatedMerchantKey(key: string): boolean {
+  return (
+    key.length < BCRYPT_MERCHANT_KEY_EXACT_LENGTH &&
+    (key.startsWith(".") || key.startsWith("y$10$") || !key.startsWith("$"))
+  );
+}
+
+/**
+ * Next.js/dotenv-expand $ karakterlerini yiyebilir.
+ * Öncelik: SIPAY_MERCHANT_KEY_B64 → SIPAY_MERCHANT_KEY (+ $$ escape)
+ */
+export function resolveMerchantKeyFromProcessEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const b64 = env.SIPAY_MERCHANT_KEY_B64?.trim();
+  if (b64) {
+    try {
+      const decoded = Buffer.from(b64, "base64").toString("utf8");
+      return normalizeMerchantKey(decoded);
+    } catch {
+      throw new Error("SIPAY_MERCHANT_KEY_B64 geçersiz base64.");
+    }
+  }
+
+  const raw = normalizeMerchantKey(env.SIPAY_MERCHANT_KEY);
+  return unescapeMerchantKeyDollars(raw);
+}
+
+export function encodeMerchantKeyToBase64(key: string): string {
+  return Buffer.from(key, "utf8").toString("base64");
+}
+
+export function normalizeMerchantId(value: unknown): string {
+  return readRawEnvString(value).trim();
 }
 
 const sipayEnvSchema = z.object({
@@ -84,11 +135,11 @@ const sipayEnvSchema = z.object({
     z.string().min(1, "SIPAY_APP_SECRET required"),
   ),
   SIPAY_MERCHANT_KEY: z.preprocess(
-    readRawEnvString,
+    () => resolveMerchantKeyFromProcessEnv(),
     z.string().min(32, "SIPAY_MERCHANT_KEY must be ≥32 chars"),
   ),
   SIPAY_MERCHANT_ID: z.preprocess(
-    readRawEnvString,
+    (v) => normalizeMerchantId(v),
     z.string().min(1, "SIPAY_MERCHANT_ID required"),
   ),
   SIPAY_SALE_WEBHOOK_KEY: z.preprocess(
@@ -184,19 +235,53 @@ export function logSipaySafeConfigDebug(context?: string): SipaySafeConfigDebug 
   return debug;
 }
 
-function assertMerchantKeyIntegrity(key: string) {
-  if (!key.startsWith("$")) return;
-
-  if (!key.startsWith(BCRYPT_MERCHANT_KEY_PREFIX)) {
+function assertMerchantKeyIntegrity(key: string, sipayEnv: CanonicalSipayEnv) {
+  if (key.startsWith("y$10$")) {
     throw new Error(
-      "SIPAY_MERCHANT_KEY $2y$10$ prefix bekleniyor — Next.js env expansion bozulmuş olabilir",
+      "SIPAY_MERCHANT_KEY $2 prefix eksik — SIPAY_MERCHANT_KEY_B64 kullanın veya her $ için $$ yazın.",
     );
   }
 
-  if (key.length < BCRYPT_MERCHANT_KEY_MIN_LENGTH) {
+  if (sipayEnv === "live" || key.includes("$")) {
+    if (isLikelyTruncatedMerchantKey(key)) {
+      throw new Error(
+        `SIPAY_MERCHANT_KEY bozuk görünüyor (uzunluk: ${key.length}, beklenen: ${BCRYPT_MERCHANT_KEY_EXACT_LENGTH}). ` +
+          "Next.js .env dosyası $ karakterlerini siliyor. Çözüm: SIPAY_MERCHANT_KEY_B64 kullanın " +
+          "(scripts/gen-merchant-key-b64.mjs) veya SIPAY_MERCHANT_KEY içinde her $ için $$ yazın.",
+      );
+    }
+
+    if (!key.startsWith(BCRYPT_MERCHANT_KEY_PREFIX)) {
+      throw new Error(
+        "SIPAY_MERCHANT_KEY $2y$10$ ile başlamalı — canlı ortamda geçerli bcrypt merchant key gerekir.",
+      );
+    }
+
+    if (key.length !== BCRYPT_MERCHANT_KEY_EXACT_LENGTH) {
+      throw new Error(
+        `SIPAY_MERCHANT_KEY uzunluğu ${BCRYPT_MERCHANT_KEY_EXACT_LENGTH} olmalı (şu an: ${key.length}).`,
+      );
+    }
+  }
+
+  if (sipayEnv === "live" && key === SIPAY_SANDBOX_MERCHANT_KEY) {
     throw new Error(
-      "SIPAY_MERCHANT_KEY uzunluğu geçersiz — env değeri eksik/bozuk olabilir",
+      "SIPAY_ENV=live iken sandbox merchant key kullanılamaz — canlı panelden merchant key alın.",
     );
+  }
+}
+
+function assertSipayCredentialEnvironment(
+  env: Pick<SipayEnv, "SIPAY_ENV" | "SIPAY_MERCHANT_KEY" | "SIPAY_BASE_URL">,
+): void {
+  const baseUrl = getSipayBaseUrl(env);
+  if (env.SIPAY_ENV === "live" && !baseUrl.startsWith(SIPAY_LIVE_API_BASE)) {
+    throw new Error(
+      `SIPAY_ENV=live iken API base ${SIPAY_LIVE_API_BASE} olmalı (şu an: ${baseUrl}).`,
+    );
+  }
+  if (env.SIPAY_ENV === "test" && baseUrl.startsWith(SIPAY_LIVE_API_BASE)) {
+    throw new Error("SIPAY_ENV=test iken canlı API base kullanılamaz.");
   }
 }
 
@@ -206,7 +291,8 @@ export function getSipayEnv(): SipayEnv {
   if (!result.success) {
     throw new Error(`Sipay env config invalid:\n${result.error.message}`);
   }
-  assertMerchantKeyIntegrity(result.data.SIPAY_MERCHANT_KEY);
+  assertMerchantKeyIntegrity(result.data.SIPAY_MERCHANT_KEY, result.data.SIPAY_ENV);
+  assertSipayCredentialEnvironment(result.data);
   _cached = result.data;
   return _cached;
 }

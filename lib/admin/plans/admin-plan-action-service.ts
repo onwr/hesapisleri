@@ -15,11 +15,11 @@ export async function activateAdminPlan(input: {
 }) {
   const plan = await db.membershipPlan.findUnique({ where: { id: input.planId } });
   if (!plan) throw new AdminPlanServiceError("Plan bulunamadı.", 404);
-  if (plan.planStatus === "ACTIVE") {
-    throw new AdminPlanServiceError("Plan zaten aktif.", 400);
-  }
   if (plan.planStatus === "ARCHIVED") {
     throw new AdminPlanServiceError("Arşivlenmiş plan yeniden etkinleştirilemez.", 400);
+  }
+  if (plan.planStatus === "ACTIVE" && plan.isActive) {
+    throw new AdminPlanServiceError("Plan zaten aktif.", 400);
   }
 
   const detail = await getAdminPlanDetail(input.planId, "overview");
@@ -44,7 +44,12 @@ export async function activateAdminPlan(input: {
 
   if (plan.code) {
     const dup = await db.membershipPlan.findFirst({
-      where: { code: plan.code, id: { not: input.planId }, planStatus: "ACTIVE" },
+      where: {
+        code: plan.code,
+        id: { not: input.planId },
+        planStatus: "ACTIVE",
+        isActive: true,
+      },
     });
     if (dup) {
       throw new AdminPlanServiceError("Aynı kodla başka aktif plan var.", 409);
@@ -147,4 +152,45 @@ export async function archiveAdminPlan(input: {
 
   invalidateAdminPlanCaches(input.planId);
   return result;
+}
+
+export async function deactivateAdminPlan(input: {
+  planId: string;
+  userId: string;
+  reason: string;
+}) {
+  const plan = await db.membershipPlan.findUnique({ where: { id: input.planId } });
+  if (!plan) throw new AdminPlanServiceError("Plan bulunamadı.", 404);
+  if (plan.planStatus === "ARCHIVED") {
+    throw new AdminPlanServiceError("Arşivlenmiş plan pasifleştirilemez.", 400);
+  }
+  if (plan.planStatus !== "ACTIVE" || !plan.isActive) {
+    throw new AdminPlanServiceError("Yalnızca satışta aktif planlar pasifleştirilebilir.", 400);
+  }
+
+  const updated = await db.$transaction(async (tx) => {
+    const row = await tx.membershipPlan.update({
+      where: { id: input.planId },
+      data: {
+        isActive: false,
+        visibility: plan.visibility === "PUBLIC" ? "PRIVATE" : plan.visibility,
+      },
+    });
+
+    await logAdminPlanAudit({
+      userId: input.userId,
+      action: "PLAN_DEACTIVATED",
+      planId: input.planId,
+      entityType: "MembershipPlan",
+      entityId: input.planId,
+      displayMessage: `${plan.name} pasifleştirildi.`,
+      metadata: { reason: input.reason },
+      tx,
+    });
+
+    return row;
+  });
+
+  invalidateAdminPlanCaches(input.planId);
+  return updated;
 }

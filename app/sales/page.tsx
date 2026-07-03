@@ -2,7 +2,6 @@ import Link from "next/link";
 import {
   CalendarDays,
   CheckCircle2,
-  ChevronRight,
   FileText,
   ReceiptText,
   RefreshCcw,
@@ -32,6 +31,10 @@ import {
 } from "@/lib/sales-page-utils";
 import { formatMoney } from "@/lib/format-utils";
 import { AiPageTriggerButton } from "@/components/ai-assistant/ai-page-trigger-button";
+import {
+  CompactActionCard,
+} from "@/components/cards/compact-action-card";
+import { CompactActionCardGrid } from "@/components/cards/compact-action-card-grid";
 
 type SalesPageProps = {
   searchParams: Promise<{
@@ -80,36 +83,36 @@ const actionCards = [
     title: "Yeni Satış",
     description: "Hemen satış oluştur",
     href: "/sales/new",
-    icon: ShoppingCart,
-    gradient: "from-emerald-500 to-green-600",
+    iconName: "shopping-cart" as const,
+    color: "emerald" as const,
   },
   {
     title: "Fatura Kes",
     description: "Yeni fatura oluştur",
     href: "/invoices/e-invoice",
-    icon: FileText,
-    gradient: "from-violet-500 to-purple-600",
+    iconName: "file-text" as const,
+    color: "violet" as const,
   },
   {
     title: "Tahsilat Al",
     description: "Müşteriden ödeme al",
     href: "/cash-bank/collections",
-    icon: Wallet,
-    gradient: "from-sky-400 to-blue-600",
+    iconName: "wallet" as const,
+    color: "sky" as const,
   },
   {
     title: "İade / İptal",
     description: "İade veya iptal işlemi",
     href: "/sales?tab=returns",
-    icon: RefreshCcw,
-    gradient: "from-orange-400 to-orange-600",
+    iconName: "refresh-ccw" as const,
+    color: "orange" as const,
   },
   {
     title: "Teklif Oluştur",
     description: "Müşteriye teklif ver",
     href: "/sales/quotes/new",
-    icon: ReceiptText,
-    gradient: "from-rose-400 to-pink-600",
+    iconName: "receipt-text" as const,
+    color: "rose" as const,
   },
 ];
 
@@ -165,43 +168,18 @@ const now = new Date();
           <AiPageTriggerButton moduleKey="sales" />
         </div>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          {actionCards.map((card) => {
-            const Icon = card.icon;
-
-            return (
-              <Link
-                key={card.title}
-                href={card.href}
-                className={[
-                  "group flex h-[86px] items-center justify-between rounded-2xl bg-linear-to-br p-4 text-white shadow-[0_14px_30px_rgba(15,23,42,0.12)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgba(15,23,42,0.16)]",
-                  card.gradient,
-                ].join(" ")}
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/15 shadow-inner">
-                    <Icon size={22} strokeWidth={2.2} />
-                  </div>
-
-                  <div className="min-w-0">
-                    <p className="truncate text-[15px] font-black leading-tight">
-                      {card.title}
-                    </p>
-                    <p className="mt-1 truncate text-[11px] font-medium text-white/85">
-                      {card.description}
-                    </p>
-                  </div>
-                </div>
-
-                <ChevronRight
-                  size={18}
-                  strokeWidth={3}
-                  className="shrink-0 opacity-90 transition group-hover:translate-x-1 group-hover:opacity-100"
-                />
-              </Link>
-            );
-          })}
-        </section>
+        <CompactActionCardGrid columns="5">
+          {actionCards.map((card) => (
+            <CompactActionCard
+              key={card.title}
+              title={card.title}
+              description={card.description}
+              href={card.href}
+              iconName={card.iconName}
+              color={card.color}
+            />
+          ))}
+        </CompactActionCardGrid>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           {statCards.map((stat) => {

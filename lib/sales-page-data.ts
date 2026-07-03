@@ -8,12 +8,14 @@ import {
   startOfLastMonth,
   startOfMonth,
 } from "@/lib/dashboard-metrics";
+import { getTimeMs } from "@/lib/format-utils";
 import { getCollectedAmount, getSaleRemainingAmount } from "@/lib/sale-payment-utils";
 import { getInvoiceRemainingAmount } from "@/lib/invoice-payment-utils";
 import {
   formatShortDateTime,
   normalizeDateRange,
   buildSalesExportQuery,
+  serializeSalesDocumentDate,
   type SalesDocumentRow,
   type SalesStatCard,
   type SalesTabKey,
@@ -37,6 +39,7 @@ export {
   parsePage,
   parseSalesTab,
   SALES_TAB_LABELS,
+  serializeSalesDocumentDate,
   toSalesRowActionData,
 } from "@/lib/sales-page-utils";
 
@@ -100,7 +103,7 @@ async function fetchDocuments(companyId: string) {
 
       return {
         id: `invoice-${invoice.id}`,
-        createdAt: invoice.createdAt,
+        createdAt: serializeSalesDocumentDate(invoice.createdAt),
         documentNo: invoice.invoiceNo,
         customerName: invoice.customer?.name ?? "Müşteri seçilmedi",
         typeLabel: "Fatura",
@@ -133,7 +136,7 @@ async function fetchDocuments(companyId: string) {
 
   const collectionRows: SalesDocumentRow[] = collections.map((tx) => ({
     id: `collection-${tx.id}`,
-    createdAt: tx.date,
+    createdAt: serializeSalesDocumentDate(tx.date),
     documentNo: `THS-${tx.id.slice(-8).toUpperCase()}`,
     customerName: tx.title.replace(/^Tahsilat:\s*/i, "") || "Tahsilat",
     typeLabel: "Tahsilat",
@@ -159,7 +162,7 @@ async function fetchDocuments(companyId: string) {
     .filter((sale) => sale.status === "REFUNDED" || sale.status === "CANCELLED")
     .map((sale) => ({
       id: `return-${sale.id}`,
-      createdAt: sale.createdAt,
+      createdAt: serializeSalesDocumentDate(sale.createdAt),
       documentNo: sale.saleNo,
       customerName: sale.customer?.name ?? "Müşteri seçilmedi",
       typeLabel: "İade",
@@ -187,7 +190,7 @@ async function fetchDocuments(companyId: string) {
     .filter((sale) => sale.status === "DRAFT")
     .map((sale) => ({
       id: `quote-${sale.id}`,
-      createdAt: sale.createdAt,
+      createdAt: serializeSalesDocumentDate(sale.createdAt),
       documentNo: sale.saleNo,
       customerName: sale.customer?.name ?? "Müşteri seçilmedi",
       typeLabel: "Teklif",
@@ -224,7 +227,7 @@ async function fetchDocuments(companyId: string) {
 
       return {
         id: `sale-${sale.id}`,
-        createdAt: sale.createdAt,
+        createdAt: serializeSalesDocumentDate(sale.createdAt),
         documentNo: sale.saleNo,
         customerName: sale.customer?.name ?? "Müşteri seçilmedi",
         typeLabel: "Satış",
@@ -264,11 +267,14 @@ async function fetchDocuments(companyId: string) {
 }
 
 function filterByDateRange(rows: SalesDocumentRow[], from: Date, to: Date) {
-  const end = endOfDay(to);
+  const fromMs = from.getTime();
+  const endMs = endOfDay(to).getTime();
 
-  return rows.filter(
-    (row) => row.createdAt >= from && row.createdAt <= end
-  );
+  return rows.filter((row) => {
+    const rowMs = getTimeMs(row.createdAt);
+    if (rowMs == null) return false;
+    return rowMs >= fromMs && rowMs <= endMs;
+  });
 }
 
 export async function getSalesPageData(
@@ -439,7 +445,8 @@ export async function getSalesPageData(
     options.to
   );
   const filteredRows = filterByDateRange(tabRows, rangeFrom, rangeTo).sort(
-    (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+    (a, b) =>
+      (getTimeMs(b.createdAt) ?? 0) - (getTimeMs(a.createdAt) ?? 0)
   );
 
   const totalRecords = filteredRows.length;
@@ -558,7 +565,8 @@ export async function getSalesExportRows(
     options.to
   );
   const filteredRows = filterByDateRange(tabRows, rangeFrom, rangeTo).sort(
-    (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+    (a, b) =>
+      (getTimeMs(b.createdAt) ?? 0) - (getTimeMs(a.createdAt) ?? 0)
   );
 
   return filteredRows.map((row) => ({

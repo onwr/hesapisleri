@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuthenticatedApiSession } from "@/lib/module-access";
@@ -6,6 +7,7 @@ import {
   switchUserCompany,
 } from "@/lib/auth-companies-service";
 import { attachAuthCookie } from "@/lib/auth-session-utils";
+import { invalidateCompanyEntitlementCache } from "@/lib/billing/entitlements/entitlement-cache";
 import { getPostAuthRedirectPath, resolveEffectiveRole } from "@/lib/permission-utils";
 
 const switchCompanySchema = z.object({
@@ -31,10 +33,17 @@ export async function POST(req: Request) {
       );
     }
 
+    const previousCompanyId = auth.session.companyId;
+
     const result = await switchUserCompany({
       userId: auth.session.userId,
       companyId: parsed.data.companyId,
     });
+
+    if (previousCompanyId) {
+      invalidateCompanyEntitlementCache(previousCompanyId);
+    }
+    invalidateCompanyEntitlementCache(result.companyId);
 
     const effectiveRole = resolveEffectiveRole({
       role: result.membershipRole,
@@ -58,6 +67,9 @@ export async function POST(req: Request) {
       companyId: result.companyId,
       sv: result.user.sessionVersion,
     });
+
+    revalidatePath("/", "layout");
+    revalidatePath("/settings/billing");
 
     return response;
   } catch (error) {

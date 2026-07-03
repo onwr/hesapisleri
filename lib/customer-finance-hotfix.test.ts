@@ -61,7 +61,7 @@ describe("customer finance utils", () => {
         balance: 5,
       },
       "company-a",
-      { purpose: "payment", amount: 10, checkBalance: true }
+      { purpose: "payment", amount: 10, checkBalance: true, allowNegativeCashBalance: false }
     );
     assert.equal(result.ok, false);
     if (!result.ok) {

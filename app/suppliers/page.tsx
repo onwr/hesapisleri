@@ -1,6 +1,5 @@
 import Link from "next/link";
 import {
-  ArrowRight,
   BellRing,
   CheckCircle2,
   Edit3,
@@ -32,6 +31,10 @@ import {
 import { getCachedSuppliersPageData } from "@/lib/tenant-cache/cached-tenant-page-data";
 import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
 import { formatDisplayDate, toIsoString } from "@/lib/format-utils";
+import {
+  CompactActionCard,
+} from "@/components/cards/compact-action-card";
+import { CompactActionCardGrid } from "@/components/cards/compact-action-card-grid";
 
 type SuppliersPageProps = {
   searchParams: Promise<{
@@ -68,36 +71,36 @@ function buildActionCards(exportHref: string) {
       title: "Yeni Tedarikçi",
       description: "Tedarikçi ekle",
       href: "/suppliers/new",
-      icon: Truck,
-      gradient: "from-emerald-500 to-green-600",
+      iconName: "truck" as const,
+      color: "emerald" as const,
     },
     {
       title: "Borçlu Tedarikçiler",
       description: "Borçlu tedarikçileri gör",
       href: "/suppliers?tab=payable",
-      icon: Wallet,
-      gradient: "from-rose-400 to-pink-600",
+      iconName: "wallet" as const,
+      color: "rose" as const,
     },
     {
       title: "Vadesi Geçen",
       description: "Vadesi geçen borçları gör",
       href: "/suppliers?tab=overdue",
-      icon: BellRing,
-      gradient: "from-orange-400 to-orange-600",
+      iconName: "bell-ring" as const,
+      color: "orange" as const,
     },
     {
       title: "Tedarikçi Excel",
       description: "Excel'e aktar",
       href: exportHref,
-      icon: FileSpreadsheet,
-      gradient: "from-violet-500 to-purple-600",
+      iconName: "file-spreadsheet" as const,
+      color: "violet" as const,
     },
     {
       title: "Pasif Tedarikçiler",
       description: "Pasif kayıtları gör",
       href: "/suppliers?tab=passive",
-      icon: UserX,
-      gradient: "from-blue-500 to-blue-600",
+      iconName: "user-x" as const,
+      color: "blue" as const,
     },
   ];
 }
@@ -146,43 +149,18 @@ export default async function SuppliersPage({ searchParams }: SuppliersPageProps
     <AppShell>
       <TenantPageSync />
       <div className="space-y-5">
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          {actionCards.map((card) => {
-            const Icon = card.icon;
-
-            return (
-              <Link
-                key={card.title}
-                href={card.href}
-                className={[
-                  "group flex h-[86px] items-center justify-between rounded-2xl bg-linear-to-br p-4 text-white shadow-[0_14px_30px_rgba(15,23,42,0.12)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgba(15,23,42,0.16)]",
-                  card.gradient,
-                ].join(" ")}
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/15 shadow-inner">
-                    <Icon size={22} strokeWidth={2.4} />
-                  </div>
-
-                  <div className="min-w-0">
-                    <p className="truncate text-[15px] font-black leading-tight">
-                      {card.title}
-                    </p>
-                    <p className="mt-1 truncate text-[11px] font-medium text-white/85">
-                      {card.description}
-                    </p>
-                  </div>
-                </div>
-
-                <ArrowRight
-                  size={18}
-                  strokeWidth={3}
-                  className="shrink-0 opacity-90 transition group-hover:translate-x-1 group-hover:opacity-100"
-                />
-              </Link>
-            );
-          })}
-        </section>
+        <CompactActionCardGrid columns="5">
+          {actionCards.map((card) => (
+            <CompactActionCard
+              key={card.title}
+              title={card.title}
+              description={card.description}
+              href={card.href}
+              iconName={card.iconName}
+              color={card.color}
+            />
+          ))}
+        </CompactActionCardGrid>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           {statCards.map((stat) => {
@@ -283,7 +261,10 @@ export default async function SuppliersPage({ searchParams }: SuppliersPageProps
                           </div>
 
                           <div className="min-w-0">
-                            <p className="truncate font-extrabold text-[#0f1f4d]">
+                            <Link
+                              href={`/suppliers/${supplier.id}`}
+                              className="truncate font-extrabold text-[#0f1f4d] hover:text-blue-700 hover:underline"
+                            >
                               {supplier.name}
                               {supplier.isFavorite ? (
                                 <Star
@@ -291,7 +272,7 @@ export default async function SuppliersPage({ searchParams }: SuppliersPageProps
                                   className="ml-1 inline fill-amber-400 text-amber-400"
                                 />
                               ) : null}
-                            </p>
+                            </Link>
                             {supplier.category ? (
                               <span
                                 className={[

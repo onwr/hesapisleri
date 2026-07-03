@@ -18,7 +18,7 @@ const cdnHostname = (() => {
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   output: "standalone",
-  serverExternalPackages: ["libxmljs2"],
+  serverExternalPackages: ["libxmljs2", "sharp"],
   images: {
     remotePatterns: [
       {

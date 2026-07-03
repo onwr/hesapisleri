@@ -219,9 +219,9 @@ describe("collections UI wiring", () => {
     const cashBank = read("components/cash-bank/cash-bank-list-actions.tsx");
     const dashboard = read("components/dashboard/dashboard-content.tsx");
 
-    assert.match(sales, /href: "\/cash-bank\/collections"/);
-    assert.match(cashBank, /href: "\/cash-bank\/collections"/);
-    assert.match(dashboard, /href: "\/cash-bank\/collections"/);
+    assert.match(sales, /href[=:]\s*["']\/cash-bank\/collections["']/);
+    assert.match(cashBank, /href[=:]\s*["']\/cash-bank\/collections["']/);
+    assert.match(dashboard, /href[=:]\s*["']\/cash-bank\/collections["']/);
   });
 
   it("collections page empty state metni", () => {

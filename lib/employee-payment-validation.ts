@@ -42,6 +42,7 @@ export function validateEmployeePaymentAccount(
     paymentCurrency?: string;
     amount?: number;
     checkBalance?: boolean;
+    allowNegativeCashBalance?: boolean;
   } = {}
 ):
   | { ok: true; account: NonNullable<typeof account> }
@@ -78,6 +79,7 @@ export function validateEmployeePaymentAccount(
 
   if (
     options.checkBalance &&
+    !options.allowNegativeCashBalance &&
     options.amount != null &&
     account.balance != null
   ) {

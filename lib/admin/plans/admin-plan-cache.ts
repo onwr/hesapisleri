@@ -1,6 +1,10 @@
-import { revalidateTag } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 
 export function invalidateAdminPlanCaches(planId?: string) {
+  revalidatePath("/admin/plans");
+  if (planId) {
+    revalidatePath(`/admin/plans/${planId}`);
+  }
   revalidateTag("admin-plan-list-metrics", "max");
   revalidateTag("admin-overview", "max");
   revalidateTag("checkout-plan", "max");

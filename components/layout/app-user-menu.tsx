@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 import { Building2, Check, ChevronDown, Loader2, LogOut, Plus } from "lucide-react";
 import {
   DropdownMenu,
@@ -81,8 +82,9 @@ export function AppUserMenu({ userName, companyName }: AppUserMenuProps) {
         return;
       }
 
-      router.push(json.data?.redirectTo ?? "/dashboard");
-      router.refresh();
+      notifyTenantCacheSync();
+      const redirectTo = json.data?.redirectTo ?? "/dashboard";
+      window.location.assign(redirectTo);
     } finally {
       setSwitchingId(null);
     }

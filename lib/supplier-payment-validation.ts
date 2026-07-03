@@ -47,6 +47,7 @@ export function validateSupplierFinanceAccount(
     paymentCurrency?: string;
     amount?: number;
     checkBalance?: boolean;
+    allowNegativeCashBalance?: boolean;
     purpose?: "disbursement" | "collection";
   } = {}
 ):
@@ -87,6 +88,7 @@ export function validateSupplierFinanceAccount(
 
   if (
     options.checkBalance &&
+    !options.allowNegativeCashBalance &&
     options.purpose !== "collection" &&
     options.amount != null &&
     options.amount > 0

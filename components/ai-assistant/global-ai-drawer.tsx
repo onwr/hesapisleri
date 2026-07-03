@@ -101,6 +101,15 @@ export function GlobalAiDrawer() {
 
           <div className="mt-3 flex gap-1 rounded-2xl bg-slate-100 p-1">
             <DrawerTabButton
+              active={state.tab === "finance"}
+              onClick={() => setTab("finance")}
+            >
+              <span className="inline-flex items-center justify-center gap-1.5">
+                <BarChart3 size={12} />
+                Finans
+              </span>
+            </DrawerTabButton>
+            <DrawerTabButton
               active={state.tab === "chat"}
               onClick={() => setTab("chat")}
             >
@@ -113,15 +122,6 @@ export function GlobalAiDrawer() {
               <span className="inline-flex items-center justify-center gap-1.5">
                 <Sparkles size={12} />
                 Özet
-              </span>
-            </DrawerTabButton>
-            <DrawerTabButton
-              active={state.tab === "finance"}
-              onClick={() => setTab("finance")}
-            >
-              <span className="inline-flex items-center justify-center gap-1.5">
-                <BarChart3 size={12} />
-                Finans
               </span>
             </DrawerTabButton>
           </div>

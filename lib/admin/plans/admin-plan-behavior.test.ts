@@ -20,7 +20,6 @@ import {
   PriceResolutionConflictError,
 } from "@/lib/admin/plans/admin-plan-price-resolution-utils";
 import { isPlanCheckoutAvailable } from "@/lib/admin/plans/admin-plan-checkout-utils";
-import { FORBIDDEN_PRICE_PATCH_FIELDS } from "@/lib/admin/plans/admin-plan-price-publish-service";
 
 const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -232,10 +231,9 @@ describe("activate/archive transaction source", () => {
 
 describe("price publish protection", () => {
   it("financial fields cannot be PATCHed on existing price row", () => {
-    for (const field of FORBIDDEN_PRICE_PATCH_FIELDS) {
-      assert.ok(field.length > 0);
-    }
     const publishSrc = readSrc("lib/admin/plans/admin-plan-price-publish-service.ts");
+    assert.ok(publishSrc.includes("FORBIDDEN_PRICE_PATCH_FIELDS"));
+    assert.ok(publishSrc.includes("Fiyatı Değiştir"));
     assert.ok(publishSrc.includes("applyPriceChangePolicyOnPublish"));
     assert.ok(publishSrc.includes("NEW_SUBSCRIBERS_ONLY"));
     assert.ok(publishSrc.includes("GRANDFATHERED"));
@@ -264,17 +262,21 @@ describe("route security", () => {
     });
   }
 
-  it("no hard delete endpoint in plans API", () => {
+  it("hard delete endpoint guarded for super admin", () => {
     const idRoute = readSrc("app/api/admin/plans/[id]/route.ts");
-    assert.ok(!idRoute.includes("export async function DELETE"));
+    assert.ok(idRoute.includes("export async function DELETE"));
+    assert.ok(idRoute.includes("requireSuperAdminApi"));
   });
 });
 
 describe("preview HMAC secret policy", () => {
-  it("requires separate PLAN_PRICE_PREVIEW_SECRET", () => {
-    const src = readSrc("lib/admin/plans/admin-plan-preview-hash.ts");
-    assert.ok(src.includes("PLAN_PRICE_PREVIEW_SECRET"));
-    assert.ok(src.includes("affectedSubscriptionSummary"));
-    assert.ok(src.includes("isPublic"));
+  it("admin preview session-only; public secret optional for share links", () => {
+    const hashSrc = readSrc("lib/admin/plans/admin-plan-preview-hash.ts");
+    const previewSrc = readSrc("lib/admin/plans/admin-plan-price-preview-service.ts");
+    assert.ok(hashSrc.includes("getPlanPricePreviewSecret"));
+    assert.ok(!hashSrc.includes("getAdminPlanPricePreviewSigningKey"));
+    assert.ok(!hashSrc.includes("NEXTAUTH_SECRET"));
+    assert.ok(previewSrc.includes("expectedCurrentPriceId"));
+    assert.ok(!previewSrc.includes("signPlanPricePreview"));
   });
 });

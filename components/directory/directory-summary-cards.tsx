@@ -31,22 +31,22 @@ export function DirectorySummaryCards({ summary }: DirectorySummaryCardsProps) {
                   <p className="text-[12px] font-extrabold text-[#24345f]/80">
                     {card.title}
                   </p>
-                  <p className="mt-3 text-[20px] font-black tracking-[-0.03em] text-[#0f1f4d]">
+                  <p className="mt-2 text-[22px] font-black tracking-[-0.03em] text-[#0f1f4d]">
                     {card.value}
                   </p>
                 </div>
 
                 <div
                   className={[
-                    "flex h-12 w-12 shrink-0 items-center justify-center rounded-full",
+                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
                     getDirectorySummaryColorClass(card.color),
                   ].join(" ")}
                 >
-                  <Icon size={22} strokeWidth={2.4} />
+                  <Icon size={18} strokeWidth={2.3} />
                 </div>
               </div>
 
-              <p className="mt-3 text-[11px] font-semibold text-slate-500">
+              <p className="mt-2 text-[11px] font-semibold text-slate-500">
                 {card.subtitle}
               </p>
             </div>
@@ -68,22 +68,22 @@ export function DirectorySummaryCards({ summary }: DirectorySummaryCardsProps) {
                   <p className="text-[12px] font-extrabold text-[#24345f]/80">
                     {card.title}
                   </p>
-                  <p className="mt-3 text-[20px] font-black tracking-[-0.03em] text-[#0f1f4d]">
+                  <p className="mt-2 text-[22px] font-black tracking-[-0.03em] text-[#0f1f4d]">
                     {card.value}
                   </p>
                 </div>
 
                 <div
                   className={[
-                    "flex h-12 w-12 shrink-0 items-center justify-center rounded-full",
+                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
                     getDirectorySummaryColorClass(card.color),
                   ].join(" ")}
                 >
-                  <Icon size={22} strokeWidth={2.4} />
+                  <Icon size={18} strokeWidth={2.3} />
                 </div>
               </div>
 
-              <p className="mt-3 text-[11px] font-semibold text-slate-500">
+              <p className="mt-2 text-[11px] font-semibold text-slate-500">
                 {card.subtitle}
               </p>
             </div>

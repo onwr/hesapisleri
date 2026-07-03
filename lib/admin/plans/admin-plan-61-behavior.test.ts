@@ -49,6 +49,7 @@ function samplePayload(overrides: Partial<PlanPricePreviewCanonicalPayload> = {}
       grandfathered: 0,
       pendingPlanChanges: 0,
     },
+    issuedByUserId: "admin-1",
     issuedAt: now,
     expiresAt: now + PLAN_PRICE_PREVIEW_TTL_MS,
     ...overrides,
@@ -58,22 +59,23 @@ function samplePayload(overrides: Partial<PlanPricePreviewCanonicalPayload> = {}
 describe("Faz 6.1 preview HMAC", () => {
   const envKey = "PLAN_PRICE_PREVIEW_SECRET";
   const prev = process.env[envKey];
-  const prevAuth = process.env.NEXTAUTH_SECRET;
+  const prevJwt = process.env.JWT_SECRET;
+  process.env.JWT_SECRET = "different-jwt-secret-value";
 
-  it("secret yoksa 503", () => {
+  it("public secret yoksa friendly mesaj", () => {
     delete process.env[envKey];
-    assert.throws(() => getPlanPricePreviewSecret(), /PREVIEW_SECRET/);
+    assert.throws(() => getPlanPricePreviewSecret(), /Paylaşılabilir/);
   });
 
-  it("secret çakışması reddedilir", () => {
+  it("secret çakışması reddedilir (JWT_SECRET ile aynı)", () => {
     process.env[envKey] = "same-secret-value-16c";
-    process.env.NEXTAUTH_SECRET = "same-secret-value-16c";
+    process.env.JWT_SECRET = "same-secret-value-16c";
     assert.throws(() => getPlanPricePreviewSecret());
   });
 
   it("token tampering reddedilir", () => {
     process.env[envKey] = SECRET;
-    process.env.NEXTAUTH_SECRET = "different-nextauth-secret";
+    process.env.JWT_SECRET = "different-jwt-secret-value";
     const payload = samplePayload();
     const token = signPlanPricePreview(payload, SECRET);
     const bad = verifyPlanPricePreview(token, samplePayload({ planId: "other" }), SECRET);
@@ -100,7 +102,8 @@ describe("Faz 6.1 preview HMAC", () => {
 
   if (prev !== undefined) process.env[envKey] = prev;
   else delete process.env[envKey];
-  if (prevAuth !== undefined) process.env.NEXTAUTH_SECRET = prevAuth;
+  if (prevJwt !== undefined) process.env.JWT_SECRET = prevJwt;
+  else delete process.env.JWT_SECRET;
 });
 
 describe("Faz 6.1 lifecycle source", () => {
@@ -222,12 +225,12 @@ describe("Faz 6.1 route security", () => {
 });
 
 describe("Faz 6.1 publish requires preview", () => {
-  it("publish servisi preview token doğrular", () => {
+  it("publish servisi expectedCurrentPriceId ile stale kontrolü yapar", () => {
     const src = readFileSync(
       join(webRoot, "lib/admin/plans/admin-plan-price-preview-service.ts"),
       "utf8"
     );
-    assert.ok(src.includes("verifyPlanPricePreview"));
+    assert.ok(src.includes("expectedCurrentPriceId"));
     assert.ok(src.includes("PreviewStaleError"));
     assert.ok(src.includes("applyPriceChangePolicyOnPublish"));
   });

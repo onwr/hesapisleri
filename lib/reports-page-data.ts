@@ -1,6 +1,7 @@
 import { calculateInventoryValue } from "@/lib/inventory-value-utils";
 import { db } from "@/lib/prisma";
 import { endOfMonth, startOfMonth } from "@/lib/dashboard-metrics";
+import { toIsoString } from "@/lib/format-utils";
 import {
   buildMonthlyCashFlowData,
   combineFinanceBreakdown,
@@ -428,9 +429,9 @@ export async function getReportsPageData(
     },
     accountBalance,
     periodLabel,
-    lastUpdatedAt: latestUpdate,
+    lastUpdatedAt: toIsoString(latestUpdate) ?? new Date().toISOString(),
     reportCards: REPORT_CARDS,
-    defaultFrom: startOfMonth(now),
-    defaultTo: endOfMonth(now),
+    defaultFrom: startOfMonth(now).toISOString(),
+    defaultTo: endOfMonth(now).toISOString(),
   };
 }

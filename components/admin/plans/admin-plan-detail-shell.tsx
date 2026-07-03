@@ -92,6 +92,7 @@ export function AdminPlanDetailShell({
     initialPrice?: ReturnType<typeof toWizardInitial>;
   } | null>(null);
   const [publishingPriceId, setPublishingPriceId] = useState<string | null>(null);
+  const [cancellingPriceId, setCancellingPriceId] = useState<string | null>(null);
   const [activateOpen, setActivateOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [cloneOpen, setCloneOpen] = useState(false);
@@ -114,6 +115,19 @@ export function AdminPlanDetailShell({
       setLoading(false);
     }
   }, [planId, tab, searchParams]);
+
+  useEffect(() => {
+    const action = searchParams.get("action");
+    if (action !== "change-price" && action !== "preview") return;
+    if (tab !== "pricing" || !tabData) return;
+
+    const pricing = tabData as { groups?: { effective?: PriceRow[] } };
+    const effective = pricing.groups?.effective ?? [];
+    if (effective.length > 0) {
+      openEditPriceWizard(effective[0], "revise");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, tab, tabData]);
 
   useEffect(() => {
     if (skipTabFetchRef.current && tab === activeTab) {
@@ -172,6 +186,28 @@ export function AdminPlanDetailShell({
     }
   }
 
+  async function cancelPriceRow(row: PriceRow, reason: string) {
+    setCancellingPriceId(row.id);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/admin/plans/${planId}/prices/${row.id}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      const json = await res.json();
+      if (!json.success) {
+        setMessage(json.message ?? "İptal başarısız.");
+        return;
+      }
+      onMutationSuccess(json.message ?? "Planlanmış fiyat iptal edildi.");
+    } catch {
+      setMessage("İptal başarısız.");
+    } finally {
+      setCancellingPriceId(null);
+    }
+  }
+
   return (
     <AdminPageContainer size="full">
       <AdminPageHeader
@@ -218,8 +254,11 @@ export function AdminPlanDetailShell({
               Planı Kopyala
             </button>
             <button type="button" className={appOutlineButtonClass} onClick={() => setEditOpen(true)}>
-              Planı düzenle
+              Hızlı Düzenle
             </button>
+            <Link href={`/admin/plans/${planId}/edit`} className={appPrimaryButtonClass}>
+              Tam Düzenle
+            </Link>
             <button
               type="button"
               className={appOutlineButtonClass}
@@ -272,7 +311,9 @@ export function AdminPlanDetailShell({
           onCreatePrice={openCreatePriceWizard}
           onEditPrice={openEditPriceWizard}
           onPublishPrice={publishPriceRow}
+          onCancelPrice={(row, reason) => void cancelPriceRow(row, reason)}
           publishingPriceId={publishingPriceId}
+          cancellingPriceId={cancellingPriceId}
         />
       ) : tab === "features" ? (
         <AdminPlanFeaturesTab

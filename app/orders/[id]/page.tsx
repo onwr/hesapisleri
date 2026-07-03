@@ -218,9 +218,9 @@ export default async function OrderDetailPage({ params }: Props) {
           </div>
 
           <aside className="space-y-4">
-            <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
-              <h2 className="text-[14px] font-extrabold text-[#0f1f4d]">İşlemler</h2>
-              <div className="mt-4">
+            <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+              <h2 className="text-[13px] font-extrabold text-[#0f1f4d]">İşlemler</h2>
+              <div className="mt-3">
                 <OrderDetailActions
                   orderId={sale.id}
                   orderNo={orderRow.orderNo}

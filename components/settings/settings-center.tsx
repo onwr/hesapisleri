@@ -173,6 +173,7 @@ export function SettingsCenter({
     defaultExpenseAccountId: bundle.settings.defaultExpenseAccountId ?? "",
     autoCreateCashAccount: bundle.settings.autoCreateCashAccount,
     hideInactiveAccounts: bundle.settings.hideInactiveAccounts,
+    allowNegativeCashBalance: bundle.settings.allowNegativeCashBalance ?? false,
   });
 
   const [notificationForm, setNotificationForm] = useState({
@@ -595,6 +596,18 @@ export function SettingsCenter({
             }
           />
 
+          <ToggleRow
+            label="Eksi kasa/banka bakiyesine izin ver"
+            description="Açıkken ödemeler bakiyeyi eksiye düşürebilir. Kapalıyken yetersiz bakiye engellenir."
+            checked={cashBankForm.allowNegativeCashBalance}
+            onChange={(checked) =>
+              setCashBankForm((prev) => ({
+                ...prev,
+                allowNegativeCashBalance: checked,
+              }))
+            }
+          />
+
           <SaveButton
             saving={saving}
             onClick={() =>
@@ -784,7 +797,7 @@ export function SettingsCenter({
           title="Firma Bilgileri"
           description="Logo, vergi ve iletişim"
           onClick={() => selectSection("company")}
-          icon={<Building2 size={22} strokeWidth={2.4} />}
+          iconName="building-2"
           gradient="bg-linear-to-br from-[#0f1f4d] to-[#1e3a8a]"
         />
 
@@ -792,7 +805,7 @@ export function SettingsCenter({
           title="Entegrasyonlar"
           description="Pazaryeri bağlantıları"
           href="/settings/integrations"
-          icon={<PlugZap size={22} strokeWidth={2.4} />}
+          iconName="plug-zap"
           gradient="bg-linear-to-br from-violet-500 to-purple-600"
         />
 
@@ -801,7 +814,7 @@ export function SettingsCenter({
             title="Yapay Zekâ"
             description="Asistan ve model ayarları"
             href="/settings/ai"
-            icon={<Sparkles size={22} strokeWidth={2.4} />}
+            iconName="sparkles"
             gradient="bg-linear-to-br from-indigo-500 to-violet-600"
           />
         ) : null}
@@ -811,7 +824,7 @@ export function SettingsCenter({
             title="Üyelik & Ödeme"
             description="Paket ve faturalandırma"
             href="/settings/billing"
-            icon={<CreditCard size={22} strokeWidth={2.4} />}
+            iconName="credit-card"
             gradient="bg-linear-to-br from-emerald-500 to-green-600"
           />
         ) : (
@@ -819,7 +832,7 @@ export function SettingsCenter({
             title="Bildirimler"
             description="Uyarı tercihlerini düzenle"
             onClick={() => selectSection("notifications")}
-            icon={<Bell size={22} strokeWidth={2.4} />}
+            iconName="bell"
             gradient="bg-linear-to-br from-orange-500 to-amber-600"
           />
         )}
@@ -828,7 +841,7 @@ export function SettingsCenter({
           title="Çalışanlar"
           description="Personel ve ekip yönetimi"
           href="/team"
-          icon={<Users size={22} strokeWidth={2.4} />}
+          iconName="users"
           gradient="bg-linear-to-br from-blue-500 to-blue-600"
         />
       </section>

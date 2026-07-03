@@ -123,52 +123,52 @@ const { id } = await params;
       <InvoicePrintOnLoad enabled={shouldPrint} />
 
       <div className="space-y-5 print:space-y-4">
-        <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)] print:border-none print:shadow-none">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-start gap-4">
+        <section className="rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-[0_10px_28px_rgba(15,23,42,0.04)] print:border-none print:shadow-none">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-start gap-3">
               <Link
                 href="/invoices"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-[#0f1f4d] transition hover:bg-slate-50 print:hidden"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-[#0f1f4d] transition hover:bg-slate-50 print:hidden"
               >
-                <ArrowLeft size={18} strokeWidth={2.6} />
+                <ArrowLeft size={16} strokeWidth={2.6} />
               </Link>
 
               <div>
-                <p className="text-[12px] font-black uppercase tracking-wide text-slate-400">
+                <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
                   {view.documentLabel}
                 </p>
-                <h1 className="text-[26px] font-black tracking-[-0.04em] text-[#0f1f4d]">
+                <h1 className="text-[22px] font-black tracking-[-0.04em] text-[#0f1f4d]">
                   {invoice.invoiceNo}
                 </h1>
-                <p className="mt-1 text-[13px] font-medium text-slate-500">
+                <p className="mt-0.5 text-[12px] font-medium text-slate-500">
                   {view.typeLabel} · {view.statusLabel}
                 </p>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 print:hidden">
+            <div className="flex flex-wrap items-center gap-1.5 print:hidden">
               <PrintInvoiceButton />
               <a
                 href={`/api/invoices/${invoice.id}/pdf`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex h-11 items-center justify-center rounded-xl bg-linear-to-br from-blue-600 to-violet-600 px-4 text-[12px] font-black text-white"
+                className="inline-flex h-9 items-center justify-center rounded-xl bg-linear-to-br from-blue-600 to-violet-600 px-3 text-[11px] font-black text-white"
               >
-                PDF Aç
+                PDF
               </a>
               <Link
                 href={editHref}
-                className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-[12px] font-black text-[#0f1f4d]"
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-black text-[#0f1f4d]"
               >
                 Düzenle
               </Link>
               {canConvert ? (
                 <Link
                   href={`/invoices/e-invoice?convertFrom=${invoice.id}`}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 text-[12px] font-black text-blue-600"
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-blue-100 bg-blue-50 px-3 text-[11px] font-black text-blue-600"
                 >
-                  <Send size={14} />
-                  e-Fatura&apos;ya Dönüştür
+                  <Send size={13} />
+                  e-Belge
                 </Link>
               ) : null}
               <InvoiceDetailActions
@@ -184,12 +184,13 @@ const { id } = await params;
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <InfoCard
-            icon={<User size={18} />}
+            icon={<User size={16} />}
             title="Müşteri"
             value={invoice.customer?.name ?? "Müşteri seçilmedi"}
-            subtitle={invoice.customer?.phone ?? invoice.customer?.email ?? "-"}
+            subtitle={invoice.customer?.phone ?? invoice.customer?.email ?? undefined}
+            href={invoice.customer?.id ? `/customers/${invoice.customer.id}` : undefined}
           />
           <InfoCard
             icon={<CalendarDays size={18} />}
@@ -405,31 +406,48 @@ function InfoCard({
   value,
   subtitle,
   badgeClass,
+  href,
 }: {
   icon: React.ReactNode;
   title: string;
   value: string;
-  subtitle: string;
+  subtitle?: string;
   badgeClass?: string;
+  href?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
-      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+    <div className="rounded-2xl border border-slate-200/80 bg-white p-3 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+      <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
         {icon}
       </div>
       <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
         {title}
       </p>
-      <p
-        className={[
-          "mt-2 text-[14px] font-black text-[#0f1f4d]",
-          badgeClass ? "inline-block rounded-md px-2 py-1 text-[12px]" : "",
-          badgeClass ?? "",
-        ].join(" ")}
-      >
-        {value}
-      </p>
-      <p className="mt-1 text-[12px] font-medium text-slate-500">{subtitle}</p>
+      {href ? (
+        <Link
+          href={href}
+          className={[
+            "mt-1.5 block text-[15px] font-black text-blue-700 hover:underline",
+            badgeClass ? "inline-block rounded-md px-2 py-1 text-[12px]" : "",
+            badgeClass ?? "",
+          ].join(" ")}
+        >
+          {value}
+        </Link>
+      ) : (
+        <p
+          className={[
+            "mt-1.5 text-[15px] font-black text-[#0f1f4d]",
+            badgeClass ? "inline-block rounded-md px-2 py-1 text-[12px]" : "",
+            badgeClass ?? "",
+          ].join(" ")}
+        >
+          {value}
+        </p>
+      )}
+      {subtitle ? (
+        <p className="mt-1 text-[11px] font-medium text-slate-500">{subtitle}</p>
+      ) : null}
     </div>
   );
 }

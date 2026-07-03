@@ -15,6 +15,7 @@ import {
 import { ActionCard } from "@/components/cards/action-card";
 import { StatCard } from "@/components/cards/stat-card";
 import { TeamActionButton } from "@/components/team/team-action-button";
+import { CompactActionCardGrid } from "@/components/cards/compact-action-card-grid";
 import { TEAM_CARD_CLASS, TEAM_HERO_CLASS } from "@/components/team/team-ui-tokens";
 import { formatMoney } from "@/lib/format-utils";
 import type { EmployeeStats } from "@/lib/employee-page-utils";
@@ -130,14 +131,15 @@ export function TeamShell({
         />
       </section>
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <CompactActionCardGrid columns="4">
         {canManageEmployees ? (
           <TeamActionButton
             title="Çalışan Ekle"
             description="Yeni personel kaydı oluştur"
             onClick={onCreateEmployee}
-            icon={<UserPlus size={22} />}
+            iconName="user-plus"
             gradient="bg-linear-to-br from-[#0f1f4d] to-[#1e3a8a]"
+            color="navy"
           />
         ) : null}
         {canManageEmployees ? (
@@ -145,25 +147,28 @@ export function TeamShell({
             title="Departmanları Yönet"
             description="Departmanları düzenle"
             href="/team/departments"
-            icon={<Building2 size={22} />}
+            iconName="building-2"
             gradient="bg-linear-to-br from-violet-500 to-purple-600"
+            color="violet"
           />
         ) : null}
         <ActionCard
           title="Bordro"
           description="Maaş ve bordro işlemleri"
           href="/team/payroll"
-          icon={<Receipt size={22} />}
+          iconName="receipt"
           gradient="bg-linear-to-br from-sky-400 to-blue-600"
+          color="sky"
         />
         <ActionCard
           title="Performans Raporu"
           description="Personel performansını incele"
           href="/reports/personnel-performance"
-          icon={<BarChart3 size={22} />}
+          iconName="bar-chart-3"
           gradient="bg-linear-to-br from-emerald-500 to-green-600"
+          color="emerald"
         />
-      </section>
+      </CompactActionCardGrid>
 
       <section className={[TEAM_CARD_CLASS, "overflow-hidden"].join(" ")}>
         {children}

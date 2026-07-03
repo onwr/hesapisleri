@@ -45,7 +45,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         success: true,
-        message: "Plan taslak olarak oluşturuldu.",
+        message: plan.isActive ? "Plan oluşturuldu." : "Plan oluşturuldu (pasif).",
         data: { planId: plan.id, code: plan.code },
       },
       { status: 201 }

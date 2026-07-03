@@ -1,6 +1,5 @@
 import Link from "next/link";
 import {
-  ArrowRight,
   BellRing,
   CheckCircle2,
   Download,
@@ -36,6 +35,10 @@ import {
   buildSingleCustomerExportHref,
 } from "@/lib/customers-page-utils";
 import { AiPageTriggerButton } from "@/components/ai-assistant/ai-page-trigger-button";
+import {
+  CompactActionCard,
+} from "@/components/cards/compact-action-card";
+import { CompactActionCardGrid } from "@/components/cards/compact-action-card-grid";
 
 type CustomersPageProps = {
   searchParams: Promise<{
@@ -67,36 +70,36 @@ function buildActionCards(exportHref: string) {
       title: "Yeni Müşteri",
       description: "Müşteri ekle",
       href: "/customers/new",
-      icon: UserPlus,
-      gradient: "from-emerald-500 to-green-600",
+      iconName: "user-plus" as const,
+      color: "emerald" as const,
     },
     {
       title: "Müşteri Grupları",
       description: "Grupları yönet",
       href: "/customers/groups",
-      icon: Users,
-      gradient: "from-blue-500 to-blue-600",
+      iconName: "users" as const,
+      color: "blue" as const,
     },
     {
       title: "Toplu İşlemler",
       description: "Toplu mail, sms gönder",
       href: "/customers/bulk-actions",
-      icon: Mail,
-      gradient: "from-orange-400 to-orange-600",
+      iconName: "mail" as const,
+      color: "orange" as const,
     },
     {
       title: "Müşteri Excel",
       description: "Excel'e aktar",
       href: exportHref,
-      icon: FileSpreadsheet,
-      gradient: "from-violet-500 to-purple-600",
+      iconName: "file-spreadsheet" as const,
+      color: "violet" as const,
     },
     {
       title: "Borçlu Müşteriler",
       description: "Borçlu müşterileri gör",
       href: "/customers?tab=debtors",
-      icon: BellRing,
-      gradient: "from-rose-400 to-pink-600",
+      iconName: "bell-ring" as const,
+      color: "rose" as const,
     },
   ];
 }
@@ -141,43 +144,18 @@ const activeTab = parseCustomerTab(params.tab);
           <AiPageTriggerButton moduleKey="customers" />
         </div>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          {actionCards.map((card) => {
-            const Icon = card.icon;
-
-            return (
-              <Link
-                key={card.title}
-                href={card.href}
-                className={[
-                  "group flex h-[86px] items-center justify-between rounded-2xl bg-linear-to-br p-4 text-white shadow-[0_14px_30px_rgba(15,23,42,0.12)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgba(15,23,42,0.16)]",
-                  card.gradient,
-                ].join(" ")}
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/15 shadow-inner">
-                    <Icon size={22} strokeWidth={2.4} />
-                  </div>
-
-                  <div className="min-w-0">
-                    <p className="truncate text-[15px] font-black leading-tight">
-                      {card.title}
-                    </p>
-                    <p className="mt-1 truncate text-[11px] font-medium text-white/85">
-                      {card.description}
-                    </p>
-                  </div>
-                </div>
-
-                <ArrowRight
-                  size={18}
-                  strokeWidth={3}
-                  className="shrink-0 opacity-90 transition group-hover:translate-x-1 group-hover:opacity-100"
-                />
-              </Link>
-            );
-          })}
-        </section>
+        <CompactActionCardGrid columns="5">
+          {actionCards.map((card) => (
+            <CompactActionCard
+              key={card.title}
+              title={card.title}
+              description={card.description}
+              href={card.href}
+              iconName={card.iconName}
+              color={card.color}
+            />
+          ))}
+        </CompactActionCardGrid>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           {statCards.map((stat) => {
@@ -267,9 +245,12 @@ const activeTab = parseCustomerTab(params.tab);
                             {getInitials(customer.name) || "M"}
                           </div>
 
-                          <p className="truncate font-extrabold text-[#0f1f4d]">
+                          <Link
+                            href={`/customers/${customer.id}`}
+                            className="truncate font-extrabold text-[#0f1f4d] hover:text-blue-700 hover:underline"
+                          >
                             {customer.name}
-                          </p>
+                          </Link>
                         </div>
                       </td>
 

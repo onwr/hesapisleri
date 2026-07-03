@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdminApi } from "@/lib/admin-auth";
+import { verifyApiMutationOrigin } from "@/lib/api-origin-guard";
 import { adminPlanPricePublishSchema } from "@/lib/admin/plans/admin-plan-schemas";
 import {
   publishAdminPlanPriceFromPreview,
-  PreviewSecretNotConfiguredError,
   PreviewStaleError,
 } from "@/lib/admin/plans/admin-plan-price-preview-service";
 import { MembershipPlanPriceError } from "@/lib/membership-plan-price-service";
@@ -14,6 +14,9 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 export async function POST(req: Request, context: RouteContext) {
   try {
+    const originError = verifyApiMutationOrigin(req);
+    if (originError) return originError;
+
     const auth = await requireSuperAdminApi();
     if ("error" in auth) return auth.error;
 
@@ -30,9 +33,9 @@ export async function POST(req: Request, context: RouteContext) {
     const price = await publishAdminPlanPriceFromPreview({
       planId: id,
       userId: auth.user.id,
-      previewToken: parsed.data.previewToken,
       reason: parsed.data.reason,
       priceInput: parsed.data.price,
+      expectedCurrentPriceId: parsed.data.expectedCurrentPriceId,
     });
 
     return NextResponse.json({
@@ -41,12 +44,6 @@ export async function POST(req: Request, context: RouteContext) {
       data: { price },
     });
   } catch (error) {
-    if (error instanceof PreviewSecretNotConfiguredError) {
-      return NextResponse.json(
-        { success: false, message: error.message, code: error.code },
-        { status: 503 }
-      );
-    }
     if (error instanceof PreviewStaleError) {
       return NextResponse.json(
         { success: false, message: error.message, code: error.code },

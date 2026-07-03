@@ -6,7 +6,9 @@ export function buildAdminPlanListWhere(
 ): Prisma.MembershipPlanWhereInput {
   const where: Prisma.MembershipPlanWhereInput = {};
 
-  if (query.planStatus !== "ALL") {
+  if (query.planStatus === "NOT_ARCHIVED") {
+    where.planStatus = { not: "ARCHIVED" };
+  } else if (query.planStatus !== "ALL") {
     where.planStatus = query.planStatus;
   }
 

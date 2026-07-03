@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
@@ -44,6 +45,7 @@ import {
   getDirectoryPrimaryLine,
   getDirectorySecondaryLine,
   getDirectorySourceLabel,
+  getDirectoryContactDetailHref,
   getDirectoryTypeBadgeClass,
   getDirectoryTypeLabel,
   isManualDirectoryContact,
@@ -293,7 +295,7 @@ export function DirectoryPageClient({
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
         <section className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
-          <div className="space-y-3 border-b border-slate-100 p-4">
+          <div className="space-y-2.5 border-b border-slate-100 p-3">
             <DirectorySourceFilterChips
               sourceType={sourceType}
               favorite={favorite}
@@ -575,6 +577,8 @@ function DirectoryTableRow({
 }) {
   const phoneHref = formatPhoneHref(contact.phone ?? contact.mobilePhone);
   const emailHref = formatEmailHref(contact.email);
+  const detailHref = getDirectoryContactDetailHref(contact);
+  const primaryName = getDirectoryPrimaryLine(contact);
 
   return (
     <tr
@@ -597,9 +601,17 @@ function DirectoryTableRow({
         </button>
       </td>
       <td className="px-3 py-2.5">
-        <p className="font-black text-[#0f1f4d]">
-          {getDirectoryPrimaryLine(contact)}
-        </p>
+        {detailHref ? (
+          <Link
+            href={detailHref}
+            onClick={(event) => event.stopPropagation()}
+            className="line-clamp-2 font-black text-blue-700 hover:underline"
+          >
+            {primaryName}
+          </Link>
+        ) : (
+          <p className="line-clamp-2 font-black text-[#0f1f4d]">{primaryName}</p>
+        )}
         {getDirectorySecondaryLine(contact) ? (
           <p className="text-[11px] font-medium text-slate-500">
             {getDirectorySecondaryLine(contact)}

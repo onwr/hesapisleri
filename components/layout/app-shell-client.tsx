@@ -1,6 +1,8 @@
 ﻿"use client";
 
 import type { ReactNode } from "react";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { AppSidebar } from "./app-sidebar";
 import { AppTopbar } from "./app-topbar";
 import { AiDrawerProvider } from "@/components/ai-assistant/ai-drawer-context";
@@ -33,6 +35,15 @@ type AppShellClientProps = {
 
 function AppShellMain({ children }: { children: ReactNode }) {
   const { collapsed } = useSidebar();
+  const router = useRouter();
+
+  useEffect(() => {
+    const handlePopState = () => {
+      router.refresh();
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [router]);
 
   return (
     <main

@@ -102,8 +102,8 @@ export type InvoiceActionCard = {
   title: string;
   description: string;
   href: string;
-  iconKey: "filePlus" | "file" | "clock" | "alert" | "grid";
-  gradient: string;
+  iconKey: "filePlus" | "file" | "clock" | "alert" | "grid" | "eInvoice";
+  color: "emerald" | "blue" | "orange" | "rose" | "violet";
 };
 
 export const INVOICE_TAB_LABELS: Record<InvoiceTabKey, string> = {

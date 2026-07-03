@@ -2,13 +2,16 @@ import type { LucideIcon } from "lucide-react";
 import {
   AlertCircle,
   BookUser,
-  Download,
   Star,
   Truck,
   UserPlus,
   Users,
 } from "lucide-react";
 import type { DirectorySummary } from "@/lib/directory-service";
+import type {
+  CompactActionColor,
+  CompactActionIconName,
+} from "@/components/cards/compact-action-card-types";
 
 export type DirectoryQuickActionKey =
   | "new-person"
@@ -21,8 +24,8 @@ export type DirectoryQuickActionCard = {
   key: DirectoryQuickActionKey;
   title: string;
   description: string;
-  gradient: string;
-  icon: LucideIcon;
+  iconName: CompactActionIconName;
+  color: CompactActionColor;
   permission: "manage" | "view";
   href?: string;
 };
@@ -102,40 +105,40 @@ export function buildDirectoryQuickActionCards(): DirectoryQuickActionCard[] {
       key: "new-person",
       title: "Yeni Kişi",
       description: "Manuel kayıt oluştur",
-      gradient: "from-emerald-500 to-green-600",
-      icon: UserPlus,
+      iconName: "user-plus",
+      color: "emerald",
       permission: "manage",
     },
     {
       key: "sync-customers",
       title: "Müşterileri Aktar",
       description: "Müşteri kartlarını aktar",
-      gradient: "from-cyan-500 to-blue-600",
-      icon: Users,
+      iconName: "users",
+      color: "sky",
       permission: "manage",
     },
     {
       key: "sync-suppliers",
       title: "Tedarikçileri Aktar",
       description: "Tedarikçi kartlarını aktar",
-      gradient: "from-orange-500 to-amber-500",
-      icon: Truck,
+      iconName: "truck",
+      color: "orange",
       permission: "manage",
     },
     {
       key: "sync-employees",
       title: "Çalışanları Aktar",
       description: "Çalışan kayıtlarını aktar",
-      gradient: "from-violet-500 to-purple-600",
-      icon: BookUser,
+      iconName: "book-user",
+      color: "violet",
       permission: "manage",
     },
     {
       key: "export",
       title: "Dışa Aktar",
       description: "Fihristi CSV olarak indir",
-      gradient: "from-rose-400 to-pink-600",
-      icon: Download,
+      iconName: "download",
+      color: "rose",
       permission: "view",
     },
   ];

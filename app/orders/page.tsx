@@ -1,12 +1,9 @@
 import Link from "next/link";
 import {
   AlertCircle,
-  ArrowRight,
   CheckCircle2,
   FileSpreadsheet,
-  LayoutGrid,
   PackageCheck,
-  Plus,
   RefreshCcw,
   ShoppingBag,
   Truck,
@@ -14,6 +11,11 @@ import {
 import { AppShell } from "@/components/layout/app-shell";
 import { guardPageModule } from "@/lib/module-access";
 import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
+import {
+  CompactActionCard,
+  type CompactActionIconName,
+} from "@/components/cards/compact-action-card";
+import { CompactActionCardGrid } from "@/components/cards/compact-action-card-grid";
 
 import { MarketplaceLogo } from "@/components/orders/marketplace-logo";
 import { OrdersRowActions } from "@/components/orders/orders-row-actions";
@@ -36,6 +38,7 @@ import {
   parsePage,
   parseSearchQuery,
   parseSourceChannelFilter,
+  type OrderActionCard,
 } from "@/lib/orders-page-utils";
 
 type OrdersPageProps = {
@@ -49,12 +52,16 @@ type OrdersPageProps = {
   }>;
 };
 
-const actionIconMap = {
-  plus: Plus,
-  refresh: RefreshCcw,
-  truck: Truck,
-  spreadsheet: FileSpreadsheet,
-  grid: LayoutGrid,
+const orderActionIconMap: Record<
+  OrderActionCard["iconKey"],
+  CompactActionIconName
+> = {
+  plus: "plus",
+  refresh: "refresh-ccw",
+  truck: "truck",
+  spreadsheet: "upload",
+  grid: "layout-grid",
+  bag: "shopping-bag",
 };
 
 const statIconMap = {
@@ -122,45 +129,20 @@ const now = new Date();
     <AppShell>
       <TenantPageSync />
       <div className="space-y-5">
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          {actionCards.map((card) => {
-            const Icon = actionIconMap[card.iconKey];
+        <CompactActionCardGrid columns="5">
+          {actionCards.map((card) => (
+            <CompactActionCard
+              key={card.title}
+              title={card.title}
+              description={card.description}
+              href={card.href}
+              iconName={orderActionIconMap[card.iconKey]}
+              color={card.color}
+            />
+          ))}
+        </CompactActionCardGrid>
 
-            return (
-              <Link
-                key={card.title}
-                href={card.href}
-                className={[
-                  "group flex h-[86px] items-center justify-between rounded-2xl bg-linear-to-br p-4 text-white shadow-[0_14px_30px_rgba(15,23,42,0.12)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgba(15,23,42,0.16)]",
-                  card.gradient,
-                ].join(" ")}
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/15 shadow-inner">
-                    <Icon size={22} strokeWidth={2.4} />
-                  </div>
-
-                  <div className="min-w-0">
-                    <p className="truncate text-[15px] font-black leading-tight">
-                      {card.title}
-                    </p>
-                    <p className="mt-1 truncate text-[11px] font-medium text-white/85">
-                      {card.description}
-                    </p>
-                  </div>
-                </div>
-
-                <ArrowRight
-                  size={18}
-                  strokeWidth={3}
-                  className="shrink-0 opacity-90 transition group-hover:translate-x-1 group-hover:opacity-100"
-                />
-              </Link>
-            );
-          })}
-        </section>
-
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
           {statCards.map((stat) => {
             const Icon = statIconMap[stat.iconKey];
 
@@ -176,22 +158,22 @@ const now = new Date();
                       {stat.title}
                     </p>
 
-                    <p className="mt-3 text-[20px] font-black tracking-[-0.03em] text-[#0f1f4d]">
+                    <p className="mt-2 text-[22px] font-black tracking-[-0.03em] text-[#0f1f4d]">
                       {stat.count}
                     </p>
 
-                    <p className="mt-2 text-[13px] font-black tracking-[-0.02em] text-[#0f1f4d]">
+                    <p className="mt-1 text-[13px] font-black tracking-[-0.02em] text-[#0f1f4d]">
                       {formatOrderMoney(stat.amount)}
                     </p>
                   </div>
 
                   <div
                     className={[
-                      "flex h-12 w-12 shrink-0 items-center justify-center rounded-full",
+                      "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
                       colorClassMap[stat.color],
                     ].join(" ")}
                   >
-                    <Icon size={22} strokeWidth={2.4} />
+                    <Icon size={18} strokeWidth={2.3} />
                   </div>
                 </div>
               </Link>

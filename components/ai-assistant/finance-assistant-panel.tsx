@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BarChart3,
   ChevronRight,
@@ -73,7 +73,7 @@ function MetricCard({
       <p className="text-[10px] font-extrabold uppercase tracking-wide text-slate-500">
         {label}
       </p>
-      <p className="mt-1 text-[14px] font-black text-[#0f1f4d]">{formattedValue}</p>
+      <p className="mt-1 text-[16px] font-black text-[#0f1f4d]">{formattedValue}</p>
     </div>
   );
 }
@@ -140,7 +140,31 @@ export function FinanceAssistantPanel({ companyId }: Props) {
   const [queryState, setQueryState] = useState<QueryState>({ status: "idle" });
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [categorySuggestions, setCategorySuggestions] = useState<string[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setSuggestionsLoading(true);
+    void fetch(
+      `/api/finance-assistant/suggestions?category=${encodeURIComponent(activeCategory)}`
+    )
+      .then((res) => res.json())
+      .then((json: { data?: { suggestions?: string[] } }) => {
+        if (cancelled) return;
+        setCategorySuggestions(json.data?.suggestions ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setCategorySuggestions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSuggestionsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCategory, companyId]);
 
   const needsProduct = selectedCommand ? PRODUCT_COMMANDS.has(selectedCommand) : false;
   const needsPeriod = selectedCommand ? PERIOD_SENSITIVE_COMMANDS.has(selectedCommand) : false;
@@ -250,6 +274,23 @@ export function FinanceAssistantPanel({ companyId }: Props) {
           ))}
         </div>
 
+        <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-3 py-2.5">
+          <p className="text-[10px] font-extrabold uppercase tracking-wide text-blue-700">
+            Öneriler
+          </p>
+          {suggestionsLoading ? (
+            <p className="mt-1 text-[11px] font-medium text-slate-500">Yükleniyor...</p>
+          ) : (
+            <ul className="mt-1 space-y-1">
+              {categorySuggestions.map((item) => (
+                <li key={item} className="text-[11px] font-semibold text-[#0f1f4d]">
+                  • {item}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
         {/* Command cards */}
         <div className="space-y-1.5">
           {(COMMAND_CATEGORIES[activeCategory] ?? []).map((cmd) => (
@@ -258,7 +299,7 @@ export function FinanceAssistantPanel({ companyId }: Props) {
               type="button"
               onClick={() => selectCommand(cmd)}
               className={[
-                "flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left transition",
+                "flex w-full min-h-[56px] max-h-[72px] items-center justify-between rounded-xl border px-3 py-2 text-left transition",
                 selectedCommand === cmd
                   ? "border-blue-200 bg-blue-50 text-blue-700"
                   : "border-slate-100 bg-white text-[#0f1f4d] hover:bg-slate-50",

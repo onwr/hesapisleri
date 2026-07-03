@@ -56,7 +56,7 @@ export type AiActionCard = {
   description: string;
   topic: AiTopicKey;
   iconKey: "brain" | "wallet" | "package" | "receipt" | "message";
-  gradient: string;
+  color: "emerald" | "blue" | "orange" | "violet" | "rose";
 };
 
 export type AiChatMessage = {

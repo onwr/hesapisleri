@@ -1,10 +1,17 @@
+import {
+  formatDateTimeDisplay,
+  formatShortDisplayDate,
+  getTimeMs,
+  toIsoString,
+} from "@/lib/format-utils";
+
 export type SalesTabKey = "all" | "invoices" | "collections" | "offers" | "returns";
 
 export type SalesDocumentSource = "sale" | "invoice" | "collection";
 
 export type SalesDocumentRow = {
   id: string;
-  createdAt: Date;
+  createdAt: string;
   documentNo: string;
   customerName: string;
   typeLabel: string;
@@ -126,22 +133,22 @@ export function formatDateInputValue(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-export function formatDateDisplay(date: Date) {
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date);
+export function formatDateDisplay(
+  date: Date | string | number | null | undefined
+) {
+  return formatShortDisplayDate(date);
 }
 
-export function formatShortDateTime(date: Date) {
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
+export function formatShortDateTime(
+  date: Date | string | number | null | undefined
+) {
+  return formatDateTimeDisplay(date);
+}
+
+export function serializeSalesDocumentDate(
+  value: Date | string | number | null | undefined
+) {
+  return toIsoString(value) ?? new Date(0).toISOString();
 }
 
 export function normalizeDateRange(from: Date, to: Date) {

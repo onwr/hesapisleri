@@ -17,6 +17,20 @@ import {
 } from "recharts";
 import { formatMoney } from "@/lib/format-utils";
 
+function sanitizeChartNumber(value: number) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function sanitizeMonthlyFinancePoint(point: MonthlyFinancePoint): MonthlyFinancePoint {
+  return {
+    month: point.month,
+    income: sanitizeChartNumber(point.income),
+    expense: sanitizeChartNumber(point.expense),
+    net: sanitizeChartNumber(point.net),
+  };
+}
+
 export type MonthlyFinancePoint = {
   month: string;
   income: number;
@@ -79,10 +93,13 @@ export function ReportMiniLine({
   color?: string;
 }) {
   const chartData = data.length > 0 ? data : [{ value: 0 }];
+  const safeData = chartData.map((point) => ({
+    value: sanitizeChartNumber(point.value),
+  }));
 
   return (
     <div className="h-12 w-24">
-      <LineChart width={96} height={48} data={chartData}>
+      <LineChart width={96} height={48} data={safeData}>
         <Line
           type="monotone"
           dataKey="value"
@@ -96,14 +113,15 @@ export function ReportMiniLine({
 }
 
 export function FinanceBarChart({ data }: { data: MonthlyFinancePoint[] }) {
-  if (data.length === 0) {
+  const chartData = data.map(sanitizeMonthlyFinancePoint);
+  if (chartData.length === 0) {
     return <ChartEmptyState message="Bu dönem için rapor verisi bulunmuyor." />;
   }
 
   return (
     <div className="h-[210px] w-full min-w-0">
       <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-        <BarChart data={data} barGap={8} barCategoryGap={24}>
+        <BarChart data={chartData} barGap={8} barCategoryGap={24}>
           <CartesianGrid vertical={false} stroke="#eef2f7" />
           <XAxis
             dataKey="month"
@@ -136,14 +154,15 @@ export function FinanceBarChart({ data }: { data: MonthlyFinancePoint[] }) {
 }
 
 export function CashFlowChart({ data }: { data: MonthlyFinancePoint[] }) {
-  if (data.length === 0) {
+  const chartData = data.map(sanitizeMonthlyFinancePoint);
+  if (chartData.length === 0) {
     return <ChartEmptyState message="Bu dönem için rapor verisi bulunmuyor." />;
   }
 
   return (
     <div className="h-[210px] w-full min-w-0">
       <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-        <ComposedChart data={data} barGap={6} barCategoryGap={18}>
+        <ComposedChart data={chartData} barGap={6} barCategoryGap={18}>
           <CartesianGrid vertical={false} stroke="#eef2f7" />
           <XAxis
             dataKey="month"

@@ -11,9 +11,11 @@ export function isPlanCheckoutAvailable(input: {
   code: string;
   pricingClass: PlanPricingClass;
   hasPriceConflicts: boolean;
+  isActive?: boolean;
 }): boolean {
   if (input.code !== "standard") return false;
   if (input.planStatus !== "ACTIVE") return false;
+  if (input.isActive === false) return false;
   if (input.visibility !== "PUBLIC") return false;
   if (input.hasPriceConflicts) return false;
   if (input.pricingClass === "UNCONFIGURED") return false;

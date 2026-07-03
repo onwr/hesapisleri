@@ -1,5 +1,3 @@
-import sharp from "sharp";
-
 export const MAX_UPLOAD_PIXELS = 24_000_000;
 export const MAX_ORIGINAL_IMAGE_BYTES = 8 * 1024 * 1024;
 
@@ -28,6 +26,11 @@ export class ImageOptimizerError extends Error {
   }
 }
 
+async function loadSharp(): Promise<typeof import("sharp").default> {
+  const { default: sharp } = await import("sharp");
+  return sharp;
+}
+
 export async function optimizeUploadedImage(
   buffer: Buffer,
   options: OptimizeUploadedImageOptions = {}
@@ -40,6 +43,7 @@ export async function optimizeUploadedImage(
     throw new ImageOptimizerError("Dosya boyutu 8MB sınırını aşıyor.", 413);
   }
 
+  const sharp = await loadSharp();
   let image = sharp(buffer, {
     failOn: "error",
     limitInputPixels: MAX_UPLOAD_PIXELS,

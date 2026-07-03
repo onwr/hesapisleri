@@ -23,6 +23,7 @@ import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
 import { formatDateTimeDisplay } from "@/lib/format-utils";
 import {
   formatCashMoney,
+  getCashBalanceClass,
   getAccountTypeText,
 } from "@/lib/cash-bank-page-utils";
 import { canManageAccounts } from "@/lib/permission-utils";
@@ -133,10 +134,20 @@ export default async function CashBankAccountDetailPage({ params,
 
                 <p className="mt-3 text-[13px] font-medium text-slate-500">
                   Güncel bakiye:{" "}
-                  <span className="font-black text-emerald-600">
+                  <span
+                    className={[
+                      "font-black",
+                      getCashBalanceClass(account.balance),
+                    ].join(" ")}
+                  >
                     {formatCashMoney(account.balance)}
                   </span>
                 </p>
+                {Number(account.balance) < 0 ? (
+                  <p className="mt-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] font-semibold text-rose-700">
+                    Hesap bakiyesi ekside. Yetkiniz varsa manuel düzeltme ile dengeleyebilirsiniz.
+                  </p>
+                ) : null}
               </div>
             </div>
 
@@ -192,7 +203,10 @@ export default async function CashBankAccountDetailPage({ params,
           />
         </section>
 
-        <section className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+        <section
+          id="movements"
+          className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.04)]"
+        >
           <div className="border-b border-slate-100 px-4 py-4">
             <h2 className="text-[16px] font-black text-[#0f1f4d]">
               Hesap Hareketleri

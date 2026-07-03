@@ -5,6 +5,7 @@ import {
   parseDateParam,
 } from "@/lib/sales-page-utils";
 import { endOfMonth, percentChange, startOfDay, startOfMonth } from "@/lib/dashboard-metrics";
+import { formatDateTimeDisplay, toIsoString } from "@/lib/format-utils";
 
 export type ReportTabKey = "all" | "financial" | "sales" | "stock" | "customer";
 
@@ -305,14 +306,15 @@ export function endOfDay(date: Date) {
 
 export { formatMoney as formatReportMoney } from "@/lib/format-utils";
 
-export function formatReportDateTime(date: Date) {
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
+export function sanitizeReportNumber(value: number | null | undefined) {
+  const numeric = Number(value ?? 0);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+export function formatReportDateTime(
+  date: Date | string | number | null | undefined
+) {
+  return formatDateTimeDisplay(date);
 }
 
 export function getMonthKey(date: Date) {
@@ -401,7 +403,7 @@ export function buildMiniLineData(
   points: MonthlyFinancePoint[],
   key: "income" | "expense" | "net"
 ) {
-  const values = points.map((point) => point[key]);
+  const values = points.map((point) => sanitizeReportNumber(point[key]));
 
   if (values.length === 0) {
     return [{ value: 0 }];
@@ -423,9 +425,11 @@ export function buildReportKpiCards(
   return [
     {
       title: "Toplam Gelir",
-      value: currentIncome,
-      previousValue: previousIncome,
-      changePercent: percentChange(currentIncome, previousIncome),
+      value: sanitizeReportNumber(currentIncome),
+      previousValue: sanitizeReportNumber(previousIncome),
+      changePercent: sanitizeReportNumber(
+        percentChange(currentIncome, previousIncome)
+      ),
       positive: currentIncome >= previousIncome,
       color: "emerald",
       lineColor: "#22c55e",
@@ -433,9 +437,11 @@ export function buildReportKpiCards(
     },
     {
       title: "Toplam Gider",
-      value: currentExpense,
-      previousValue: previousExpense,
-      changePercent: percentChange(currentExpense, previousExpense),
+      value: sanitizeReportNumber(currentExpense),
+      previousValue: sanitizeReportNumber(previousExpense),
+      changePercent: sanitizeReportNumber(
+        percentChange(currentExpense, previousExpense)
+      ),
       positive: currentExpense <= previousExpense,
       color: "rose",
       lineColor: "#fb7185",
@@ -443,9 +449,9 @@ export function buildReportKpiCards(
     },
     {
       title: "Net Kâr",
-      value: currentNet,
-      previousValue: previousNet,
-      changePercent: percentChange(currentNet, previousNet),
+      value: sanitizeReportNumber(currentNet),
+      previousValue: sanitizeReportNumber(previousNet),
+      changePercent: sanitizeReportNumber(percentChange(currentNet, previousNet)),
       positive: currentNet >= previousNet,
       color: "blue",
       lineColor: "#3b82f6",

@@ -14,21 +14,19 @@ import {
 import { MembershipPlanPriceError } from "@/lib/membership-plan-price-service";
 import { AdminPlanServiceError } from "@/lib/admin/plans/admin-plan-patch-service";
 import {
-  getPlanPricePreviewSecret,
-  signPlanPricePreview,
-  verifyPlanPricePreview,
-  PreviewSecretNotConfiguredError,
   PreviewStaleError,
   PLAN_PRICE_PREVIEW_TTL_MS,
   type AffectedSubscriptionSummary,
   type PlanPricePreviewCanonicalPayload,
 } from "@/lib/admin/plans/admin-plan-preview-hash";
+import { getPricePolicyLabel } from "@/lib/admin/plans/admin-plan-price-policy-labels";
+import { policyAffectsExistingSubscribersNow } from "@/lib/admin/plans/admin-plan-price-policy-utils";
 import { invalidateAdminPlanCaches } from "@/lib/admin/plans/admin-plan-cache";
 import { logAdminPlanAudit } from "@/lib/admin/plans/admin-plan-audit-service";
 import type { z } from "zod";
 import type { adminPlanPricePreviewInputSchema } from "@/lib/admin/plans/admin-plan-schemas";
 
-export { PreviewSecretNotConfiguredError, PreviewStaleError };
+export { PreviewStaleError };
 
 type PreviewInput = z.infer<typeof adminPlanPricePreviewInputSchema>;
 
@@ -72,6 +70,7 @@ async function loadSubscriptionImpact(planId: string, billingInterval: Membershi
 async function buildCanonicalPayload(
   planId: string,
   input: PreviewInput,
+  userId: string,
   now: Date
 ): Promise<{
   canonical: PlanPricePreviewCanonicalPayload;
@@ -147,6 +146,7 @@ async function buildCanonicalPayload(
     priceChangePolicy: input.priceChangePolicy,
     isPublic: input.isPublic,
     affectedSubscriptionSummary: summary,
+    issuedByUserId: userId,
     issuedAt,
     expiresAt: issuedAt + PLAN_PRICE_PREVIEW_TTL_MS,
   };
@@ -154,16 +154,18 @@ async function buildCanonicalPayload(
   return { canonical, currentPrice, totals, summary };
 }
 
-export async function createAdminPlanPricePreview(planId: string, input: PreviewInput) {
+export async function createAdminPlanPricePreview(
+  planId: string,
+  input: PreviewInput,
+  userId: string
+) {
   const now = new Date();
-  const secret = getPlanPricePreviewSecret();
   const { canonical, currentPrice, totals, summary } = await buildCanonicalPayload(
     planId,
     input,
+    userId,
     now
   );
-
-  const previewToken = signPlanPricePreview(canonical, secret, now.getTime());
 
   const diffMinor = totals.salePriceMinor - (currentPrice?.salePriceMinor ?? 0);
   const diffPercent =
@@ -179,7 +181,7 @@ export async function createAdminPlanPricePreview(planId: string, input: Preview
   }
 
   return {
-    previewToken,
+    expectedCurrentPriceId: currentPrice?.id ?? null,
     expiresAt: canonical.expiresAt,
     current: currentPrice
       ? {
@@ -203,10 +205,12 @@ export async function createAdminPlanPricePreview(planId: string, input: Preview
       interval: canonical.billingInterval,
     },
     priceChangePolicy: input.priceChangePolicy,
+    priceChangePolicyLabel: getPricePolicyLabel(input.priceChangePolicy),
     effectiveFrom: canonical.effectiveFrom,
     effectiveUntil: canonical.effectiveUntil,
     subscriptionImpact: summary,
     mrrEstimatedDelta: mrrDelta,
+    affectsExistingSubscribers: policyAffectsExistingSubscribersNow(input.priceChangePolicy),
     notices: [
       "Geçmiş payment priceSnapshot kayıtları değişmeyecek.",
       "Kampanya ve kupon etkileri checkout sırasında yeniden çözümlenecek.",
@@ -224,30 +228,23 @@ export async function createAdminPlanPricePreview(planId: string, input: Preview
 export async function publishAdminPlanPriceFromPreview(input: {
   planId: string;
   userId: string;
-  previewToken: string;
   reason: string;
   priceInput: PreviewInput;
+  expectedCurrentPriceId?: string | null;
 }) {
   const now = new Date();
-  const secret = getPlanPricePreviewSecret();
   const { canonical, currentPrice } = await buildCanonicalPayload(
     input.planId,
     input.priceInput,
+    input.userId,
     now
   );
 
-  const verification = verifyPlanPricePreview(
-    input.previewToken,
-    canonical,
-    secret,
-    now.getTime()
-  );
-
-  if (verification.expired) {
-    throw new MembershipPlanPriceError("Önizleme süresi doldu.", 410);
-  }
-  if (verification.tampered || !verification.valid) {
-    throw new PreviewStaleError();
+  if (input.expectedCurrentPriceId !== undefined) {
+    const actual = currentPrice?.id ?? null;
+    if (input.expectedCurrentPriceId !== actual) {
+      throw new PreviewStaleError();
+    }
   }
 
   const plan = await db.membershipPlan.findUnique({ where: { id: input.planId } });

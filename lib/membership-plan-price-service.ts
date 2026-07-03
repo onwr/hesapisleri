@@ -218,7 +218,7 @@ export async function updatePlanPriceDraft(input: {
 
   if (price.status !== "DRAFT" && price.status !== "SCHEDULED") {
     throw new MembershipPlanPriceError(
-      "Yalnızca taslak veya zamanlanmış fiyat düzenlenebilir. Aktif fiyat için yeni versiyon oluşturun.",
+      "Yalnızca taslak veya zamanlanmış fiyat düzenlenebilir. Aktif fiyat için Fiyatı Değiştir akışını kullanın.",
       400
     );
   }

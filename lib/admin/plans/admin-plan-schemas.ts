@@ -71,7 +71,9 @@ export class AdminPlanPatchValidationError extends Error {
 
 export const adminPlanListQuerySchema = z.object({
   q: z.string().optional(),
-  planStatus: z.enum(["ALL", "DRAFT", "ACTIVE", "ARCHIVED"]).default("ALL"),
+  planStatus: z
+    .enum(["ALL", "DRAFT", "ACTIVE", "ARCHIVED", "NOT_ARCHIVED"])
+    .default("NOT_ARCHIVED"),
   visibility: z.enum(["ALL", "PUBLIC", "PRIVATE", "INTERNAL"]).default("ALL"),
   pricingClass: z.enum(["ALL", "FREE", "PAID", "MIXED", "UNCONFIGURED"]).default("ALL"),
   checkout: z.enum(["ALL", "AVAILABLE", "UNAVAILABLE"]).default("ALL"),
@@ -94,6 +96,16 @@ export const adminPlanActivateSchema = z.object({
 export const adminPlanArchiveSchema = z.object({
   reason: z.string().min(1).max(2000),
   confirmActiveSubscriptions: z.boolean().default(false),
+  confirm: z.literal(true),
+});
+
+export const adminPlanDeactivateSchema = z.object({
+  reason: z.string().min(1).max(2000),
+  confirm: z.literal(true),
+});
+
+export const adminPlanDeleteSchema = z.object({
+  confirmName: z.string().min(1).max(200),
   confirm: z.literal(true),
 });
 
@@ -120,9 +132,9 @@ export const adminPlanPricePreviewInputSchema = z.object({
 });
 
 export const adminPlanPricePublishSchema = z.object({
-  previewToken: z.string().min(10),
   reason: z.string().min(1).max(2000),
   price: adminPlanPricePreviewInputSchema,
+  expectedCurrentPriceId: z.string().nullable().optional(),
 });
 
 export const adminPlanPricePatchSchema = adminPlanPricePreviewInputSchema
@@ -265,18 +277,27 @@ export const adminPlanActivityQuerySchema = z.object({
 export type AdminPlanActivityQuery = z.infer<typeof adminPlanActivityQuerySchema>;
 
 const forbiddenCreateKeys = [
-  ...forbiddenPatchKeys,
+  "planStatus",
+  "isActive",
+  "publishedAt",
+  "archivedAt",
+  "monthlyPrice",
+  "quarterlyPrice",
+  "semiAnnualPrice",
+  "yearlyPrice",
+  "vatRate",
+  "vatIncluded",
+  "visibility",
+  "features",
   "planId",
   "id",
   "slug",
-  "isFeatured",
   "autoRenewAllowed",
   "upgradeAllowed",
   "downgradeAllowed",
   "cancellationAllowed",
   "gracePeriodDays",
   "badgeText",
-  "shortDescription",
 ] as const;
 
 export const adminPlanCreateFeatureSchema = z
@@ -299,10 +320,33 @@ export const adminPlanCreateFeatureSchema = z
   })
   .strict();
 
+export const adminPlanPeriodPriceCreateSchema = z
+  .object({
+    billingInterval: z.enum(["MONTHLY", "QUARTERLY", "SEMI_ANNUAL", "YEARLY"]),
+    enabled: z.boolean(),
+    discountPercent: z.number().min(0).max(99.99).optional(),
+    salePriceMinor: z.number().int().positive().optional(),
+  })
+  .strict();
+
+export type AdminPlanPeriodPriceCreateInput = z.infer<
+  typeof adminPlanPeriodPriceCreateSchema
+>;
+
 export const adminPlanCreateSchema = z
   .object({
     name: z.string().min(2).max(200).transform((s) => s.trim()),
-    code: z.string().min(2).max(64),
+    code: z.string().min(2).max(64).optional(),
+    shortDescription: z
+      .string()
+      .max(500)
+      .nullable()
+      .optional()
+      .transform((v) => {
+        if (v == null) return null;
+        const t = v.trim();
+        return t.length ? t : null;
+      }),
     description: z
       .string()
       .max(5000)
@@ -316,15 +360,71 @@ export const adminPlanCreateSchema = z
     sortOrder: z.number().int().min(0).max(9999).default(100),
     trialEnabled: z.boolean().default(true),
     trialDays: z.number().int().min(0).max(365).default(14),
-    defaultCurrency: z.enum(["TRY", "USD", "EUR"]).default("TRY"),
-    visibility: z.enum(["INTERNAL", "PRIVATE"]).default("INTERNAL"),
-    features: z.array(adminPlanCreateFeatureSchema).max(50).default([]),
+    currency: z.enum(["TRY", "USD", "EUR"]).default("TRY"),
+    isFeatured: z.boolean().default(false),
+    salesOpen: z.boolean().default(true),
+    periodPrices: z.array(adminPlanPeriodPriceCreateSchema).min(1).max(4),
     entitlements: z.array(entitlementRowSchema).max(100).default([]),
     clientRequestId: z.string().min(8).max(64).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((data, ctx) => {
+    const monthly = data.periodPrices.find((p) => p.billingInterval === "MONTHLY");
+    if (!monthly?.enabled || !monthly.salePriceMinor || monthly.salePriceMinor <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Aylık fiyat zorunludur.",
+        path: ["periodPrices"],
+      });
+    }
+
+    const enabledPaid = data.periodPrices.filter((p) => {
+      if (!p.enabled) return false;
+      if (p.billingInterval === "MONTHLY") {
+        return (p.salePriceMinor ?? 0) > 0;
+      }
+      return p.salePriceMinor != null || p.discountPercent != null;
+    });
+    if (data.salesOpen && enabledPaid.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Satışa açık plan için en az bir geçerli fiyat gerekir.",
+        path: ["salesOpen"],
+      });
+    }
+
+    for (const row of data.periodPrices) {
+      if (!row.enabled || row.billingInterval === "MONTHLY") continue;
+      if (row.salePriceMinor == null && row.discountPercent == null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Etkin dönemler için indirim veya fiyat gerekir.",
+          path: ["periodPrices"],
+        });
+      }
+      if (row.discountPercent != null && row.discountPercent >= 100) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "İndirim oranı %100 veya üzeri olamaz.",
+          path: ["periodPrices"],
+        });
+      }
+    }
+  });
 
 export type AdminPlanCreateInput = z.infer<typeof adminPlanCreateSchema>;
+
+export function normalizeAdminPlanCreateBody(raw: unknown): Record<string, unknown> {
+  if (!raw || typeof raw !== "object") return {};
+  const body = { ...(raw as Record<string, unknown>) };
+  if ("defaultCurrency" in body && !("currency" in body)) {
+    body.currency = body.defaultCurrency;
+  }
+  delete body.defaultCurrency;
+  delete body.visibility;
+  delete body.features;
+  return body;
+}
 
 export const adminPlanCloneSchema = z
   .object({
@@ -351,10 +451,11 @@ export const adminPlanCloneSchema = z
 export type AdminPlanCloneInput = z.infer<typeof adminPlanCloneSchema>;
 
 export function assertNoForbiddenPlanCreateKeys(body: Record<string, unknown>) {
+  const allowed = new Set(adminPlanCreateSchema.keyof().options as string[]);
   for (const key of forbiddenCreateKeys) {
-    if (key in body) {
+    if (key in body && !allowed.has(key)) {
       throw new AdminPlanPatchValidationError(
-        `"${key}" plan oluşturma isteğinde kabul edilmez.`,
+        "Plan oluşturma isteğinde geçersiz alan bulundu.",
         key
       );
     }

@@ -48,13 +48,13 @@ export function EmployeeProfileHeader({
 }: EmployeeProfileHeaderProps) {
   const posBadge = employee.hasPosAccess ? (
     employee.posAccount?.status === "ACTIVE" ? (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black text-emerald-700 ring-1 ring-emerald-100">
-        <ScanBarcode size={12} />
-        POS erişimi var
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-black text-emerald-700 ring-1 ring-emerald-100">
+        <ScanBarcode size={10} />
+        POS
       </span>
     ) : (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-black text-amber-700 ring-1 ring-amber-100">
-        <ScanBarcode size={12} />
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[9px] font-black text-amber-700 ring-1 ring-amber-100">
+        <ScanBarcode size={10} />
         POS pasif
       </span>
     )
@@ -78,10 +78,10 @@ export function EmployeeProfileHeader({
                 .filter(Boolean)
                 .join(" · ") || "Görev ve departman belirtilmemiş"}
             </p>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
               <span
                 className={[
-                  "inline-flex rounded-full px-2.5 py-1 text-[10px] font-black ring-1 ring-inset",
+                  "inline-flex rounded-full px-2 py-0.5 text-[9px] font-black ring-1 ring-inset",
                   getEmployeeStatusBadgeClass(employee.status),
                 ].join(" ")}
               >

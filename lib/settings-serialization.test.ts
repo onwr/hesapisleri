@@ -22,6 +22,7 @@ describe("settings serialization", () => {
       autoCreateCashAccount: true,
       hideInactiveAccounts: true,
       allowNegativeStockSales: false,
+      allowNegativeCashBalance: false,
       notifyLowStock: true,
       notifyDueInvoices: true,
       notifyLateCollections: true,

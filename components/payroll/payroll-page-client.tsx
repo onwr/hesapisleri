@@ -137,7 +137,7 @@ export function PayrollPageClient({
             title="Yeni Bordro Dönemi"
             description="Dönem bordrosu oluştur"
             onClick={openCreateModal}
-            icon={<Receipt size={22} strokeWidth={2.4} />}
+            iconName="receipt"
             gradient="bg-linear-to-br from-[#0f1f4d] to-[#1e3a8a]"
           />
         ) : null}
@@ -146,7 +146,7 @@ export function PayrollPageClient({
           title="Çalışanlar"
           description="Personel listesine dön"
           href="/team"
-          icon={<Users size={22} strokeWidth={2.4} />}
+          iconName="users"
           gradient="bg-linear-to-br from-blue-500 to-blue-600"
         />
 
@@ -154,7 +154,7 @@ export function PayrollPageClient({
           title="Performans Raporu"
           description="Personel performansını incele"
           href="/reports/personnel-performance"
-          icon={<BarChart3 size={22} strokeWidth={2.4} />}
+          iconName="bar-chart-3"
           gradient="bg-linear-to-br from-emerald-500 to-green-600"
         />
 
@@ -162,7 +162,7 @@ export function PayrollPageClient({
           title="Kasa & Banka"
           description="Ödeme hesaplarını yönet"
           href="/cash-bank"
-          icon={<Wallet size={22} strokeWidth={2.4} />}
+          iconName="wallet"
           gradient="bg-linear-to-br from-violet-500 to-purple-600"
         />
       </section>

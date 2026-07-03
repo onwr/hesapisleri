@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useState } from "react";
 import {
-  ArrowRight,
+  Archive,
   Banknote,
   Eye,
   Loader2,
+  MoreVertical,
   Pencil,
   Plus,
   Repeat,
@@ -21,6 +22,17 @@ import {
   CashBankTransferModal,
   type CashBankAccountOption,
 } from "@/components/cash-bank/cash-bank-transfer-modal";
+import {
+  CompactActionCard,
+} from "@/components/cards/compact-action-card";
+import { CompactActionCardGrid } from "@/components/cards/compact-action-card-grid";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 
@@ -37,47 +49,6 @@ export function CashBankActionCards({
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
   const [banner, setBanner] = useState("");
 
-  const cards = [
-    {
-      title: "Tahsilat Al",
-      description: "Müşteriden ödeme al",
-      href: "/cash-bank/collections",
-      icon: Wallet,
-      gradient: "from-emerald-500 to-green-600",
-      action: "link" as const,
-    },
-    {
-      title: "Ödeme Yap",
-      description: "Tedarikçiye ödeme yap",
-      href: "/expenses",
-      icon: Wallet,
-      gradient: "from-blue-500 to-blue-600",
-      action: "link" as const,
-    },
-    {
-      title: "Para Transferi",
-      description: "Hesaplar arası transfer",
-      icon: Repeat,
-      gradient: "from-orange-400 to-orange-600",
-      action: "transfer" as const,
-    },
-    {
-      title: "Kasa İşlemi",
-      description: "Hesap seçerek hareket ekle",
-      href: accounts[0] ? `/cash-bank/${accounts[0].id}?movement=1` : "/cash-bank?tab=accounts",
-      icon: Banknote,
-      gradient: "from-violet-500 to-purple-600",
-      action: "link" as const,
-    },
-    {
-      title: "Yeni Hesap",
-      description: "Kasa, banka veya POS ekle",
-      icon: Plus,
-      gradient: "from-rose-400 to-pink-600",
-      action: "account" as const,
-    },
-  ];
-
   return (
     <>
       {banner ? (
@@ -86,61 +57,52 @@ export function CashBankActionCards({
         </div>
       ) : null}
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        {cards.map((card) => {
-          const Icon = card.icon;
-
-          if (card.action === "transfer") {
-            return (
-              <button
-                key={card.title}
-                type="button"
-                onClick={() => setTransferOpen(true)}
-                className={[
-                  "group flex h-[86px] w-full items-center justify-between rounded-2xl bg-linear-to-br p-4 text-left text-white shadow-[0_14px_30px_rgba(15,23,42,0.12)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgba(15,23,42,0.16)]",
-                  card.gradient,
-                ].join(" ")}
-              >
-                <CardContent icon={Icon} title={card.title} description={card.description} />
-              </button>
-            );
+      <CompactActionCardGrid columns="5">
+        <CompactActionCard
+          title="Tahsilat Al"
+          description="Müşteriden ödeme al"
+          href="/cash-bank/collections"
+          iconName="wallet"
+          color="emerald"
+        />
+        <CompactActionCard
+          title="Ödeme Yap"
+          description="Tedarikçiye ödeme yap"
+          href="/expenses"
+          iconName="wallet"
+          color="blue"
+        />
+        <CompactActionCard
+          title="Para Transferi"
+          description="Hesaplar arası transfer"
+          iconName="repeat"
+          color="orange"
+          onClick={() => setTransferOpen(true)}
+        />
+        <CompactActionCard
+          title="Kasa İşlemi"
+          description="Hesap seçerek hareket ekle"
+          href={
+            accounts[0]
+              ? `/cash-bank/${accounts[0].id}?movement=1`
+              : "/cash-bank?tab=accounts"
           }
-
-          if (card.action === "account") {
-            return (
-              <button
-                key={card.title}
-                type="button"
-                onClick={() => {
-                  if (canManage) {
-                    setAccountDialogOpen(true);
-                  }
-                }}
-                disabled={!canManage}
-                className={[
-                  "group flex h-[86px] w-full items-center justify-between rounded-2xl bg-linear-to-br p-4 text-left text-white shadow-[0_14px_30px_rgba(15,23,42,0.12)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgba(15,23,42,0.16)] disabled:cursor-not-allowed disabled:opacity-70",
-                  card.gradient,
-                ].join(" ")}
-              >
-                <CardContent icon={Icon} title={card.title} description={card.description} />
-              </button>
-            );
-          }
-
-          return (
-            <Link
-              key={card.title}
-              href={card.href!}
-              className={[
-                "group flex h-[86px] items-center justify-between rounded-2xl bg-linear-to-br p-4 text-white shadow-[0_14px_30px_rgba(15,23,42,0.12)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgba(15,23,42,0.16)]",
-                card.gradient,
-              ].join(" ")}
-            >
-              <CardContent icon={Icon} title={card.title} description={card.description} />
-            </Link>
-          );
-        })}
-      </section>
+          iconName="banknote"
+          color="violet"
+        />
+        <CompactActionCard
+          title="Yeni Hesap"
+          description="Kasa, banka veya POS ekle"
+          iconName="plus"
+          color="rose"
+          onClick={() => {
+            if (canManage) {
+              setAccountDialogOpen(true);
+            }
+          }}
+          disabled={!canManage}
+        />
+      </CompactActionCardGrid>
 
       <CashBankTransferModal
         open={transferOpen}
@@ -157,39 +119,6 @@ export function CashBankActionCards({
           setBanner(message);
           notifyTenantCacheSync();
         }}
-      />
-    </>
-  );
-}
-
-function CardContent({
-  icon: Icon,
-  title,
-  description,
-}: {
-  icon: typeof Wallet;
-  title: string;
-  description: string;
-}) {
-  return (
-    <>
-      <div className="flex min-w-0 items-center gap-3">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/15 shadow-inner">
-          <Icon size={22} strokeWidth={2.4} />
-        </div>
-
-        <div className="min-w-0">
-          <p className="truncate text-[15px] font-black leading-tight">{title}</p>
-          <p className="mt-1 truncate text-[11px] font-medium text-white/85">
-            {description}
-          </p>
-        </div>
-      </div>
-
-      <ArrowRight
-        size={18}
-        strokeWidth={3}
-        className="shrink-0 opacity-90 transition group-hover:translate-x-1 group-hover:opacity-100"
       />
     </>
   );
@@ -270,75 +199,76 @@ export function CashBankAccountRowActions({
     setLoadingAction(null);
   }
 
+  const busy = isSubmitting || loadingAction !== null;
+
   return (
     <>
-      <div className="flex flex-wrap items-center justify-end gap-1">
-        <Link
-          href={`/cash-bank/${accountId}`}
-          className="inline-flex h-7 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 text-[10px] font-black text-[#24345f] transition hover:border-blue-100 hover:bg-blue-50 hover:text-blue-600"
-        >
-          <Eye size={12} />
-          Detay
-        </Link>
-
-        {canManage && account ? (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
           <button
             type="button"
-            onClick={() => setEditOpen(true)}
-            className="inline-flex h-7 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 text-[10px] font-black text-[#24345f] transition hover:border-blue-100 hover:bg-blue-50 hover:text-blue-600"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:border-blue-100 hover:bg-blue-50 hover:text-blue-600"
+            aria-label="Hesap işlemleri"
           >
-            <Pencil size={12} />
-            Düzenle
-          </button>
-        ) : null}
-
-        <Link
-          href={`/cash-bank/${accountId}?movement=1`}
-          className="inline-flex h-7 items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2 text-[10px] font-black text-violet-700 transition hover:bg-violet-100"
-        >
-          <Plus size={12} />
-          Hareket
-        </Link>
-
-        <button
-          type="button"
-          onClick={() => setTransferOpen(true)}
-          className="inline-flex h-7 items-center gap-1 rounded-md border border-orange-200 bg-orange-50 px-2 text-[10px] font-black text-orange-700 transition hover:bg-orange-100"
-        >
-          <Repeat size={12} />
-          Transfer
-        </button>
-
-        {canManage && !isDefault ? (
-          <button
-            type="button"
-            onClick={handleSetDefault}
-            disabled={isSubmitting || loadingAction === "default"}
-            className="inline-flex h-7 items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 text-[10px] font-black text-amber-700 transition hover:bg-amber-100 disabled:opacity-60"
-          >
-            {loadingAction === "default" ? (
-              <Loader2 size={12} className="animate-spin" />
+            {busy ? (
+              <Loader2 size={14} className="animate-spin" />
             ) : (
-              <Star size={12} />
+              <MoreVertical size={14} />
             )}
-            Varsayılan
           </button>
-        ) : null}
+        </DropdownMenuTrigger>
 
-        {canManage ? (
-          <button
-            type="button"
-            onClick={handleToggleStatus}
-            disabled={isSubmitting || loadingAction === "status" || (isDefault && status === "ACTIVE")}
-            className="inline-flex h-7 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 text-[10px] font-black text-slate-600 transition hover:bg-slate-50 disabled:opacity-60"
-          >
-            {isSubmitting || loadingAction === "status" ? (
-              <Loader2 size={12} className="animate-spin" />
-            ) : null}
-            {status === "ACTIVE" ? "Arşivle" : "Aktifleştir"}
-          </button>
-        ) : null}
-      </div>
+        <DropdownMenuContent align="end" className="w-48 rounded-xl p-1">
+          <DropdownMenuItem asChild>
+            <Link href={`/cash-bank/${accountId}`} className="cursor-pointer gap-2">
+              <Eye size={14} />
+              Detay
+            </Link>
+          </DropdownMenuItem>
+
+          <DropdownMenuItem asChild>
+            <Link href={`/cash-bank/${accountId}#movements`} className="cursor-pointer gap-2">
+              <Banknote size={14} />
+              Hareketler
+            </Link>
+          </DropdownMenuItem>
+
+          {canManage && account ? (
+            <DropdownMenuItem
+              className="cursor-pointer gap-2"
+              onClick={() => setEditOpen(true)}
+            >
+              <Pencil size={14} />
+              Düzenle
+            </DropdownMenuItem>
+          ) : null}
+
+          {canManage && !isDefault ? (
+            <DropdownMenuItem
+              className="cursor-pointer gap-2"
+              disabled={busy}
+              onClick={() => void handleSetDefault()}
+            >
+              <Star size={14} />
+              Varsayılan Yap
+            </DropdownMenuItem>
+          ) : null}
+
+          {canManage ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="cursor-pointer gap-2"
+                disabled={busy || (isDefault && status === "ACTIVE")}
+                onClick={() => void handleToggleStatus()}
+              >
+                <Archive size={14} />
+                {status === "ACTIVE" ? "Arşivle" : "Aktifleştir"}
+              </DropdownMenuItem>
+            </>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <CashBankTransferModal
         open={transferOpen}

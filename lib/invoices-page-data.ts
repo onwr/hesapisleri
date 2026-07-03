@@ -124,39 +124,39 @@ function buildActionCards(stats: {
 }): InvoiceActionCard[] {
   return [
     {
-      title: "Yeni Fatura Kes",
+      title: "Yeni Fatura",
       description: "Hızlı fatura oluştur",
       href: "/invoices/new",
       iconKey: "filePlus",
-      gradient: "from-emerald-500 to-green-600",
+      color: "emerald",
     },
     {
-      title: "Taslak Faturalar",
-      description: `${stats.draftCount} taslak fatura`,
-      href: buildInvoicesQuery({ tab: "draft" }),
-      iconKey: "file",
-      gradient: "from-blue-500 to-blue-600",
+      title: "E-Fatura",
+      description: "e-Belge işlemleri",
+      href: "/invoices/e-invoice",
+      iconKey: "eInvoice",
+      color: "blue",
+    },
+    {
+      title: "Dışa Aktar",
+      description: "Excel/PDF indir",
+      href: stats.exportHref,
+      iconKey: "grid",
+      color: "violet",
     },
     {
       title: "Bekleyen Tahsilatlar",
       description: formatInvoiceMoney(stats.pendingTotal),
       href: buildInvoicesQuery({ tab: "pending" }),
       iconKey: "clock",
-      gradient: "from-orange-400 to-orange-600",
+      color: "orange",
     },
     {
-      title: "Geciken Faturalar",
+      title: "Vadesi Geçenler",
       description: `${stats.overdueCount} adet geciken`,
       href: buildInvoicesQuery({ tab: "overdue" }),
       iconKey: "alert",
-      gradient: "from-violet-500 to-purple-600",
-    },
-    {
-      title: "Toplu İşlemler",
-      description: "Faturaları dışa aktar",
-      href: stats.exportHref,
-      iconKey: "grid",
-      gradient: "from-rose-400 to-pink-600",
+      color: "rose",
     },
   ];
 }

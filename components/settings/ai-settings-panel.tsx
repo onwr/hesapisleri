@@ -128,23 +128,23 @@ export function AiSettingsPanel() {
           {costAlert.thresholdUsd?.toFixed(2)} USD).
         </div>
       ) : null}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5">
+      <div className="rounded-xl border border-slate-200 bg-white p-3">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="flex items-center gap-2 text-[18px] font-black text-[#0f1f4d]">
-              <Sparkles size={18} />
+            <h2 className="flex items-center gap-2 text-[15px] font-black text-[#0f1f4d]">
+              <Sparkles size={16} />
               Yapay Zekâ Ayarları
             </h2>
-            <p className="mt-1 text-[12px] font-medium text-slate-500">
-              Bağlantı durumu: <span className="font-bold">{health.label}</span>
+            <p className="mt-0.5 text-[11px] font-medium text-slate-500">
+              Bağlantı: <span className="font-bold">{health.label}</span>
             </p>
-            <p className="mt-1 text-[12px] text-slate-500">{health.message}</p>
+            <p className="mt-0.5 text-[11px] text-slate-500 line-clamp-2">{health.message}</p>
           </div>
           <button
             type="button"
             onClick={() => void testConnection()}
             disabled={testing}
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-[12px] font-black text-slate-700"
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 px-3 text-[11px] font-black text-slate-700"
           >
             {testing ? <Loader2 size={14} className="animate-spin" /> : <TestTubeDiagonal size={14} />}
             Bağlantıyı Test Et
@@ -152,8 +152,8 @@ export function AiSettingsPanel() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <label className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="grid gap-3 md:grid-cols-2">
+        <label className="rounded-xl border border-slate-200 bg-white p-3">
           <span className="text-[12px] font-black text-slate-500">AI Aktif</span>
           <div className="mt-2">
             <input
@@ -165,7 +165,7 @@ export function AiSettingsPanel() {
           </div>
         </label>
 
-        <label className="rounded-2xl border border-slate-200 bg-white p-4">
+        <label className="rounded-xl border border-slate-200 bg-white p-3">
           <span className="text-[12px] font-black text-slate-500">Salt Okunur Mod</span>
           <div className="mt-2">
             <input
@@ -177,7 +177,7 @@ export function AiSettingsPanel() {
           </div>
         </label>
 
-        <label className="rounded-2xl border border-slate-200 bg-white p-4">
+        <label className="rounded-xl border border-slate-200 bg-white p-3">
           <span className="text-[12px] font-black text-slate-500">Provider</span>
           <select
             value={settings.provider}
@@ -191,7 +191,7 @@ export function AiSettingsPanel() {
           </select>
         </label>
 
-        <label className="rounded-2xl border border-slate-200 bg-white p-4">
+        <label className="rounded-xl border border-slate-200 bg-white p-3">
           <span className="text-[12px] font-black text-slate-500">Model</span>
           <input
             value={settings.model || settings.platformModel}
@@ -201,7 +201,7 @@ export function AiSettingsPanel() {
           />
         </label>
 
-        <label className="rounded-2xl border border-slate-200 bg-white p-4">
+        <label className="rounded-xl border border-slate-200 bg-white p-3">
           <span className="text-[12px] font-black text-slate-500">Varsayılan Dil</span>
           <input
             value={settings.defaultLanguage}
@@ -210,7 +210,7 @@ export function AiSettingsPanel() {
           />
         </label>
 
-        <label className="rounded-2xl border border-slate-200 bg-white p-4">
+        <label className="rounded-xl border border-slate-200 bg-white p-3">
           <span className="text-[12px] font-black text-slate-500">Maks. Yanıt Uzunluğu</span>
           <input
             type="number"
@@ -222,7 +222,7 @@ export function AiSettingsPanel() {
           />
         </label>
 
-        <label className="rounded-2xl border border-slate-200 bg-white p-4">
+        <label className="rounded-xl border border-slate-200 bg-white p-3">
           <span className="text-[12px] font-black text-slate-500">Aylık Maliyet Uyarısı (USD)</span>
           <input
             type="number"
@@ -239,7 +239,7 @@ export function AiSettingsPanel() {
           />
         </label>
 
-        <label className="rounded-2xl border border-slate-200 bg-white p-4">
+        <label className="rounded-xl border border-slate-200 bg-white p-3">
           <span className="text-[12px] font-black text-slate-500">
             Eşik Aşılınca AI&apos;yi Otomatik Kapat
           </span>

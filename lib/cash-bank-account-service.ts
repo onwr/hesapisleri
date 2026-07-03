@@ -15,6 +15,11 @@ import {
   roundCashMoney,
   validateTransferAccounts,
 } from "@/lib/cash-bank-account-utils";
+import {
+  getCompanyAllowNegativeCashBalance,
+  hasInsufficientCashBalance,
+  INSUFFICIENT_CASH_BALANCE_MESSAGE,
+} from "@/lib/cash-balance-policy";
 
 export const manualTransactionSchema = z.object({
   type: z.enum(["INCOME", "EXPENSE"]),
@@ -213,6 +218,9 @@ export async function applyManualAccountTransaction(input: {
 
   const amount = roundCashMoney(input.data.amount);
   const note = input.data.note?.trim() || null;
+  const allowNegativeCashBalance = await getCompanyAllowNegativeCashBalance(
+    input.companyId
+  );
 
   const result = await db.$transaction(async (tx) => {
     const account = await tx.account.findFirst({
@@ -227,6 +235,21 @@ export async function applyManualAccountTransaction(input: {
         ok: false as const,
         status: 404,
         message: "Hesap bulunamadı.",
+      };
+    }
+
+    if (
+      input.data.type === "EXPENSE" &&
+      hasInsufficientCashBalance(
+        account.balance,
+        amount,
+        allowNegativeCashBalance
+      )
+    ) {
+      return {
+        ok: false as const,
+        status: 400,
+        message: INSUFFICIENT_CASH_BALANCE_MESSAGE,
       };
     }
 
@@ -301,6 +324,9 @@ export async function applyAccountTransfer(input: {
   const amount = roundCashMoney(input.data.amount);
   const note = input.data.note?.trim() || null;
   const transferDate = new Date();
+  const allowNegativeCashBalance = await getCompanyAllowNegativeCashBalance(
+    input.companyId
+  );
 
   const result = await runTransactionWithRetry(async (tx) => {
     const locked = await lockCompanyAccountsForUpdate(
@@ -341,7 +367,13 @@ export async function applyAccountTransfer(input: {
       };
     }
 
-    if (roundCashMoney(Number(fromAccount.balance)) < amount) {
+    if (
+      hasInsufficientCashBalance(
+        fromAccount.balance,
+        amount,
+        allowNegativeCashBalance
+      )
+    ) {
       return {
         ok: false as const,
         status: 400,

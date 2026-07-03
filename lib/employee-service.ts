@@ -63,6 +63,7 @@ import {
   validateEmployeePaymentAccount,
   validateEmployeePaymentCreateInput,
 } from "@/lib/employee-payment-validation";
+import { getCompanyAllowNegativeCashBalance } from "@/lib/cash-balance-policy";
 import {
   getEmployeePaymentTypeBehavior,
 } from "@/lib/employee-payment-type-mapping";
@@ -84,7 +85,11 @@ async function assertFinancePaymentAccount(
   companyId: string,
   accountId: string,
   paymentCurrency: string,
-  options?: { amount?: number; checkBalance?: boolean }
+  options?: {
+    amount?: number;
+    checkBalance?: boolean;
+    allowNegativeCashBalance?: boolean;
+  }
 ) {
   const account = await client.account.findFirst({
     where: { id: accountId },
@@ -94,6 +99,7 @@ async function assertFinancePaymentAccount(
     paymentCurrency,
     amount: options?.amount,
     checkBalance: options?.checkBalance,
+    allowNegativeCashBalance: options?.allowNegativeCashBalance,
   });
 
   if (!validation.ok) {
@@ -1176,12 +1182,20 @@ export async function createEmployeeLedgerMovement(input: {
     );
   }
 
+  const allowNegativeCashBalance = await getCompanyAllowNegativeCashBalance(
+    input.companyId
+  );
+
   const account = await assertFinancePaymentAccount(
     db,
     input.companyId,
     input.accountId.trim(),
     "TRY",
-    { amount: input.amount, checkBalance: true }
+    {
+      amount: input.amount,
+      checkBalance: true,
+      allowNegativeCashBalance,
+    }
   );
 
   const paymentType: EmployeePaymentType =
@@ -1300,6 +1314,9 @@ export async function createEmployeePayment(input: {
     (input.type === "DEDUCTION" ? "DEDUCTED" : "PAYABLE");
   const payImmediately =
     input.payImmediately === true || validation.payImmediately;
+  const allowNegativeCashBalance = await getCompanyAllowNegativeCashBalance(
+    input.companyId
+  );
 
   if (payImmediately && validation.accountId) {
     const paidAt = input.dueDate ?? new Date();
@@ -1310,7 +1327,11 @@ export async function createEmployeePayment(input: {
         input.companyId,
         validation.accountId!,
         currency,
-        { amount: validation.amount, checkBalance: true }
+        {
+          amount: validation.amount,
+          checkBalance: true,
+          allowNegativeCashBalance,
+        }
       );
 
       const created = await tx.employeePayment.create({
@@ -1445,13 +1466,20 @@ export async function markEmployeePaymentPaidInTx(
   }
 
   const typeBehavior = getEmployeePaymentTypeBehavior(input.payment.type);
+  const allowNegativeCashBalance = await getCompanyAllowNegativeCashBalance(
+    input.companyId
+  );
 
   await assertFinancePaymentAccount(
     tx,
     input.companyId,
     plan.accountId,
     input.payment.currency,
-    { amount: roundCashMoney(Number(input.payment.amount)), checkBalance: true }
+    {
+      amount: roundCashMoney(Number(input.payment.amount)),
+      checkBalance: true,
+      allowNegativeCashBalance,
+    }
   );
 
   const amount = roundCashMoney(Number(input.payment.amount));

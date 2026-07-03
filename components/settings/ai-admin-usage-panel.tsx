@@ -81,11 +81,11 @@ export function AiAdminUsagePanel() {
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="flex items-center gap-2 text-[18px] font-black text-[#0f1f4d]">
-            <Sparkles size={18} />
+          <h2 className="flex items-center gap-2 text-[15px] font-black text-[#0f1f4d]">
+            <Sparkles size={16} />
             AI Kullanım ve Maliyet
           </h2>
-          <p className="mt-1 text-[12px] font-medium text-slate-500">
+          <p className="mt-0.5 text-[11px] font-medium text-slate-500">
             Bu ayki istek, token ve tahmini maliyet özeti
           </p>
         </div>
@@ -104,7 +104,7 @@ export function AiAdminUsagePanel() {
         </div>
       ) : null}
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           { label: "Toplam İstek", value: data.totalRequests },
           { label: "Token", value: data.totalTokens.toLocaleString("tr-TR") },
@@ -113,10 +113,10 @@ export function AiAdminUsagePanel() {
         ].map((card) => (
           <div
             key={card.label}
-            className="rounded-2xl border border-slate-200 bg-white p-4"
+            className="rounded-xl border border-slate-200 bg-white p-3"
           >
-            <p className="text-[11px] font-black uppercase text-slate-400">{card.label}</p>
-            <p className="mt-2 text-[20px] font-black text-[#0f1f4d]">{card.value}</p>
+            <p className="text-[10px] font-black uppercase text-slate-400">{card.label}</p>
+            <p className="mt-1.5 text-[18px] font-black text-[#0f1f4d]">{card.value}</p>
           </div>
         ))}
       </section>

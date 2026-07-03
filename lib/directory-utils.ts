@@ -171,6 +171,29 @@ export function isManualDirectoryContact(
   return !sourceType || sourceType === "MANUAL";
 }
 
+export function getDirectoryContactDetailHref(contact: {
+  sourceType: DirectorySourceType | null;
+  sourceId: string | null;
+}): string | null {
+  if (!contact.sourceId || isManualDirectoryContact(contact.sourceType)) {
+    return null;
+  }
+
+  if (contact.sourceType === "CUSTOMER") {
+    return `/customers/${contact.sourceId}`;
+  }
+
+  if (contact.sourceType === "SUPPLIER") {
+    return `/suppliers/${contact.sourceId}`;
+  }
+
+  if (contact.sourceType === "EMPLOYEE") {
+    return `/team/${contact.sourceId}`;
+  }
+
+  return null;
+}
+
 export function isSourceManagedDirectoryContact(
   sourceType: DirectorySourceType | null | undefined
 ) {

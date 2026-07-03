@@ -910,7 +910,8 @@ model CompanySettings {
   autoCreateCashAccount      Boolean @default(true)
   hideInactiveAccounts       Boolean @default(true)
 
-  allowNegativeStockSales Boolean @default(false)
+  allowNegativeStockSales  Boolean @default(false)
+  allowNegativeCashBalance Boolean @default(false)
 
   notifyLowStock         Boolean @default(true)
   notifyDueInvoices      Boolean @default(true)

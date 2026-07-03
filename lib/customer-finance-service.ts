@@ -12,6 +12,7 @@ import {
   parseCustomerFinanceDate,
   validateCustomerFinanceAccount,
 } from "@/lib/customer-finance-utils";
+import { getCompanyAllowNegativeCashBalance } from "@/lib/cash-balance-policy";
 
 export class CustomerFinanceError extends Error {
   status: number;
@@ -212,6 +213,9 @@ export async function createCustomerPayment(input: {
   }
 
   const paymentDate = input.date ?? new Date();
+  const allowNegativeCashBalance = await getCompanyAllowNegativeCashBalance(
+    input.companyId
+  );
 
   return runTransactionWithRetry(async (tx) => {
     if (input.idempotencyKey) {
@@ -252,6 +256,7 @@ export async function createCustomerPayment(input: {
         purpose: "payment",
         amount: amountParsed.amount,
         checkBalance: true,
+        allowNegativeCashBalance,
       }
     );
 

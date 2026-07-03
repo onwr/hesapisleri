@@ -24,7 +24,7 @@ import {
   getAchievementStatus,
   getAchievementStatusLabel,
 } from "@/lib/employee-performance-target-utils";
-import { formatMoney, formatNumber } from "@/lib/format-utils";
+import { formatMoney, formatNumber, formatShortDisplayDate } from "@/lib/format-utils";
 
 type PersonnelPerformanceClientProps = {
   initialReport: PersonnelPerformanceReport;
@@ -153,7 +153,7 @@ export function PersonnelPerformanceClient({
             title="Performans Hedefi"
             description="Yeni hedef tanımla"
             onClick={openTargetModal}
-            icon={<Target size={22} strokeWidth={2.4} />}
+            iconName="target"
             gradient="bg-linear-to-br from-[#0f1f4d] to-[#1e3a8a]"
           />
         ) : null}
@@ -164,7 +164,7 @@ export function PersonnelPerformanceClient({
             canManageTargets ? "Hedef kayıtlarını düzenle" : "Hedef listesini gör"
           }
           href="/reports/personnel-performance/targets"
-          icon={<Target size={22} strokeWidth={2.4} />}
+          iconName="target"
           gradient="bg-linear-to-br from-violet-500 to-purple-600"
         />
 
@@ -172,7 +172,7 @@ export function PersonnelPerformanceClient({
           title="Departman Performansı"
           description="Departman bazlı karşılaştır"
           href="/reports/personnel-performance/departments"
-          icon={<Building2 size={22} strokeWidth={2.4} />}
+          iconName="building-2"
           gradient="bg-linear-to-br from-blue-500 to-blue-600"
         />
 
@@ -180,7 +180,7 @@ export function PersonnelPerformanceClient({
           title="Excel Dışa Aktar"
           description="CSV olarak indir"
           href={exportUrl}
-          icon={<Download size={22} strokeWidth={2.4} />}
+          iconName="download"
           gradient="bg-linear-to-br from-emerald-500 to-green-600"
         />
       </section>
@@ -707,9 +707,5 @@ function getAvatarColor(name: string) {
 }
 
 function formatPeriodLabel(value: string) {
-  return new Date(value).toLocaleDateString("tr-TR", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return formatShortDisplayDate(value);
 }

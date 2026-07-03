@@ -28,6 +28,7 @@ export interface PlanPricePreviewCanonicalPayload {
   priceChangePolicy: string;
   isPublic: boolean;
   affectedSubscriptionSummary: AffectedSubscriptionSummary;
+  issuedByUserId: string;
   issuedAt: number;
   expiresAt: number;
 }
@@ -36,7 +37,7 @@ export class PreviewSecretNotConfiguredError extends Error {
   status = 503;
   code = "PREVIEW_SECRET_NOT_CONFIGURED";
   constructor() {
-    super("PLAN_PRICE_PREVIEW_SECRET yapılandırılmamış.");
+    super("Paylaşılabilir önizleme bağlantısı şu anda kapalıdır.");
     this.name = "PreviewSecretNotConfiguredError";
   }
 }
@@ -50,17 +51,27 @@ export class PreviewStaleError extends Error {
   }
 }
 
+/** Paylaşılabilir (harici) önizleme bağlantıları için opsiyonel secret. */
 export function getPlanPricePreviewSecret(): string {
   const secret = process.env.PLAN_PRICE_PREVIEW_SECRET;
   if (!secret || secret.length < 16) {
     throw new PreviewSecretNotConfiguredError();
   }
-  const nextAuth = process.env.NEXTAUTH_SECRET;
+  const jwtSecret = process.env.JWT_SECRET;
   const subPreview = process.env.SUBSCRIPTION_PREVIEW_SECRET;
-  if (secret === nextAuth || secret === subPreview) {
+  if (secret === jwtSecret || secret === subPreview) {
     throw new PreviewSecretNotConfiguredError();
   }
   return secret;
+}
+
+export function isPublicPlanPricePreviewConfigured(): boolean {
+  try {
+    getPlanPricePreviewSecret();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function signPlanPricePreview(

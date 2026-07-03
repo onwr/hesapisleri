@@ -22,6 +22,11 @@ import {
   type PayExpenseInput,
   type UpdateExpenseInput,
 } from "@/lib/expense-utils";
+import {
+  getCompanyAllowNegativeCashBalance,
+  hasInsufficientCashBalance,
+  INSUFFICIENT_CASH_BALANCE_MESSAGE,
+} from "@/lib/cash-balance-policy";
 
 export {
   createExpenseSchema,
@@ -176,6 +181,9 @@ export async function createExpenseRecord(input: {
   const amount = roundCashMoney(input.data.amount);
   const category = normalizeExpenseCategory(input.data.category);
   await ensureExpenseCategoryExists(input.companyId, category);
+  const allowNegativeCashBalance = await getCompanyAllowNegativeCashBalance(
+    input.companyId
+  );
 
   const result = await db.$transaction(async (tx) => {
     if (input.data.paymentStatus === "PAID") {
@@ -220,6 +228,21 @@ export async function createExpenseRecord(input: {
       const account = await tx.account.findFirstOrThrow({
         where: { id: input.data.accountId },
       });
+
+      if (
+        hasInsufficientCashBalance(
+          account.balance,
+          amount,
+          allowNegativeCashBalance
+        )
+      ) {
+        return {
+          ok: false as const,
+          status: 400,
+          message: INSUFFICIENT_CASH_BALANCE_MESSAGE,
+        };
+      }
+
       const newBalance = roundCashMoney(Number(account.balance) - amount);
 
       await tx.accountTransaction.create({
@@ -494,6 +517,10 @@ export async function payExpenseRecord(input: {
     };
   }
 
+  const allowNegativeCashBalance = await getCompanyAllowNegativeCashBalance(
+    input.companyId
+  );
+
   const result = await db.$transaction(async (tx) => {
     const expense = await tx.expense.findFirst({
       where: {
@@ -540,6 +567,21 @@ export async function payExpenseRecord(input: {
 
     const amount = roundCashMoney(Number(expense.amount));
     const paymentNote = input.data.note?.trim() || expense.note;
+
+    if (
+      hasInsufficientCashBalance(
+        account.balance,
+        amount,
+        allowNegativeCashBalance
+      )
+    ) {
+      return {
+        ok: false as const,
+        status: 400,
+        message: INSUFFICIENT_CASH_BALANCE_MESSAGE,
+      };
+    }
+
     const newBalance = roundCashMoney(Number(account.balance) - amount);
 
     await tx.accountTransaction.create({

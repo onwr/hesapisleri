@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { Prisma } from "@prisma/client";
+import type { MembershipPeriod, Prisma } from "@prisma/client";
 import { db } from "@/lib/prisma";
 import {
   assertValidEntitlementSet,
@@ -8,26 +8,31 @@ import {
   type EntitlementInputRow,
 } from "@/lib/admin/entitlements/admin-plan-entitlement-validation";
 import { getEntitlementMeta } from "@/lib/billing/entitlements/entitlement-registry";
-import { validateIconKey } from "@/lib/admin/plans/admin-plan-feature-schemas";
+import { buildPriceTotals } from "@/lib/billing/pricing-utils";
 import { logAdminPlanAudit } from "@/lib/admin/plans/admin-plan-audit-service";
-import { syncLegacyPlanFeatures } from "@/lib/admin/plans/admin-plan-feature-service";
 import {
   invalidateAdminPlanCaches,
   invalidateAdminPlanEntitlementCaches,
-  invalidateAdminPlanFeatureCaches,
 } from "@/lib/admin/plans/admin-plan-cache";
 import {
   AdminPlanPatchValidationError,
   adminPlanCreateSchema,
   assertNoForbiddenPlanCreateKeys,
+  normalizeAdminPlanCreateBody,
   type AdminPlanCreateInput,
+  type AdminPlanPeriodPriceCreateInput,
 } from "@/lib/admin/plans/admin-plan-schemas";
 import { AdminPlanServiceError } from "@/lib/admin/plans/admin-plan-patch-service";
-import { assertPlanCodeAvailable } from "@/lib/admin/plans/admin-plan-code-utils";
+import {
+  assertPlanCodeAvailable,
+  normalizePlanCode,
+} from "@/lib/admin/plans/admin-plan-code-utils";
 import {
   getExistingCreatePlanId,
   recordCreatePlanIdempotency,
 } from "@/lib/admin/plans/admin-plan-create-idempotency";
+import { resolvePeriodPriceMinor } from "@/lib/admin/plans/admin-plan-period-pricing-utils";
+import { syncLegacyPlanColumnIfApplicable } from "@/lib/admin/plans/admin-plan-price-publish-service";
 
 export class AdminPlanCreateError extends Error {
   status: number;
@@ -65,18 +70,95 @@ async function upsertEntitlementsInTx(
   return saved;
 }
 
+async function createPlanPriceInTx(
+  tx: Prisma.TransactionClient,
+  input: {
+    planId: string;
+    actorUserId: string;
+    currency: string;
+    vatRate: number;
+    vatIncluded: boolean;
+    salesOpen: boolean;
+    monthlyPriceMinor: number;
+    periodPrice: AdminPlanPeriodPriceCreateInput;
+    now: Date;
+  }
+) {
+  const resolved = resolvePeriodPriceMinor({
+    monthlyPriceMinor: input.monthlyPriceMinor,
+    interval: input.periodPrice.billingInterval,
+    enabled: input.periodPrice.enabled,
+    discountPercent: input.periodPrice.discountPercent,
+    salePriceMinor: input.periodPrice.salePriceMinor,
+  });
+  if (!resolved) return null;
+
+  const totals = buildPriceTotals({
+    listPriceMinor: resolved.listPriceMinor,
+    salePriceMinor: resolved.salePriceMinor,
+    interval: input.periodPrice.billingInterval,
+    vatRate: input.vatRate,
+    vatIncluded: input.vatIncluded,
+    discountPercent: resolved.discountPercent,
+  });
+
+  const price = await tx.membershipPlanPrice.create({
+    data: {
+      planId: input.planId,
+      billingInterval: input.periodPrice.billingInterval,
+      version: 1,
+      status: "ACTIVE",
+      listPriceMinor: totals.listPriceMinor,
+      salePriceMinor: totals.salePriceMinor,
+      currency: input.currency,
+      vatRate: input.vatRate,
+      vatIncluded: input.vatIncluded,
+      monthlyEquivalentMinor: totals.monthlyEquivalentMinor,
+      effectiveFrom: input.now,
+      effectiveUntil: null,
+      isAutoRenewEnabled: true,
+      isPublic: input.salesOpen,
+      priceChangePolicy: "NEW_SUBSCRIBERS_ONLY",
+      adminNote: "Plan oluşturma",
+      createdByUserId: input.actorUserId,
+      publishedByUserId: input.actorUserId,
+      publishedAt: input.now,
+    },
+  });
+
+  await syncLegacyPlanColumnIfApplicable(
+    tx,
+    { id: input.planId, defaultCurrency: input.currency, currency: input.currency },
+    input.periodPrice.billingInterval as MembershipPeriod,
+    totals.salePriceMinor,
+    input.currency
+  );
+
+  return price;
+}
+
+function resolvePlanLifecycle(input: AdminPlanCreateInput, hasEnabledPrices: boolean) {
+  const salesReady = input.salesOpen && hasEnabledPrices;
+  return {
+    planStatus: salesReady ? ("ACTIVE" as const) : ("DRAFT" as const),
+    visibility: salesReady ? ("PUBLIC" as const) : ("PRIVATE" as const),
+    isActive: salesReady,
+    publishedAt: salesReady ? new Date() : null,
+  };
+}
+
 export async function createAdminPlanDraft(rawBody: unknown, actorUserId: string) {
-  if (!rawBody || typeof rawBody !== "object") {
+  const body = normalizeAdminPlanCreateBody(rawBody);
+  if (!Object.keys(body).length) {
     throw new AdminPlanCreateError("Geçersiz istek gövdesi.");
   }
-  const body = rawBody as Record<string, unknown>;
   assertNoForbiddenPlanCreateKeys(body);
 
   const parsed = adminPlanCreateSchema.safeParse(body);
   if (!parsed.success) {
-    throw new AdminPlanPatchValidationError(
-      parsed.error.issues.map((i) => i.message).join("; ")
-    );
+    const message =
+      parsed.error.issues[0]?.message ?? "Plan bilgileri geçersiz.";
+    throw new AdminPlanPatchValidationError(message);
   }
 
   const input: AdminPlanCreateInput = parsed.data;
@@ -87,13 +169,20 @@ export async function createAdminPlanDraft(rawBody: unknown, actorUserId: string
     if (plan) return plan;
   }
 
-  const code = await assertPlanCodeAvailable(input.code);
+  const codeSource = input.code?.trim() || normalizePlanCode(input.name);
+  const code = await assertPlanCodeAvailable(codeSource);
   const normalizedEntitlements = input.entitlements.map(normalizeEntitlementRow);
   assertValidEntitlementSet(normalizedEntitlements);
 
-  for (const feature of input.features) {
-    validateIconKey(feature.iconKey);
+  const monthlyRow = input.periodPrices.find((p) => p.billingInterval === "MONTHLY");
+  const monthlyPriceMinor = monthlyRow?.salePriceMinor;
+  if (!monthlyPriceMinor || monthlyPriceMinor <= 0) {
+    throw new AdminPlanCreateError("Aylık fiyat zorunludur.");
   }
+
+  const enabledPeriods = input.periodPrices.filter((p) => p.enabled);
+  const lifecycle = resolvePlanLifecycle(input, enabledPeriods.length > 0);
+  const now = new Date();
 
   const plan = await db.$transaction(async (tx) => {
     const created = await tx.membershipPlan.create({
@@ -101,43 +190,48 @@ export async function createAdminPlanDraft(rawBody: unknown, actorUserId: string
         name: input.name,
         code,
         slug: code,
+        shortDescription: input.shortDescription ?? null,
         description: input.description ?? null,
-        planStatus: "DRAFT",
-        visibility: input.visibility,
-        isFeatured: false,
+        planStatus: lifecycle.planStatus,
+        visibility: lifecycle.visibility,
+        isFeatured: input.isFeatured,
         sortOrder: input.sortOrder,
         trialEnabled: input.trialEnabled,
         trialDays: input.trialDays,
-        defaultCurrency: input.defaultCurrency,
-        currency: input.defaultCurrency,
+        defaultCurrency: input.currency,
+        currency: input.currency,
         vatRate: 20,
         vatIncluded: false,
-        monthlyPrice: 0,
+        monthlyPrice: monthlyPriceMinor / 100,
         quarterlyPrice: 0,
         semiAnnualPrice: 0,
         yearlyPrice: 0,
-        isActive: false,
+        isActive: lifecycle.isActive,
         features: [],
-        publishedAt: null,
+        publishedAt: lifecycle.publishedAt,
         archivedAt: null,
       },
     });
 
-    for (const feature of input.features) {
-      await tx.planFeature.create({
-        data: {
-          planId: created.id,
-          label: feature.title,
-          shortDescription: feature.shortDescription,
-          iconKey: validateIconKey(feature.iconKey),
-          sortOrder: feature.sortOrder,
-          isHighlighted: feature.isHighlighted,
-          isVisible: feature.isVisible,
-        },
+    const createdPrices = [];
+    for (const periodPrice of input.periodPrices) {
+      const price = await createPlanPriceInTx(tx, {
+        planId: created.id,
+        actorUserId,
+        currency: input.currency,
+        vatRate: 20,
+        vatIncluded: false,
+        salesOpen: lifecycle.isActive,
+        monthlyPriceMinor,
+        periodPrice,
+        now,
       });
+      if (price) createdPrices.push(price);
     }
 
-    await syncLegacyPlanFeatures(created.id, tx);
+    if (input.salesOpen && createdPrices.length === 0) {
+      throw new AdminPlanCreateError("Satışa açık plan için fiyat oluşturulamadı.");
+    }
 
     const savedEntitlements = await upsertEntitlementsInTx(tx, created.id, normalizedEntitlements);
 
@@ -150,7 +244,7 @@ export async function createAdminPlanDraft(rawBody: unknown, actorUserId: string
         entitlementsJson: savedEntitlements,
         createdByUserId: actorUserId,
         publishedByUserId: actorUserId,
-        publishedAt: new Date(),
+        publishedAt: now,
       },
     });
 
@@ -160,12 +254,15 @@ export async function createAdminPlanDraft(rawBody: unknown, actorUserId: string
       planId: created.id,
       entityType: "MembershipPlan",
       entityId: created.id,
-      displayMessage: `Plan taslak olarak oluşturuldu: ${created.name}`,
+      displayMessage: lifecycle.isActive
+        ? `Plan oluşturuldu ve satışa açıldı: ${created.name}`
+        : `Plan pasif olarak oluşturuldu: ${created.name}`,
       metadata: {
         code: created.code,
-        featureCount: input.features.length,
         entitlementCount: savedEntitlements.length,
-        visibility: created.visibility,
+        priceCount: createdPrices.length,
+        salesOpen: input.salesOpen,
+        currency: input.currency,
       },
       tx,
     });
@@ -175,7 +272,6 @@ export async function createAdminPlanDraft(rawBody: unknown, actorUserId: string
 
   recordCreatePlanIdempotency(input.clientRequestId, plan.id);
   invalidateAdminPlanCaches(plan.id);
-  invalidateAdminPlanFeatureCaches(plan.id);
   invalidateAdminPlanEntitlementCaches(plan.id);
 
   return plan;

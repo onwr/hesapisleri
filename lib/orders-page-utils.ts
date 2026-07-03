@@ -78,8 +78,8 @@ export type OrderActionCard = {
   title: string;
   description: string;
   href: string;
-  iconKey: "plus" | "refresh" | "truck" | "spreadsheet" | "grid";
-  gradient: string;
+  iconKey: "plus" | "refresh" | "truck" | "spreadsheet" | "grid" | "bag";
+  color: "emerald" | "blue" | "orange" | "rose" | "violet";
 };
 
 export function endOfDay(date: Date) {

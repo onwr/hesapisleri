@@ -16,6 +16,7 @@ import {
   validateSupplierFinanceAccount,
 } from "@/lib/supplier-payment-validation";
 import { getSupplierDisplayName } from "@/lib/supplier-utils";
+import { getCompanyAllowNegativeCashBalance } from "@/lib/cash-balance-policy";
 
 export class SupplierFinanceError extends Error {
   status: number;
@@ -157,6 +158,9 @@ export async function createSupplierPayment(input: {
   }
 
   const paymentDate = input.date ?? new Date();
+  const allowNegativeCashBalance = await getCompanyAllowNegativeCashBalance(
+    input.companyId
+  );
 
   try {
     const result = await db.$transaction(async (tx) => {
@@ -206,6 +210,7 @@ export async function createSupplierPayment(input: {
           paymentCurrency: supplier.currency,
           amount: amountParsed.amount,
           checkBalance: true,
+          allowNegativeCashBalance,
           purpose: "disbursement",
         }
       );

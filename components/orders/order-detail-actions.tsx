@@ -159,7 +159,7 @@ export function OrderDetailActions({
             type="button"
             disabled={isSubmitting}
             onClick={handlePrimaryAction}
-            className={["h-10 rounded-xl font-black text-white", primaryAction.tone].join(
+            className={["h-9 rounded-xl px-3 text-[11px] font-black text-white", primaryAction.tone].join(
               " "
             )}
           >
@@ -178,7 +178,7 @@ export function OrderDetailActions({
             variant="outline"
             disabled={isSubmitting}
             onClick={handleCancel}
-            className="h-10 rounded-xl border-rose-200 font-black text-rose-600 hover:bg-rose-50"
+            className="h-9 rounded-xl border-rose-200 px-3 text-[11px] font-black text-rose-600 hover:bg-rose-50"
           >
             <Ban size={16} />
             İptal Et

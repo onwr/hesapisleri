@@ -118,9 +118,9 @@ describe("QA Faz 2 — font ve kontrast", () => {
   });
 
   it("action-card açıklama metni okunabilir kontrastta", () => {
-    const card = read("components/cards/action-card.tsx");
-    assert.match(card, /text-xs font-medium text-white/);
-    assert.doesNotMatch(card, /text-white\/85/);
+    const card = read("components/cards/compact-action-card.tsx");
+    assert.match(card, /text-\[11px\] font-medium text-slate-500/);
+    assert.match(card, /bg-white/);
   });
 
   it("dashboard-content küçük badge fontları kaldırıldı", () => {
@@ -164,8 +164,9 @@ describe("QA Faz 2 — klavye ve focus", () => {
 
   it("hızlı işlem kartları Link ile navigasyon sağlar", () => {
     const card = read("components/cards/action-card.tsx");
-    assert.match(card, /<Link/);
-    assert.doesNotMatch(card, /onClick=/);
+    const compact = read("components/cards/compact-action-card.tsx");
+    assert.match(card, /iconName:/);
+    assert.match(compact, /<Link href=\{href\}/);
   });
 
   it("stat-card focus-visible ring içerir", () => {

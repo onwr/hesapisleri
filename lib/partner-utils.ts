@@ -16,7 +16,18 @@ export const PARTNER_MONTHLY_SIGNUP_GOAL = 10;
 export const partnerApplicationSchema = z.object({
   fullName: z.string().min(2, "Ad soyad zorunludur."),
   email: z.string().email("Geçerli bir e-posta girin."),
-  phone: z.string().optional(),
+  phone: z
+    .string()
+    .trim()
+    .min(10, "Geçerli bir Türkiye telefonu girin.")
+    .refine((value) => {
+      const digits = value.replace(/\D/g, "");
+      return (
+        (digits.length === 10 && digits.startsWith("5")) ||
+        (digits.length === 11 && digits.startsWith("05")) ||
+        (digits.length === 12 && digits.startsWith("905"))
+      );
+    }, "Geçerli bir Türkiye cep telefonu girin (05xx xxx xx xx)."),
   socialUrl: z.string().url("Geçerli bir URL girin.").optional().or(z.literal("")),
   audienceType: z.enum([
     "BUSINESS",

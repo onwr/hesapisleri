@@ -13,6 +13,7 @@ export const DEFAULT_COMPANY_SETTINGS = {
   autoCreateCashAccount: true,
   hideInactiveAccounts: true,
   allowNegativeStockSales: false,
+  allowNegativeCashBalance: false,
   notifyLowStock: true,
   notifyDueInvoices: true,
   notifyLateCollections: true,
@@ -54,6 +55,7 @@ export const updateCashBankSettingsSchema = z.object({
   defaultExpenseAccountId: z.string().optional().nullable(),
   autoCreateCashAccount: z.boolean().default(true),
   hideInactiveAccounts: z.boolean().default(true),
+  allowNegativeCashBalance: z.boolean().default(false),
 });
 
 export const updateNotificationSettingsSchema = z.object({

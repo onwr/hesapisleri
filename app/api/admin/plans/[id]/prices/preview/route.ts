@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdminApi } from "@/lib/admin-auth";
+import { verifyApiMutationOrigin } from "@/lib/api-origin-guard";
 import { adminPlanPricePreviewInputSchema } from "@/lib/admin/plans/admin-plan-schemas";
 import {
   createAdminPlanPricePreview,
-  PreviewSecretNotConfiguredError,
 } from "@/lib/admin/plans/admin-plan-price-preview-service";
 import { MembershipPlanPriceError } from "@/lib/membership-plan-price-service";
 import { AdminPlanServiceError } from "@/lib/admin/plans/admin-plan-patch-service";
@@ -13,6 +13,9 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 export async function POST(req: Request, context: RouteContext) {
   try {
+    const originError = verifyApiMutationOrigin(req);
+    if (originError) return originError;
+
     const auth = await requireSuperAdminApi();
     if ("error" in auth) return auth.error;
 
@@ -26,16 +29,10 @@ export async function POST(req: Request, context: RouteContext) {
     }
 
     const { id } = await context.params;
-    const preview = await createAdminPlanPricePreview(id, parsed.data);
+    const preview = await createAdminPlanPricePreview(id, parsed.data, auth.user.id);
 
     return NextResponse.json({ success: true, data: preview });
   } catch (error) {
-    if (error instanceof PreviewSecretNotConfiguredError) {
-      return NextResponse.json(
-        { success: false, message: error.message, code: error.code },
-        { status: 503 }
-      );
-    }
     if (error instanceof PlanPriceOverlapError) {
       return NextResponse.json({ success: false, message: error.message }, { status: 409 });
     }
@@ -46,6 +43,9 @@ export async function POST(req: Request, context: RouteContext) {
       );
     }
     console.error("[POST /api/admin/plans/[id]/prices/preview]", error);
-    return NextResponse.json({ success: false, message: "Önizleme oluşturulamadı." }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Fiyat önizlemesi hazırlanamadı. Girdiğiniz değerleri kontrol edin." },
+      { status: 500 }
+    );
   }
 }

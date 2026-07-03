@@ -49,22 +49,24 @@ describe("plan code security", () => {
 });
 
 describe("create schema strict", () => {
-  it("draft create body geçerli", () => {
+  it("create body geçerli", () => {
     const r = adminPlanCreateSchema.safeParse({
       name: "Test Plan",
       code: "test-plan",
       sortOrder: 100,
       trialEnabled: true,
       trialDays: 14,
-      defaultCurrency: "TRY",
-      visibility: "INTERNAL",
-      features: [{ title: "Özellik 1", sortOrder: 10 }],
+      currency: "TRY",
+      salesOpen: false,
+      periodPrices: [
+        { billingInterval: "MONTHLY", enabled: true, salePriceMinor: 50000 },
+      ],
       entitlements: [],
     });
     assert.equal(r.success, true);
     if (r.success) {
       assert.equal(r.data.name, "Test Plan");
-      assert.equal(r.data.features.length, 1);
+      assert.equal(r.data.currency, "TRY");
     }
   });
 
@@ -263,9 +265,7 @@ describe("structured audit writers", () => {
     const src = readSrc("lib/admin/plans/admin-plan-create-service.ts");
     assert.ok(src.includes('action: "PLAN_CREATED"'));
     assert.ok(src.includes('entityType: "MembershipPlan"'));
-    assert.ok(src.includes("planStatus: \"DRAFT\""));
-    assert.ok(src.includes("isActive: false"));
-    assert.ok(src.includes("syncLegacyPlanFeatures"));
+    assert.ok(src.includes("membershipPlanPrice.create"));
     assert.ok(src.includes("invalidateAdminPlanCaches"));
   });
 
@@ -293,11 +293,11 @@ describe("Faz 6.4 route auth", () => {
 
 describe("UI entry points", () => {
   it("/admin/plans/new sayfası", () => {
-    assert.ok(readSrc("app/admin/plans/new/page.tsx").includes("AdminPlanCreateWizard"));
+    assert.ok(readSrc("app/admin/plans/new/page.tsx").includes("AdminPlanCreateForm"));
   });
 
   it("list Yeni Plan linki", () => {
-    assert.ok(readSrc("app/admin/plans/page.tsx").includes("/admin/plans/new"));
+    assert.ok(readSrc("components/admin/plans/admin-plans-list-shell.tsx").includes("/admin/plans/new"));
   });
 
   it("detail Planı Kopyala", () => {

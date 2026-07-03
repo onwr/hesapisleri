@@ -19,7 +19,7 @@ import {
   type PerformanceTargetListItem,
 } from "@/components/reports/performance-target-modal";
 import { TeamActionButton } from "@/components/team/team-action-button";
-import { formatMoney, formatNumber } from "@/lib/format-utils";
+import { formatMoney, formatNumber, formatShortDisplayDate } from "@/lib/format-utils";
 
 type PerformanceTargetsClientProps = {
   initialTargets: PerformanceTargetListItem[];
@@ -237,7 +237,7 @@ export function PerformanceTargetsClient({
             title="Yeni Hedef"
             description="Performans hedefi oluştur"
             onClick={openCreateModal}
-            icon={<Target size={22} strokeWidth={2.4} />}
+            iconName="target"
             gradient="bg-linear-to-br from-[#0f1f4d] to-[#1e3a8a]"
           />
         ) : null}
@@ -246,7 +246,7 @@ export function PerformanceTargetsClient({
           title="Personel Performansı"
           description="Performans raporuna dön"
           href="/reports/personnel-performance"
-          icon={<Users size={22} strokeWidth={2.4} />}
+          iconName="users"
           gradient="bg-linear-to-br from-blue-500 to-blue-600"
         />
 
@@ -254,7 +254,7 @@ export function PerformanceTargetsClient({
           title="Departman Performansı"
           description="Departman kırılımını gör"
           href="/reports/personnel-performance/departments"
-          icon={<Building2 size={22} strokeWidth={2.4} />}
+          iconName="building-2"
           gradient="bg-linear-to-br from-violet-500 to-purple-600"
         />
 
@@ -262,7 +262,7 @@ export function PerformanceTargetsClient({
           title="Çalışanlar"
           description="Personel listesine git"
           href="/team"
-          icon={<User size={22} strokeWidth={2.4} />}
+          iconName="user"
           gradient="bg-linear-to-br from-emerald-500 to-green-600"
         />
       </section>
@@ -462,8 +462,8 @@ export function PerformanceTargetsClient({
                         </td>
 
                         <td className="whitespace-nowrap px-4 py-3 text-[11px] text-slate-500">
-                          {formatDate(target.periodStart)} –{" "}
-                          {formatDate(target.periodEnd)}
+                          {formatShortDisplayDate(target.periodStart)} –{" "}
+                          {formatShortDisplayDate(target.periodEnd)}
                         </td>
 
                         <td className="px-4 py-3">
@@ -553,8 +553,8 @@ export function PerformanceTargetsClient({
                           {getTargetSubject(target)}
                         </p>
                         <p className="mt-1 text-[11px] font-semibold text-slate-500">
-                          {formatDate(target.periodStart)} –{" "}
-                          {formatDate(target.periodEnd)}
+                          {formatShortDisplayDate(target.periodStart)} –{" "}
+                          {formatShortDisplayDate(target.periodEnd)}
                         </p>
                       </div>
                     </div>
@@ -782,14 +782,6 @@ function FilterField({
   );
 }
 
-function formatDate(value: string) {
-  return new Date(value).toLocaleDateString("tr-TR", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-
 function formatPeriodLabel(value: string) {
-  return formatDate(value);
+  return formatShortDisplayDate(value);
 }

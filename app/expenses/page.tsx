@@ -1,21 +1,21 @@
 import Link from "next/link";
 import {
-  ArrowRight,
   Download,
   Edit3,
   Eye,
   FileText,
-  Grid2X2,
   Hourglass,
   MoreVertical,
-  Plus,
   ReceiptText,
-  Repeat,
   TrendingDown,
   Wallet,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { guardPageModule } from "@/lib/module-access";
+import {
+  CompactActionCard,
+} from "@/components/cards/compact-action-card";
+import { CompactActionCardGrid } from "@/components/cards/compact-action-card-grid";
 
 import {
   ExpensesTablePagination,
@@ -71,35 +71,42 @@ const colorClassMap = {
   violet: "bg-violet-50 text-violet-600",
 };
 
-function buildActionCards() {
+function buildActionCards(exportHref: string) {
   return [
     {
       title: "Yeni Gider",
       description: "Manuel gider kaydı oluşturun",
       href: "/expenses/new",
-      icon: Plus,
-      gradient: "from-orange-400 to-orange-600",
-    },
-    {
-      title: "Ödenmemiş Gider",
-      description: "Ödeme bekleyen giderleri görün",
-      href: "/expenses?tab=unpaid",
-      icon: Hourglass,
-      gradient: "from-amber-400 to-orange-500",
-    },
-    {
-      title: "Gider Kategorileri",
-      description: "Kategorileri yönetin",
-      href: "/expenses/categories",
-      icon: Grid2X2,
-      gradient: "from-violet-500 to-purple-600",
+      iconName: "plus" as const,
+      color: "orange" as const,
     },
     {
       title: "Toplu İşlemler",
       description: "Seçili giderlerde toplu aksiyon",
       href: "/expenses/bulk-actions",
-      icon: Repeat,
-      gradient: "from-rose-400 to-pink-600",
+      iconName: "repeat" as const,
+      color: "rose" as const,
+    },
+    {
+      title: "Kategoriler",
+      description: "Gider kategorilerini yönetin",
+      href: "/expenses/categories",
+      iconName: "boxes" as const,
+      color: "violet" as const,
+    },
+    {
+      title: "Ödeme Bekleyenler",
+      description: "Ödeme bekleyen giderleri görün",
+      href: "/expenses?tab=unpaid",
+      iconName: "hourglass" as const,
+      color: "amber" as const,
+    },
+    {
+      title: "Dışa Aktar",
+      description: "Excel olarak indir",
+      href: exportHref,
+      iconName: "download" as const,
+      color: "blue" as const,
     },
   ];
 }
@@ -149,7 +156,7 @@ const now = new Date();
     category: categoryFilter,
   });
 
-  const actionCards = buildActionCards();
+  const actionCards = buildActionCards(exportHref);
   const hasFilters =
     Boolean(searchQuery) ||
     Boolean(categoryFilter) ||
@@ -161,45 +168,20 @@ const now = new Date();
     <AppShell>
       <TenantPageSync />
       <div className="space-y-5">
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {actionCards.map((card) => {
-            const Icon = card.icon;
+        <CompactActionCardGrid columns="5">
+          {actionCards.map((card) => (
+            <CompactActionCard
+              key={card.title}
+              title={card.title}
+              description={card.description}
+              href={card.href}
+              iconName={card.iconName}
+              color={card.color}
+            />
+          ))}
+        </CompactActionCardGrid>
 
-            return (
-              <Link
-                key={card.title}
-                href={card.href}
-                className={[
-                  "group flex h-[86px] items-center justify-between rounded-2xl bg-linear-to-br p-4 text-white shadow-[0_14px_30px_rgba(15,23,42,0.12)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgba(15,23,42,0.16)]",
-                  card.gradient,
-                ].join(" ")}
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/15 shadow-inner">
-                    <Icon size={22} strokeWidth={2.4} />
-                  </div>
-
-                  <div className="min-w-0">
-                    <p className="truncate text-[15px] font-black leading-tight">
-                      {card.title}
-                    </p>
-                    <p className="mt-1 truncate text-[11px] font-medium text-white/85">
-                      {card.description}
-                    </p>
-                  </div>
-                </div>
-
-                <ArrowRight
-                  size={18}
-                  strokeWidth={3}
-                  className="shrink-0 opacity-90 transition group-hover:translate-x-1 group-hover:opacity-100"
-                />
-              </Link>
-            );
-          })}
-        </section>
-
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           {statCards.map((stat) => {
             const Icon = statIconMap[stat.iconKey];
 
@@ -214,22 +196,22 @@ const now = new Date();
                       {stat.title}
                     </p>
 
-                    <p className="mt-3 text-[20px] font-black tracking-[-0.03em] text-[#0f1f4d]">
+                    <p className="mt-2 text-[22px] font-black tracking-[-0.03em] text-[#0f1f4d]">
                       {stat.value}
                     </p>
                   </div>
 
                   <div
                     className={[
-                      "flex h-12 w-12 shrink-0 items-center justify-center rounded-full",
+                      "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
                       colorClassMap[stat.color],
                     ].join(" ")}
                   >
-                    <Icon size={22} strokeWidth={2.4} />
+                    <Icon size={18} strokeWidth={2.3} />
                   </div>
                 </div>
 
-                <div className="mt-3 flex items-center gap-2 text-[11px] font-semibold text-slate-500">
+                <div className="mt-2 flex items-center gap-2 text-[11px] font-semibold text-slate-500">
                   <span>{stat.subtitle}</span>
 
                   {stat.change ? (

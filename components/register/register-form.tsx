@@ -141,6 +141,7 @@ export function RegisterForm({
           companyName: form.companyName.trim(),
           kvkkInformed: true as const,
           marketingConsent,
+          referralCode: referral?.referralCode ?? undefined,
         }),
       });
 

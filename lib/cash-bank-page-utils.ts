@@ -98,6 +98,12 @@ export function parseSearchQuery(value?: string | null) {
 
 export { formatMoney as formatCashMoney } from "@/lib/format-utils";
 
+export function getCashBalanceClass(balance: number | string | null | undefined) {
+  const numeric = Number(balance ?? 0);
+  if (!Number.isFinite(numeric)) return "text-[#0f1f4d]";
+  return numeric < 0 ? "text-rose-600" : "text-[#0f1f4d]";
+}
+
 export function formatCashDate(value: Date | string | number | null | undefined) {
   if (value == null) return "-";
 

@@ -41,7 +41,7 @@ export function PartnerApplyForm({ defaultEmail = "" }: { defaultEmail?: string 
         body: JSON.stringify({
           ...form,
           socialUrl: form.socialUrl || undefined,
-          phone: form.phone || undefined,
+          phone: form.phone.trim(),
           expectedReach: form.expectedReach || undefined,
           message: form.message || undefined,
         }),
@@ -108,12 +108,14 @@ export function PartnerApplyForm({ defaultEmail = "" }: { defaultEmail?: string 
         </label>
         <label className="block">
           <span className="mb-1.5 block text-[12px] font-bold text-slate-500">
-            Telefon
+            Telefon *
           </span>
           <input
             className={inputClass}
             value={form.phone}
             onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            placeholder="05xx xxx xx xx"
+            required
           />
         </label>
         <label className="block">

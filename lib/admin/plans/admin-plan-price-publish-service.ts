@@ -314,9 +314,69 @@ export function assertSafePricePatch(body: Record<string, unknown>) {
   for (const field of FORBIDDEN_PRICE_PATCH_FIELDS) {
     if (field in body) {
       throw new MembershipPlanPriceError(
-        `"${field}" mevcut fiyat satırında güncellenemez. Yeni fiyat versiyonu oluşturun.`,
+        `"${field}" mevcut fiyat satırında güncellenemez. Fiyatı Değiştir akışını kullanın.`,
         400
       );
     }
   }
+}
+
+export async function cancelScheduledAdminPlanPrice(input: {
+  planId: string;
+  priceId: string;
+  userId: string;
+  reason: string;
+}) {
+  const price = await db.membershipPlanPrice.findFirst({
+    where: { id: input.priceId, planId: input.planId },
+    include: { plan: true },
+  });
+
+  if (!price) {
+    throw new MembershipPlanPriceError("Fiyat kaydı bulunamadı.", 404);
+  }
+
+  if (price.status !== "SCHEDULED" && price.status !== "DRAFT") {
+    throw new MembershipPlanPriceError(
+      "Yalnızca planlanmış veya taslak fiyat iptal edilebilir.",
+      400
+    );
+  }
+
+  const usage = await db.companySubscription.count({
+    where: {
+      OR: [{ lockedPlanPriceId: price.id }, { nextPlanPriceId: price.id }],
+    },
+  });
+  if (usage > 0) {
+    throw new MembershipPlanPriceError(
+      "Bu fiyat aboneliklerde kullanıldığı için iptal edilemez.",
+      409
+    );
+  }
+
+  const updated = await db.$transaction(async (tx) => {
+    const row = await tx.membershipPlanPrice.update({
+      where: { id: price.id },
+      data: {
+        status: "ARCHIVED",
+        adminNote: input.reason,
+      },
+    });
+
+    await logAdminPlanAudit({
+      userId: input.userId,
+      action: "PLAN_PRICE_CANCELLED",
+      planId: input.planId,
+      entityType: "MembershipPlanPrice",
+      entityId: price.id,
+      displayMessage: `${price.plan.name} ${price.billingInterval} v${price.version} iptal edildi.`,
+      metadata: { priceId: price.id, reason: input.reason },
+      tx,
+    });
+
+    return row;
+  });
+
+  return updated;
 }

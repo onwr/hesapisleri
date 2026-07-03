@@ -25,7 +25,27 @@ import {
   getPlanStatusLabel,
   getPlanVisibilityLabel,
 } from "@/lib/admin/plans/admin-plan-serializers";
+import { getPlanListStatusLabel } from "@/lib/admin/plans/admin-plan-status-labels";
 import { getPlanMrrByPlanId } from "@/lib/admin/plans/admin-plan-metric-service";
+
+function findActiveSalePrice(
+  prices: Array<{
+    billingInterval: string;
+    currency: string;
+    salePriceMinor: number;
+    status: string;
+  }>,
+  interval: string,
+  currency: string
+) {
+  const row = prices.find(
+    (p) =>
+      p.billingInterval === interval &&
+      p.currency === currency &&
+      (p.status === "ACTIVE" || p.status === "SCHEDULED")
+  );
+  return row ? row.salePriceMinor / 100 : null;
+}
 
 const listSelect = {
   id: true,
@@ -52,11 +72,14 @@ export async function getAdminPlanList(query: AdminPlanListQuery) {
   const where = buildAdminPlanListWhere(query);
   const orderBy = buildAdminPlanOrderBy(query);
 
-  const plans = await db.membershipPlan.findMany({
-    where,
-    orderBy,
-    select: listSelect,
-  });
+  const [plans, archivedCount] = await Promise.all([
+    db.membershipPlan.findMany({
+      where,
+      orderBy,
+      select: listSelect,
+    }),
+    db.membershipPlan.count({ where: { planStatus: "ARCHIVED" } }),
+  ]);
 
   const planIds = plans.map((p) => p.id);
 
@@ -117,7 +140,19 @@ export async function getAdminPlanList(query: AdminPlanListQuery) {
       code: plan.code,
       pricingClass,
       hasPriceConflicts: conflicts.length > 0,
+      isActive: plan.isActive,
     });
+
+    const currency = plan.defaultCurrency || "TRY";
+    const monthlyPrice = findActiveSalePrice(planPrices, "MONTHLY", currency);
+    const yearlyPrice = findActiveSalePrice(planPrices, "YEARLY", currency);
+    const periods = planPrices
+      .filter((p) => p.status === "ACTIVE")
+      .map((p) => ({
+        billingInterval: p.billingInterval,
+        salePriceMinor: p.salePriceMinor,
+        currency: p.currency,
+      }));
 
     return {
       id: plan.id,
@@ -126,8 +161,9 @@ export async function getAdminPlanList(query: AdminPlanListQuery) {
       slug: plan.slug,
       shortDescription: plan.shortDescription,
       planStatus: plan.planStatus,
-      planStatusLabel: getPlanStatusLabel(plan.planStatus),
+      planStatusLabel: getPlanListStatusLabel(plan.planStatus, plan.isActive),
       planStatusClass: getPlanStatusClass(plan.planStatus),
+      planStatusLabelLegacy: getPlanStatusLabel(plan.planStatus),
       visibility: plan.visibility,
       visibilityLabel: getPlanVisibilityLabel(plan.visibility),
       isFeatured: plan.isFeatured,
@@ -142,6 +178,12 @@ export async function getAdminPlanList(query: AdminPlanListQuery) {
       mrrByCurrency: mrrByPlan.get(plan.id) ?? {},
       trialEnabled: plan.trialEnabled,
       trialDays: plan.trialDays,
+      trialLabel:
+        plan.trialEnabled && plan.trialDays > 0 ? `${plan.trialDays} gün` : "—",
+      monthlyPrice,
+      yearlyPrice,
+      periods,
+      priceCurrency: currency,
       publishedAt: plan.publishedAt?.toISOString() ?? null,
       archivedAt: plan.archivedAt?.toISOString() ?? null,
       createdAt: plan.createdAt.toISOString(),
@@ -180,5 +222,6 @@ export async function getAdminPlanList(query: AdminPlanListQuery) {
     page: page.page,
     pageSize: page.pageSize,
     totalPages: page.totalPages,
+    archivedCount,
   };
 }

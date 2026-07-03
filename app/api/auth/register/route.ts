@@ -27,6 +27,7 @@ const registerSchema = z.object({
   email: z.string().email("Geçerli bir e-posta girin."),
   phone: z.string().optional(),
   password: z.string().min(6, "Şifre en az 6 karakter olmalıdır."),
+  referralCode: z.string().optional(),
   kvkkInformed: z.literal(true, {
     message: "KVKK aydınlatma metnini okuduğunuzu ve bilgilendirildiğinizi onaylamalısınız.",
   }),
@@ -147,18 +148,22 @@ export async function POST(req: Request) {
     });
 
     const attribution = await readPartnerAttributionFromCookies();
+    const referralCode =
+      attribution.referralCode ??
+      parsed.data.referralCode?.trim() ??
+      null;
     const partner = await resolvePartnerFromAttribution({
-      referralCode: attribution.referralCode,
+      referralCode,
     });
 
-    if (partner && attribution.referralCode) {
+    if (partner && referralCode) {
       await createPartnerSignupConversion({
         companyId: result.company.id,
         userId: result.user.id,
         partnerId: partner.id,
-        referralCode: attribution.referralCode,
+        referralCode: partner.referralCode,
         clickId: attribution.clickId,
-        source: "COOKIE",
+        source: attribution.referralCode ? "COOKIE" : "REFERRAL_CODE",
       });
     }
 

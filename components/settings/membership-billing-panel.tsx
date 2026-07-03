@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTenantCacheSync } from "@/hooks/use-tenant-cache-sync";
 import {
   ArrowLeft,
   Check,
@@ -74,6 +75,8 @@ type BillingData = {
     prices: Record<MembershipPeriod, number>;
     currency: string;
   };
+  isOnArchivedPlan?: boolean;
+  scheduledPlanChange?: { targetPlanName: string; effectiveAt: string } | null;
   bankTransferInfo: { note: string };
   paytr: {
     capabilities: {
@@ -223,6 +226,21 @@ export function MembershipBillingPanel({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!data) return;
+    const available = MEMBERSHIP_PERIOD_OPTIONS.filter(
+      (option) => data.plan.prices[option.period] > 0
+    );
+    if (!available.length) return;
+    if (data.plan.prices[selectedBillingInterval] <= 0) {
+      setSelectedBillingInterval(available[0]!.period);
+    }
+  }, [data, selectedBillingInterval]);
+
+  useTenantCacheSync(() => {
+    void load();
+  }, { refresh: true });
 
   const resumePendingPayment = useCallback(
     async (paymentId: string) => {
@@ -554,6 +572,20 @@ export function MembershipBillingPanel({
         </div>
       ) : null}
 
+      {data.isOnArchivedPlan ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-semibold text-amber-800">
+          Bu paket yeni satışlara kapatılmıştır. Mevcut aboneliğiniz etkilenmez.
+        </div>
+      ) : null}
+
+      {data.scheduledPlanChange ? (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[12px] font-semibold text-blue-800">
+          Paketiniz {formatShortDisplayDate(data.scheduledPlanChange.effectiveAt)}{" "}
+          tarihinde {data.scheduledPlanChange.targetPlanName} planına geçecektir.
+          Mevcut döneminiz değişmez.
+        </div>
+      ) : null}
+
       {error ? (
         <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[12px] font-semibold text-red-700">
           {error}
@@ -633,7 +665,10 @@ export function MembershipBillingPanel({
         </div>
 
         <div className="grid gap-2 p-3 sm:grid-cols-2 lg:grid-cols-4">
-          {MEMBERSHIP_PERIOD_OPTIONS.map((option) => {
+          {MEMBERSHIP_PERIOD_OPTIONS.filter((option) => {
+            const price = data.plan.prices[option.period];
+            return price > 0;
+          }).map((option) => {
             const price = data.plan.prices[option.period];
             const selected = selectedBillingInterval === option.period;
 

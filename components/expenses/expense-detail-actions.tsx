@@ -66,7 +66,7 @@ export function ExpenseDetailActions({
           <button
             type="button"
             onClick={() => setPayOpen(true)}
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 text-[12px] font-black text-emerald-700 hover:bg-emerald-100"
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-[11px] font-black text-emerald-700 hover:bg-emerald-100"
           >
             <Wallet size={15} />
             Gideri Öde
@@ -78,7 +78,7 @@ export function ExpenseDetailActions({
             type="button"
             onClick={handleCancel}
             disabled={isSubmitting}
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 text-[12px] font-black text-rose-700 disabled:opacity-60"
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 text-[11px] font-black text-rose-700 disabled:opacity-60"
           >
             {isSubmitting ? (
               <Loader2 className="animate-spin" size={15} />

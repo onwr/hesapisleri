@@ -25,6 +25,8 @@ import {
 } from "@/lib/payments/pending-membership-payment";
 import { getSerializedPaytrCapabilities } from "@/lib/payments/paytr-capabilities";
 import { getCheckoutProviderForClient } from "@/lib/payments/billing-provider-resolver";
+import { getActivePendingChange } from "@/lib/billing/subscription-pending-change-service";
+import { loadTargetActivePricesByPeriod } from "@/lib/admin/plans/admin-plan-target-price-utils";
 
 export const DEFAULT_MEMBERSHIP_PLAN_CODE = "standard";
 
@@ -96,6 +98,41 @@ function serializePlan(
       SEMI_ANNUAL: Number(plan.semiAnnualPrice),
       YEARLY: Number(plan.yearlyPrice),
     },
+  };
+}
+
+/**
+ * Billing ekranı için canonical plan DTO'su — yalnız gerçek MembershipPlanPrice
+ * kayıtlarından üretilir. MembershipPlan.monthlyPrice/quarterlyPrice/... legacy
+ * alanları BURADA kaynak olarak kullanılmaz (statik/eski fiyat karışmasını önler).
+ */
+async function serializeBillingPlan(plan: {
+  id: string;
+  name: string;
+  code: string;
+  description: string | null;
+  currency: string;
+  isActive: boolean;
+  features: string[];
+}) {
+  const activePrices = await loadTargetActivePricesByPeriod(plan.id);
+  const prices: Partial<Record<MembershipPeriod, number>> = {};
+  const priceIds: Partial<Record<MembershipPeriod, string>> = {};
+  for (const [period, price] of activePrices.entries()) {
+    prices[period] = price.salePriceMinor / 100;
+    priceIds[period] = price.id;
+  }
+
+  return {
+    id: plan.id,
+    name: plan.name,
+    code: plan.code,
+    description: plan.description,
+    currency: plan.currency,
+    isActive: plan.isActive,
+    features: plan.features,
+    prices: prices as Record<MembershipPeriod, number>,
+    priceIds: priceIds as Record<MembershipPeriod, string>,
   };
 }
 
@@ -220,7 +257,11 @@ export async function getMembershipBillingData(input: {
 
   await expireStalePendingMembershipPayments(input.companyId);
 
-  const [subscription, payments, plan, pendingPayment, paytrCapabilities] =
+  // Billing bağlamında getDefaultMembershipPlan() ÇAĞIRMA — o fonksiyon
+  // planStatus:"ACTIVE" şartı koyar ve plan arşivlenmişse throw eder.
+  // Burada subscription'ın kendi planını kullanıyoruz; plan arşivlense de
+  // mevcut abonelik görünmeye devam etmeli.
+  const [subscription, payments, pendingPayment, paytrCapabilities] =
     await Promise.all([
       ensureCompanySubscription(input.companyId),
       db.membershipPayment.findMany({
@@ -231,21 +272,50 @@ export async function getMembershipBillingData(input: {
         orderBy: { createdAt: "desc" },
         take: 50,
       }),
-      getDefaultMembershipPlan(),
       findPendingMembershipPayment(input.companyId),
       Promise.resolve(getSerializedPaytrCapabilities()),
     ]);
+
+  // Tek canonical kaynak: aboneliğin GERÇEKTEN bağlı olduğu plan relation'ı.
+  // Ayrı bir "katalog planı" arama/fallback mekanizması KULLANILMAZ — bu,
+  // kod eşleşmesi yanlış olduğunda (ör. "standard" vs "standart") yanlışlıkla
+  // arşivlenmiş eski planı göstermeye yol açıyordu.
+  const subscriptionPlan = subscription.plan;
+  if (!subscriptionPlan) {
+    throw new MembershipServiceError("Aktif üyelik paketi bulunamadı.", 404);
+  }
+
+  // Arşiv uyarısı YALNIZ aboneliğin gerçek planının durumundan hesaplanır.
+  const isOnArchivedPlan = subscriptionPlan.planStatus === "ARCHIVED";
+
+  // Zamanlanmış plan değişikliği (admin taşıması veya kullanıcı talebi)
+  const activePendingChange = await getActivePendingChange(subscription.id);
+  let scheduledPlanChange: { targetPlanName: string; effectiveAt: string } | null = null;
+  if (activePendingChange?.targetPlanId) {
+    const targetPlan = await db.membershipPlan.findUnique({
+      where: { id: activePendingChange.targetPlanId },
+      select: { name: true },
+    });
+    if (targetPlan) {
+      scheduledPlanChange = {
+        targetPlanName: targetPlan.name,
+        effectiveAt: activePendingChange.effectiveAt.toISOString(),
+      };
+    }
+  }
 
   const effectiveStatus = getMembershipStatus(subscription);
   const remainingDays = getRemainingMembershipDays(subscription.currentPeriodEnd);
 
   const lastPaid = payments.find((payment) => payment.status === "PAID") ?? null;
+  const billingPlan = await serializeBillingPlan(subscriptionPlan);
 
   return {
     subscription: {
       status: effectiveStatus,
       statusLabel: getSubscriptionStatusLabel(effectiveStatus),
-      plan: serializePlan(subscription.plan ?? plan),
+      // subscriptionPlan: aboneliğin gerçek planı — tek kaynak, fallback yok
+      plan: { id: billingPlan.id, name: billingPlan.name },
       currentPeriodStart: subscription.currentPeriodStart?.toISOString() ?? null,
       currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() ?? null,
       trialEndsAt: subscription.trialEndsAt?.toISOString() ?? null,
@@ -255,7 +325,12 @@ export async function getMembershipBillingData(input: {
     lastPayment: lastPaid ? serializePayment(lastPaid) : null,
     pendingPayment: pendingPayment ? serializePayment(pendingPayment) : null,
     payments: payments.map(serializePayment),
-    plan: serializePlan(plan),
+    // plan: seçim kartı, ödeme özeti ve checkout'un kullandığı TEK plan —
+    // subscriptionPlan ile birebir aynı, ayrı bir "katalog planı" yok.
+    plan: billingPlan,
+    // Mevcut aboneliğin bağlı olduğu plan gerçekten ARCHIVED ise true
+    isOnArchivedPlan,
+    scheduledPlanChange,
     bankTransferInfo: {
       note: "Ödeme sonrası dekontu destek ekibine iletebilir veya admin onayı bekleyebilirsiniz.",
     },

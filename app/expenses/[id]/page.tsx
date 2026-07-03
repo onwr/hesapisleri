@@ -41,14 +41,14 @@ function InfoCard({
   icon: ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
-      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-white text-orange-600 shadow-sm">
+    <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3">
+      <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-white text-orange-600 shadow-sm">
         {icon}
       </div>
-      <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+      <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
         {label}
       </p>
-      <p className="mt-2 text-[14px] font-black text-[#0f1f4d]">{value}</p>
+      <p className="mt-1.5 text-[15px] font-black text-[#0f1f4d]">{value}</p>
     </div>
   );
 }
@@ -76,23 +76,23 @@ const { id } = await params;
     <AppShell>
       <TenantPageSync />
       <div className="space-y-5">
-        <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex items-start gap-4">
+        <section className="rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex items-start gap-3">
               <Link
                 href="/expenses"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-[#0f1f4d] transition hover:bg-slate-50"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-[#0f1f4d] transition hover:bg-slate-50"
               >
-                <ArrowLeft size={18} strokeWidth={2.6} />
+                <ArrowLeft size={16} strokeWidth={2.6} />
               </Link>
 
               <div>
-                <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-orange-100 bg-orange-50 px-3 py-1 text-[11px] font-black text-orange-600">
-                  <Sparkles size={14} strokeWidth={2.5} />
+                <div className="mb-1.5 inline-flex items-center gap-1.5 rounded-full border border-orange-100 bg-orange-50 px-2.5 py-0.5 text-[10px] font-black text-orange-600">
+                  <Sparkles size={12} strokeWidth={2.5} />
                   Gider Detayı
                 </div>
 
-                <h1 className="text-[26px] font-black tracking-tighter text-[#0f1f4d]">
+                <h1 className="text-[22px] font-black tracking-tight text-[#0f1f4d]">
                   {expense.title}
                 </h1>
 
@@ -125,13 +125,13 @@ const { id } = await params;
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               {canCancel ? (
                 <Link
                   href={`/expenses/${expense.id}/edit`}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[12px] font-black text-[#24345f] hover:bg-slate-50"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-black text-[#24345f] hover:bg-slate-50"
                 >
-                  <Edit3 size={15} />
+                  <Edit3 size={13} />
                   Düzenle
                 </Link>
               ) : null}
@@ -148,7 +148,7 @@ const { id } = await params;
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <InfoCard
             label="Tutar"
             value={formatExpenseMoney(expense.amount)}
@@ -175,10 +175,14 @@ const { id } = await params;
           <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]">
             <h2 className="text-[16px] font-black text-[#0f1f4d]">Gider Bilgileri</h2>
 
-            <div className="mt-4 space-y-3">
-              <DetailLine icon={<Tag size={16} />} label="Kategori" value={expense.category || "Diğer"} />
-              <DetailLine icon={<Store size={16} />} label="Tedarikçi" value={expense.supplier || "-"} />
-              <DetailLine icon={<ReceiptText size={16} />} label="Not" value={expense.note || "-"} />
+            <div className="mt-3 space-y-2">
+              <DetailLine icon={<Tag size={14} />} label="Kategori" value={expense.category || "Diğer"} />
+              {expense.supplier ? (
+                <DetailLine icon={<Store size={14} />} label="Tedarikçi" value={expense.supplier} />
+              ) : null}
+              {expense.note ? (
+                <DetailLine icon={<ReceiptText size={14} />} label="Not" value={expense.note} />
+              ) : null}
             </div>
           </div>
 

@@ -78,6 +78,7 @@ export function validateCustomerFinanceAccount(
   options: {
     amount?: number;
     checkBalance?: boolean;
+    allowNegativeCashBalance?: boolean;
     purpose: "collection" | "payment";
   }
 ):
@@ -133,6 +134,7 @@ export function validateCustomerFinanceAccount(
 
   if (
     options.checkBalance &&
+    !options.allowNegativeCashBalance &&
     options.purpose === "payment" &&
     options.amount != null &&
     options.amount > 0

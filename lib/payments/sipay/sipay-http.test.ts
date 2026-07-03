@@ -319,7 +319,7 @@ describe("sipay-http — checkStatus (mock fetch)", () => {
     assert.equal(result.status, "NOT_PAID");
   });
 
-  it("status_code=69 (PENDING) → NOT_PAID (settle edilmedi)", async () => {
+  it("status_code=69 (PENDING) → PENDING (settle bekleniyor)", async () => {
     const invoiceId = "SI-HTTP-CS-PEND";
 
     mockFetch(async (url) => {
@@ -336,8 +336,8 @@ describe("sipay-http — checkStatus (mock fetch)", () => {
     const { createSipayProvider } = await import("./sipay-provider");
     const result = await createSipayProvider().checkStatus(invoiceId);
 
-    // status_code 69 PENDING olarak yorumlanır — NOT_PAID döner (PAID değil)
-    assert.equal(result.status, "NOT_PAID");
+    // status_code 69 — ödeme alındı ama settle henüz tamamlanmadı
+    assert.equal(result.status, "PENDING");
   });
 });
 

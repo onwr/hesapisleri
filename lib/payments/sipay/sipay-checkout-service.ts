@@ -4,11 +4,14 @@ import type { MembershipPeriod, Prisma } from "@prisma/client";
 import { db } from "@/lib/prisma";
 import { getDefaultMembershipPlan, MembershipServiceError } from "@/lib/membership-service";
 import { getMembershipPeriodLabel } from "@/lib/membership-utils";
-import type { CheckoutProvider } from "../checkout-provider";
+import type { CheckoutProvider, CheckStatusResult } from "../checkout-provider";
 import { canFinalize, canCancel, isTerminalStatus, assertValidTransition } from "./sipay-state-machine";
-import { assertCheckStatusMatchesAttempt } from "./sipay-verification";
+import {
+  assertCheckStatusMatchesAttempt,
+  buildPaymentAttemptVerificationTarget,
+} from "./sipay-verification";
 import { isPrismaUniqueConstraintError } from "@/lib/prisma-transaction-utils";
-import { SipayCheckstatusUnavailableError } from "./sipay-errors";
+import { SipayCheckstatusUnavailableError, SipayError } from "./sipay-errors";
 import { normalizeCurrency } from "@/lib/payments/money";
 import { resolveSubscriptionPrice } from "@/lib/billing/price-resolution-service";
 import { resolvePaidPeriod, periodMonths, nextBillingDate } from "@/lib/billing/billing-period-utils";
@@ -40,6 +43,37 @@ function getSipayProvider(): CheckoutProvider {
 }
 
 export { getSipayProvider };
+
+const RETURN_STATUS_POLL_DELAYS_MS = [0, 2_000, 4_000, 6_000, 10_000] as const;
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function resolveSipayPaymentStatus(
+  provider: CheckoutProvider,
+  invoiceId: string,
+  source: "webhook" | "return",
+): Promise<CheckStatusResult> {
+  const delays = source === "return" ? RETURN_STATUS_POLL_DELAYS_MS : [0];
+
+  let lastResult: CheckStatusResult | undefined;
+  for (let i = 0; i < delays.length; i++) {
+    if (delays[i] > 0) await sleep(delays[i]);
+    lastResult = await provider.checkStatus(invoiceId);
+    if (lastResult.status === "PAID" || lastResult.status === "REFUNDED") {
+      return lastResult;
+    }
+    if (lastResult.status !== "PENDING") {
+      return lastResult;
+    }
+  }
+
+  if (!lastResult) {
+    throw new MembershipServiceError(`Sipay durum sorgusu başarısız: ${invoiceId}`, 502);
+  }
+  return lastResult;
+}
 
 export type InitializeSipayCheckoutInput = {
   companyId: string;
@@ -225,9 +259,15 @@ export async function initializeSipayCheckout(
   };
 }
 
+export type FinalizeSipayPaymentScope = {
+  companyId: string;
+  userId?: string;
+};
+
 export async function finalizeSipayPayment(
   invoiceId: string,
   source: "webhook" | "return",
+  scope?: FinalizeSipayPaymentScope,
 ): Promise<{ duplicate: boolean; membershipPaymentId?: string; verificationPending?: boolean }> {
   const attempt = await db.paymentAttempt.findUnique({
     where: { invoiceId },
@@ -240,13 +280,24 @@ export async function finalizeSipayPayment(
     throw new MembershipServiceError(`PaymentAttempt bulunamadı: ${invoiceId}`, 404);
   }
 
+  if (scope) {
+    if (attempt.companyId !== scope.companyId) {
+      throw new MembershipServiceError("Ödeme kaydı bu şirkete ait değil.", 403);
+    }
+    if (scope.userId && attempt.userId && attempt.userId !== scope.userId) {
+      throw new MembershipServiceError("Ödeme kaydı bu kullanıcıya ait değil.", 403);
+    }
+  }
+
   // Already finalized — idempotent
   if (attempt.status === "COMPLETED") {
     return { duplicate: true };
   }
 
-  // Terminal durum (FAILED, CANCELLED, EXPIRED) — state machine ihlali
-  if (isTerminalStatus(attempt.status) && !canFinalize(attempt.status)) {
+  const allowFailedRecovery = attempt.status === "FAILED";
+
+  // Terminal durum (CANCELLED, EXPIRED) — state machine ihlali
+  if (isTerminalStatus(attempt.status) && !canFinalize(attempt.status) && !allowFailedRecovery) {
     return { duplicate: false };
   }
 
@@ -254,7 +305,7 @@ export async function finalizeSipayPayment(
   const provider = getSipayProvider();
   let statusResult;
   try {
-    statusResult = await provider.checkStatus(invoiceId);
+    statusResult = await resolveSipayPaymentStatus(provider, invoiceId, source);
   } catch (error) {
     if (error instanceof SipayCheckstatusUnavailableError) {
       await markSipayVerificationPending(invoiceId, source);
@@ -263,7 +314,19 @@ export async function finalizeSipayPayment(
     throw error;
   }
 
+  if (statusResult.status === "PENDING") {
+    await markSipayVerificationPending(invoiceId, source);
+    return { duplicate: false, verificationPending: true };
+  }
+
   if (statusResult.status !== "PAID") {
+    if (allowFailedRecovery) {
+      return { duplicate: false };
+    }
+    if (source === "return") {
+      await markSipayVerificationPending(invoiceId, source);
+      return { duplicate: false, verificationPending: true };
+    }
     const newStatus = statusResult.status === "NOT_PAID" ? "FAILED" : attempt.status;
     await db.paymentAttempt.update({
       where: { id: attempt.id },
@@ -277,17 +340,38 @@ export async function finalizeSipayPayment(
     return { duplicate: false };
   }
 
-  assertCheckStatusMatchesAttempt(
-    {
-      invoiceId: attempt.invoiceId,
-      amountMinor: attempt.amountMinor,
-      currency: attempt.currency,
-      providerPaymentId: attempt.providerPaymentId,
-    },
-    statusResult,
-  );
+  if (allowFailedRecovery) {
+    const priorPayment = await db.membershipPayment.findUnique({ where: { merchantOid: invoiceId } });
+    if (priorPayment) {
+      await db.paymentAttempt.update({
+        where: { id: attempt.id },
+        data: { status: "COMPLETED", paidAt: priorPayment.paidAt ?? new Date() },
+      });
+      return { duplicate: true };
+    }
+  }
 
   const priceSnapshot = attempt.priceSnapshot as Record<string, unknown> | null;
+  const verificationTarget = buildPaymentAttemptVerificationTarget({
+    invoiceId: attempt.invoiceId,
+    amountMinor: attempt.amountMinor,
+    currency: attempt.currency,
+    companyId: attempt.companyId,
+    planId: attempt.planId,
+    planPriceId: attempt.planPriceId,
+    priceSnapshot,
+    providerPaymentId: attempt.providerPaymentId,
+  });
+
+  try {
+    assertCheckStatusMatchesAttempt(verificationTarget, statusResult);
+  } catch (error) {
+    if (error instanceof SipayError && error.statusCode) {
+      throw new MembershipServiceError(error.message, error.statusCode);
+    }
+    throw error;
+  }
+
   if (!priceSnapshot) {
     throw new MembershipServiceError("PaymentAttempt priceSnapshot eksik.", 500);
   }
@@ -295,7 +379,18 @@ export async function finalizeSipayPayment(
   const periodStart = new Date(priceSnapshot.periodStart as string);
   const periodEnd = new Date(priceSnapshot.periodEnd as string);
   const isRenewal = Boolean(priceSnapshot.isRenewal);
-  const planId = attempt.planId;
+  const planId =
+    attempt.planId ??
+    (typeof priceSnapshot.planId === "string" ? priceSnapshot.planId : null);
+  if (!planId) {
+    throw new MembershipServiceError("PaymentAttempt planId eksik.", 422);
+  }
+  const planPriceId =
+    attempt.planPriceId ??
+    (typeof priceSnapshot.planPriceId === "string" &&
+    !String(priceSnapshot.planPriceId).startsWith("legacy-")
+      ? String(priceSnapshot.planPriceId)
+      : null);
   const paidAt = new Date();
 
   const subscription = await db.companySubscription.findUnique({
@@ -323,8 +418,8 @@ export async function finalizeSipayPayment(
       payment = await tx.membershipPayment.create({
       data: {
         companyId: attempt.companyId,
-        planId: planId ?? undefined,
-        planPriceId: attempt.planPriceId ?? undefined,
+        planId,
+        planPriceId: planPriceId ?? undefined,
         period: priceSnapshot.billingPeriodSnapshot as MembershipPeriod,
         periodStart,
         periodEnd,
@@ -385,7 +480,7 @@ export async function finalizeSipayPayment(
       where: { companyId: attempt.companyId },
       create: {
         companyId: attempt.companyId,
-        planId: planId ?? undefined,
+        planId,
         status: "ACTIVE",
         currentPeriodStart: periodStart,
         currentPeriodEnd: periodEnd,
@@ -398,7 +493,7 @@ export async function finalizeSipayPayment(
         billingInterval: payment.period ?? undefined,
       },
       update: {
-        planId: planId ?? undefined,
+        planId,
         status: "ACTIVE",
         currentPeriodStart: periodStart,
         currentPeriodEnd: periodEnd,

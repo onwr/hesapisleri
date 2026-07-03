@@ -23,6 +23,11 @@ function resultUrl(base: string, params: Record<string, string>): string {
   return url.toString();
 }
 
+function redirectResult(request: Request, url: string): NextResponse {
+  const status = request.method === "POST" ? 303 : 302;
+  return NextResponse.redirect(url, { status });
+}
+
 function getResultBase(returnOrCancelUrl: string): string {
   const appUrl =
     returnOrCancelUrl.split("/api/billing/sipay/")[0] ||
@@ -101,7 +106,8 @@ export async function handleSipayReturn(request: Request): Promise<NextResponse>
       if (error.statusCode === 415) {
         return NextResponse.json({ success: false, message: error.message }, { status: 415 });
       }
-      return NextResponse.redirect(
+      return redirectResult(
+        request,
         resultUrl(resultBase, { status: "error", reason: "invalid_params" }),
       );
     }
@@ -110,51 +116,76 @@ export async function handleSipayReturn(request: Request): Promise<NextResponse>
 
   const parsed = returnParamsSchema.safeParse(rawParams);
   if (!parsed.success || !parsed.data.invoice_id) {
-    return NextResponse.redirect(
+    return redirectResult(
+      request,
       resultUrl(resultBase, { status: "error", reason: "invalid_params" }),
     );
   }
 
   const safeParams = parsed.data;
+  const invoiceId = safeParams.invoice_id;
 
   try {
     const provider = createSipayProvider();
-    const callbackParams: Record<string, string> = {
-      invoice_id: safeParams.invoice_id,
-      status: safeParams.status ?? "",
-    };
+    let hashValid = false;
     if (safeParams.hash_key) {
-      callbackParams.hash_key = safeParams.hash_key;
+      const returnVerification = provider.verifyReturn({
+        invoice_id: invoiceId,
+        status: safeParams.status ?? "",
+        hash_key: safeParams.hash_key,
+      });
+      hashValid = returnVerification.valid;
     }
 
-    const returnVerification = provider.verifyReturn(callbackParams);
-    if (!returnVerification.valid) {
-      return NextResponse.redirect(
-        resultUrl(resultBase, { status: "error", reason: "invalid_hash" }),
-      );
+    if (!hashValid) {
+      console.warn("[sipay-return] hash missing or invalid; continuing with checkstatus", {
+        invoiceId,
+        hasHash: Boolean(safeParams.hash_key),
+      });
     }
 
-    const { invoiceId } = returnVerification;
     const result = await finalizeSipayPayment(invoiceId, "return");
 
     if (result.duplicate) {
-      return NextResponse.redirect(
-        resultUrl(resultBase, { invoice_id: invoiceId }),
+      return redirectResult(
+        request,
+        resultUrl(resultBase, { invoice_id: invoiceId, outcome: "success" }),
+      );
+    }
+
+    if (result.verificationPending) {
+      return redirectResult(
+        request,
+        resultUrl(resultBase, { invoice_id: invoiceId, outcome: "pending" }),
       );
     }
 
     if (result.membershipPaymentId) {
-      return NextResponse.redirect(resultUrl(resultBase, { invoice_id: invoiceId }));
+      return redirectResult(
+        request,
+        resultUrl(resultBase, { invoice_id: invoiceId, outcome: "success" }),
+      );
     }
 
-    return NextResponse.redirect(
+    return redirectResult(
+      request,
       resultUrl(resultBase, { invoice_id: invoiceId, outcome: "failed" }),
     );
   } catch (error) {
     if (error instanceof MembershipServiceError && error.status === 404) {
-      return NextResponse.redirect(resultUrl(resultBase, { status: "error", reason: "not_found" }));
+      return redirectResult(
+        request,
+        resultUrl(resultBase, { invoice_id: invoiceId, status: "error", reason: "not_found" }),
+      );
     }
-    return NextResponse.redirect(resultUrl(resultBase, { status: "error", reason: "internal" }));
+    console.error("[sipay-return] finalize error", {
+      invoiceId,
+      message: error instanceof Error ? error.message : "unknown",
+    });
+    return redirectResult(
+      request,
+      resultUrl(resultBase, { invoice_id: invoiceId, status: "error", reason: "internal" }),
+    );
   }
 }
 
@@ -170,14 +201,14 @@ export async function handleSipayCancel(request: Request): Promise<NextResponse>
       if (error.statusCode === 415) {
         return NextResponse.json({ success: false, message: error.message }, { status: 415 });
       }
-      return NextResponse.redirect(resultUrl(resultBase, { outcome: "cancelled" }));
+      return redirectResult(request, resultUrl(resultBase, { outcome: "cancelled" }));
     }
     throw error;
   }
 
   const parsed = cancelParamsSchema.safeParse(rawParams);
   if (!parsed.success || !parsed.data.invoice_id) {
-    return NextResponse.redirect(resultUrl(resultBase, { outcome: "cancelled" }));
+    return redirectResult(request, resultUrl(resultBase, { outcome: "cancelled" }));
   }
 
   const { invoice_id } = parsed.data;
@@ -189,12 +220,16 @@ export async function handleSipayCancel(request: Request): Promise<NextResponse>
     if (statusResult.status === "PAID") {
       const result = await finalizeSipayPayment(invoice_id, "return");
       if (result.membershipPaymentId || result.duplicate) {
-        return NextResponse.redirect(resultUrl(resultBase, { invoice_id }));
+        return redirectResult(
+          request,
+          resultUrl(resultBase, { invoice_id, outcome: "success" }),
+        );
       }
     }
 
     await cancelSipayAttempt(invoice_id);
-    return NextResponse.redirect(
+    return redirectResult(
+      request,
       resultUrl(resultBase, { invoice_id, outcome: "cancelled" }),
     );
   } catch {
@@ -203,7 +238,8 @@ export async function handleSipayCancel(request: Request): Promise<NextResponse>
     } catch {
       /* ignore */
     }
-    return NextResponse.redirect(
+    return redirectResult(
+      request,
       resultUrl(resultBase, { invoice_id, outcome: "cancelled" }),
     );
   }

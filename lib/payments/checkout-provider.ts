@@ -33,7 +33,7 @@ export type CreateCheckoutResult = {
 
 export type CheckStatusResult = {
   invoiceId: string;
-  status: "PAID" | "NOT_PAID" | "REFUNDED" | "UNKNOWN";
+  status: "PAID" | "NOT_PAID" | "PENDING" | "REFUNDED" | "UNKNOWN";
   amountMinor?: number;
   currency?: string;
   providerPaymentId?: string;

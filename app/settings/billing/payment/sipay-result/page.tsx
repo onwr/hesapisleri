@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
+import { SipayResultPoller } from "@/components/billing/sipay-result-poller";
 import { getAppSession } from "@/lib/app-session";
 import { getSipayPaymentResultForCompany } from "@/lib/payments/sipay/sipay-result-service";
 
@@ -8,6 +9,7 @@ type PageProps = {
   searchParams: Promise<{
     invoice_id?: string;
     reason?: string;
+    outcome?: string;
   }>;
 };
 
@@ -59,14 +61,24 @@ function statusHeading(status: string, found: boolean): { title: string; body: s
 
 export default async function SipayResultPage({ searchParams }: PageProps) {
   const session = await getAppSession();
-  const { invoice_id: invoiceId, reason } = await searchParams;
+  const { invoice_id: invoiceId, reason, outcome } = await searchParams;
 
   if (!invoiceId) {
     redirect("/settings/billing");
   }
 
   const result = await getSipayPaymentResultForCompany(session.company.id, invoiceId);
-  const view = statusHeading(result.status, result.found);
+  const showSuccess =
+    outcome === "success" || (result.found && result.status === "COMPLETED");
+  const view = showSuccess
+    ? statusHeading("COMPLETED", true)
+    : statusHeading(result.status, result.found);
+  const shouldPoll =
+    outcome === "pending" ||
+    result.status === "PENDING" ||
+    result.status === "CHECKOUT_LINK_READY" ||
+    result.status === "CREATED" ||
+    (outcome === "failed" && result.status === "FAILED");
 
   const titleClass =
     view.tone === "success"
@@ -85,6 +97,9 @@ export default async function SipayResultPage({ searchParams }: PageProps) {
           {reason && !result.found ? ` (${reason})` : ""}
         </p>
         <p className="mt-3 font-mono text-xs text-slate-400">Referans: {invoiceId}</p>
+        {shouldPoll && result.found && (
+          <SipayResultPoller invoiceId={invoiceId} initialStatus={result.status} />
+        )}
         <div className="mt-6 flex gap-3">
           <Link
             href="/settings/billing"

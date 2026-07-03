@@ -54,7 +54,7 @@ function mapCheckStatusResult(
   statusCode: number,
   data: { payment_status: number; transaction_status?: string } | undefined,
 ): CheckStatusResult["status"] {
-  if (statusCode === 69) return "NOT_PAID"; // Pending — treat as not yet paid
+  if (statusCode === 69) return "PENDING";
   if (!data) return "UNKNOWN";
   switch (data.payment_status) {
     case 1: return "PAID";
@@ -229,8 +229,10 @@ export function createSipayProvider(): CheckoutProvider {
         amountMinor: amountFromProvider != null ? Math.round(amountFromProvider * 100) : undefined,
         currency: d?.currency,
         providerPaymentId: d?.transaction_id ?? d?.order_id ?? d?.order_no,
-        providerErrorCode: status !== "PAID" ? (d?.error_code ?? String(res.status_code)) : undefined,
-        providerErrorMessage: status !== "PAID" ? (d?.error_description ?? res.status_description) : undefined,
+        providerErrorCode:
+          status !== "PAID" ? (d?.error_code ?? String(res.status_code)) : undefined,
+        providerErrorMessage:
+          status !== "PAID" ? (d?.error_description ?? res.status_description) : undefined,
       };
     },
 

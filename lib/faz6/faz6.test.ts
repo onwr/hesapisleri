@@ -359,6 +359,7 @@ describe("Faz 6.1 — Sipay purchase payload regression", () => {
       SIPAY_APP_ID: "app-001",
       SIPAY_APP_SECRET: "secret32bytespadding0000000000000",
       SIPAY_MERCHANT_KEY: "merchant32bytespadding000000000000",
+      SIPAY_MERCHANT_ID: "mid-001",
       SIPAY_SALE_WEBHOOK_KEY: "webhook32bytespadding00000000000000",
     };
     const body = buildSipayPurchaseLinkBody({
@@ -385,6 +386,7 @@ describe("Faz 6.1 — Sipay purchase payload regression", () => {
       SIPAY_APP_ID: "app-001",
       SIPAY_APP_SECRET: "secret32bytespadding0000000000000",
       SIPAY_MERCHANT_KEY: "merchant32bytespadding000000000000",
+      SIPAY_MERCHANT_ID: "mid-001",
       SIPAY_SALE_WEBHOOK_KEY: "wh-key",
     };
     const body = buildSipayPurchaseLinkBody({
@@ -414,6 +416,7 @@ describe("Faz 6.1 — Sipay purchase payload regression", () => {
       SIPAY_APP_ID: "app-001",
       SIPAY_APP_SECRET: "secret32bytespadding0000000000000",
       SIPAY_MERCHANT_KEY: "merchant32bytespadding000000000000",
+      SIPAY_MERCHANT_ID: "mid-001",
       SIPAY_SALE_WEBHOOK_KEY: "wh-key",
     };
     assert.throws(

@@ -485,9 +485,12 @@ export async function getMobileSaleDetail(companyId: string, saleId: string) {
     include: {
       customer: { select: { id: true, name: true, phone: true, email: true } },
       user: { select: { id: true, name: true } },
+      cancelledByUser: { select: { id: true, name: true } },
+      invoice: { select: { id: true } },
       items: {
         select: {
           id: true,
+          productId: true,
           name: true,
           quantity: true,
           unitPrice: true,
@@ -496,6 +499,7 @@ export async function getMobileSaleDetail(companyId: string, saleId: string) {
         },
       },
       payments: {
+        orderBy: { createdAt: "desc" },
         include: {
           account: { select: { id: true, name: true, type: true } },
         },
@@ -507,6 +511,11 @@ export async function getMobileSaleDetail(companyId: string, saleId: string) {
     throw new MobilePosError("NOT_FOUND", "Satış bulunamadı.", 404);
   }
 
+  const total = Number(sale.total);
+  const paidAmount = Number(sale.paidAmount);
+  const remainingAmount = getInvoiceRemainingAmount(total, paidAmount);
+  const isCancelled = sale.status === "CANCELLED" || sale.status === "REFUNDED";
+
   return {
     id: sale.id,
     saleNumber: sale.saleNo,
@@ -516,13 +525,12 @@ export async function getMobileSaleDetail(companyId: string, saleId: string) {
     subtotal: Number(sale.subtotal),
     discount: Number(sale.discount),
     vatTotal: Number(sale.vatTotal),
-    total: Number(sale.total),
-    paidAmount: Number(sale.paidAmount),
-    remainingAmount: getInvoiceRemainingAmount(
-      Number(sale.total),
-      Number(sale.paidAmount)
-    ),
+    total,
+    paidAmount,
+    remainingAmount,
     currency: "TRY" as const,
+    note: sale.note?.trim() || null,
+    invoiceId: sale.invoice?.id ?? null,
     customer: sale.customer
       ? {
           id: sale.customer.id,
@@ -534,6 +542,7 @@ export async function getMobileSaleDetail(companyId: string, saleId: string) {
     userName: sale.user?.name ?? null,
     items: sale.items.map((item) => ({
       id: item.id,
+      productId: item.productId,
       name: item.name,
       quantity: item.quantity,
       unitPrice: Number(item.unitPrice),
@@ -545,7 +554,18 @@ export async function getMobileSaleDetail(companyId: string, saleId: string) {
       method: p.paymentMethod,
       amount: Number(p.amount),
       accountName: p.account.name,
+      createdAt: p.createdAt.toISOString(),
     })),
+    cancellation: isCancelled
+      ? {
+          cancelledAt: sale.cancelledAt?.toISOString() ?? null,
+          cancelledByName: sale.cancelledByUser?.name ?? null,
+          reason: sale.cancelReason,
+          note: sale.cancelNote,
+        }
+      : null,
+    canCollect: !isCancelled && remainingAmount > 0,
+    canCancel: !isCancelled,
   };
 }
 

@@ -4,7 +4,7 @@ import { IS3D_CAPABILITY, type SipayIs3dCapability, type SipayTokenResponse } fr
 import { sipayTokenResponseSchema } from "./sipay-schemas";
 import { getOrCreateDistributedKv } from "@/lib/cache/distributed-kv-factory";
 
-const SIPAY_TOKEN_PATH = "/ccpayment/api/token";
+import { SIPAY_ENDPOINTS } from "./sipay-endpoints";
 const REFRESH_BEFORE_EXPIRY_MS = 5 * 60 * 1000;
 const LOCK_TTL_MS = 15_000;
 const TOKEN_CACHE_KEY_PREFIX = "sipay:token:";
@@ -82,7 +82,7 @@ async function fetchNewToken(
   appId: string,
   appSecret: string,
 ): Promise<TokenCacheEntry> {
-  const raw = await sipayPostToken<SipayTokenResponse>(baseUrl, SIPAY_TOKEN_PATH, {
+  const raw = await sipayPostToken<SipayTokenResponse>(baseUrl, SIPAY_ENDPOINTS.TOKEN, {
     app_id: appId,
     app_secret: appSecret,
   });

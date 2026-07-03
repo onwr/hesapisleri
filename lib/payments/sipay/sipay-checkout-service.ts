@@ -3,6 +3,7 @@ import "server-only";
 import type { MembershipPeriod, Prisma } from "@prisma/client";
 import { db } from "@/lib/prisma";
 import { getDefaultMembershipPlan, MembershipServiceError } from "@/lib/membership-service";
+import { getMembershipPeriodLabel } from "@/lib/membership-utils";
 import type { CheckoutProvider } from "../checkout-provider";
 import { canFinalize, canCancel, isTerminalStatus, assertValidTransition } from "./sipay-state-machine";
 import { assertCheckStatusMatchesAttempt } from "./sipay-verification";
@@ -156,6 +157,8 @@ export async function initializeSipayCheckout(
   const returnUrl = `${sipayEnv.SIPAY_RETURN_URL}?invoice_id=${encodeURIComponent(invoiceId)}`;
   const cancelUrl = `${sipayEnv.SIPAY_CANCEL_URL}?invoice_id=${encodeURIComponent(invoiceId)}`;
 
+  const periodLabel = getMembershipPeriodLabel(input.period);
+
   const checkoutResult = await provider.createCheckout({
     invoiceId,
     idempotencyKey: input.idempotencyKey,
@@ -168,7 +171,8 @@ export async function initializeSipayCheckout(
     payerIp: input.payerIp,
     items: [
       {
-        name: `${resolved.planName} — ${resolved.billingInterval}`,
+        name: resolved.planName,
+        description: `${resolved.planName} - ${periodLabel} üyelik ödemesi`,
         priceMinor: amountMinor,
         quantity: 1,
       },

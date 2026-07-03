@@ -9,7 +9,7 @@ import type {
   RefundResult,
 } from "../checkout-provider";
 import type { SipayPurchaseLinkResponse, SipayCheckStatusResponse, SipayRefundResponse } from "./sipay-types";
-import { getSipayEnv, getSipayBaseUrl } from "./sipay-env";
+import { getSipayEnv, getSipayBaseUrl, logSipaySafeConfigDebug } from "./sipay-env";
 import { sipayPost } from "./sipay-client";
 import { getSipayToken, assertBrandedCheckoutSupported, handleSipayTokenUnauthorized } from "./sipay-token-service";
 import {
@@ -27,7 +27,7 @@ import {
   sipayWebhookPayloadSchema,
   sipayReturnParamsSchema,
 } from "./sipay-schemas";
-import { SIPAY_ALLOWED_BASE_URLS } from "./sipay-env";
+import { SIPAY_ALLOWED_ORIGINS } from "./sipay-env";
 import { SIPAY_ENDPOINTS } from "./sipay-endpoints";
 import { SipayError, SipayNetworkError, SipayCheckstatusUnavailableError } from "./sipay-errors";
 
@@ -37,7 +37,7 @@ function formatDecimal(amountMinor: number): string {
 }
 
 function assertCheckoutUrlAllowed(url: string): void {
-  const allowed = SIPAY_ALLOWED_BASE_URLS.some((base) => url.startsWith(base));
+  const allowed = SIPAY_ALLOWED_ORIGINS.some((origin) => url.startsWith(origin));
   if (!allowed) {
     throw new SipayError(
       `Sipay döndürdüğü checkout URL allowlist dışında: ${url}`,
@@ -87,6 +87,7 @@ export function createSipayProvider(): CheckoutProvider {
     async createCheckout(input: CreateCheckoutInput): Promise<CreateCheckoutResult> {
       const env = getSipayEnv();
       const baseUrl = getSipayBaseUrl(env);
+      logSipaySafeConfigDebug("createCheckout");
 
       const { token, is3d } = await getSipayToken({
         baseUrl,

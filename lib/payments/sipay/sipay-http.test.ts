@@ -456,7 +456,7 @@ describe("sipay-http — sipayPost client güvenliği", () => {
     const { sipayPost } = await import("./sipay-client");
     await assert.rejects(
       () => sipayPost("https://evil.example.com", "/pay", {}, "token"),
-      /allowlist/i,
+      /allowlist|geçersiz/i,
     );
   });
 
@@ -464,7 +464,13 @@ describe("sipay-http — sipayPost client güvenliği", () => {
     mockFetch(async () => makeResponse({ error: "server error" }, 500));
     const { sipayPost } = await import("./sipay-client");
     await assert.rejects(
-      () => sipayPost("https://provisioning.sipay.com.tr", "/ccpayment/api/checkstatus", {}, "token"),
+      () =>
+        sipayPost(
+          "https://provisioning.sipay.com.tr/ccpayment",
+          "/api/checkstatus",
+          {},
+          "token",
+        ),
       /HTTP 500/,
     );
   });
@@ -473,7 +479,13 @@ describe("sipay-http — sipayPost client güvenliği", () => {
     mockFetch(async () => new Response("NOT JSON", { status: 200, headers: { "Content-Type": "text/html" } }));
     const { sipayPost } = await import("./sipay-client");
     await assert.rejects(
-      () => sipayPost("https://provisioning.sipay.com.tr", "/ccpayment/api/checkstatus", {}, "token"),
+      () =>
+        sipayPost(
+          "https://provisioning.sipay.com.tr/ccpayment",
+          "/api/checkstatus",
+          {},
+          "token",
+        ),
       /non-JSON/i,
     );
   });

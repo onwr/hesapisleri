@@ -26,6 +26,7 @@ export type SipayTokenResponse = {
 // ─── Purchase/link (POST /ccpayment/purchase/link) ─────────────────────────────
 export type SipayPurchaseLinkItem = {
   name: string;
+  description: string;
   price: string; // "9.90" — 2 ondalık, string
   quantity: number;
   type: number; // 1 = product
@@ -50,6 +51,7 @@ export type SipayPurchaseInvoice = {
 /** Top-level purchase/link request body. */
 export type SipayPurchaseLinkRequest = {
   merchant_key: string;
+  merchant_id: string;
   name: string;
   surname: string;
   currency_code: "TRY";

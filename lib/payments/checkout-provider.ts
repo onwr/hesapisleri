@@ -4,6 +4,8 @@ export type CheckoutItem = {
   name: string;
   priceMinor: number;
   quantity: number;
+  description?: string;
+  productName?: string;
 };
 
 export type CreateCheckoutInput = {

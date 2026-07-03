@@ -10,12 +10,18 @@ export type SipayPurchaseItemInput = {
   name: string;
   priceMinor: number;
   quantity: number;
+  description?: string;
+  productName?: string;
 };
 
 export type BuildSipayPurchaseLinkBodyInput = {
   env: Pick<
     SipayEnv,
-    "SIPAY_APP_ID" | "SIPAY_APP_SECRET" | "SIPAY_MERCHANT_KEY" | "SIPAY_SALE_WEBHOOK_KEY"
+    | "SIPAY_APP_ID"
+    | "SIPAY_APP_SECRET"
+    | "SIPAY_MERCHANT_KEY"
+    | "SIPAY_MERCHANT_ID"
+    | "SIPAY_SALE_WEBHOOK_KEY"
   >;
   invoiceId: string;
   amountMinor: number;
@@ -27,6 +33,9 @@ export type BuildSipayPurchaseLinkBodyInput = {
   returnUrl: string;
   cancelUrl: string;
 };
+
+const DEFAULT_ITEM_DESCRIPTION = "Hesap İşleri üyelik paketi";
+const MAX_ITEM_DESCRIPTION_LENGTH = 200;
 
 function formatDecimal(amountMinor: number): string {
   return (amountMinor / 100).toFixed(2);
@@ -82,15 +91,54 @@ function isValidPhone(phone: string): boolean {
   return /^\+?[0-9\s()-]{7,20}$/.test(phone);
 }
 
+export function sanitizeSipayItemDescription(value: string): string {
+  return value
+    .replace(/<[^>]*>/g, "")
+    .replace(/[\u0000-\u001F\u007F]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function resolveSipayItemDescription(item: SipayPurchaseItemInput): string {
+  const raw =
+    item.description?.trim() ||
+    item.productName?.trim() ||
+    item.name?.trim() ||
+    DEFAULT_ITEM_DESCRIPTION;
+  const sanitized = sanitizeSipayItemDescription(raw);
+  return truncate(sanitized.length > 0 ? sanitized : DEFAULT_ITEM_DESCRIPTION, MAX_ITEM_DESCRIPTION_LENGTH);
+}
+
+export function validateSipayInvoiceItems(items: SipayPurchaseItemInput[]): void {
+  if (items.length < 1) {
+    throw new Error("Invoice en az bir item içermelidir");
+  }
+
+  for (const [index, item] of items.entries()) {
+    if (!Number.isFinite(item.quantity) || !Number.isInteger(item.quantity) || item.quantity < 1) {
+      throw new Error(`Invoice item[${index}] quantity geçersiz`);
+    }
+    if (!Number.isFinite(item.priceMinor) || item.priceMinor <= 0) {
+      throw new Error(`Invoice item[${index}] fiyatı pozitif olmalıdır`);
+    }
+    const description = resolveSipayItemDescription(item);
+    if (!description) {
+      throw new Error(`Invoice item[${index}] description boş olamaz`);
+    }
+  }
+}
+
 export function buildSipayPurchaseInvoice(
   input: BuildSipayPurchaseLinkBodyInput,
 ): SipayPurchaseInvoice {
   assertBillingCallbackUrl(input.returnUrl, "return_url");
   assertBillingCallbackUrl(input.cancelUrl, "cancel_url");
+  validateSipayInvoiceItems(input.items);
 
   const total = formatDecimal(input.amountMinor);
   const itemRows: SipayPurchaseLinkItem[] = input.items.map((item) => ({
     name: truncate(item.name, 120),
+    description: resolveSipayItemDescription(item),
     price: formatDecimal(item.priceMinor),
     quantity: item.quantity,
     type: 1,
@@ -145,6 +193,7 @@ export function buildSipayPurchaseLinkBody(
 
   return {
     merchant_key: input.env.SIPAY_MERCHANT_KEY,
+    merchant_id: input.env.SIPAY_MERCHANT_ID,
     name,
     surname,
     currency_code: currencyCode,

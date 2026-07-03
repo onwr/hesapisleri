@@ -23,11 +23,12 @@ export const sipayPurchaseLinkInvoiceSchema = z.object({
   items: z.array(
     z.object({
       name: z.string(),
+      description: z.string().min(1),
       price: z.string(),
-      quantity: z.number(),
+      quantity: z.number().int().positive(),
       type: z.number(),
     }),
-  ),
+  ).min(1),
   response_method: z.literal("POST"),
   bill_email: z.string().optional(),
   bill_phone: z.string().optional(),
@@ -37,6 +38,7 @@ export const sipayPurchaseLinkInvoiceSchema = z.object({
 export const sipayPurchaseLinkRequestSchema = z
   .object({
     merchant_key: z.string().min(1),
+    merchant_id: z.string().min(1),
     name: z.string(),
     surname: z.string(),
     currency_code: z.literal("TRY"),

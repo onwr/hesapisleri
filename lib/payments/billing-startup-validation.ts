@@ -5,7 +5,13 @@ import {
   isPaytrEnabled,
   isSipayEnabled,
 } from "./billing-provider-resolver";
-import { getSipayEnv, getSipayBaseUrl, SIPAY_ALLOWED_BASE_URLS } from "./sipay/sipay-env";
+import {
+  getSipayEnv,
+  getSipayBaseUrl,
+  SIPAY_ALLOWED_ORIGINS,
+  SIPAY_LIVE_API_BASE,
+  logSipaySafeConfigDebug,
+} from "./sipay/sipay-env";
 import { getPaytrConfig } from "./providers/paytr/paytr-config";
 
 function isProduction(): boolean {
@@ -26,15 +32,19 @@ function validateSipayConfig(): void {
   const env = getSipayEnv();
   const baseUrl = getSipayBaseUrl(env);
 
-  if (env.SIPAY_ENV === "live" && !baseUrl.startsWith("https://app.sipay.com.tr")) {
-    throw new Error("SIPAY_ENV=live iken base URL app.sipay.com.tr olmalıdır.");
+  if (env.SIPAY_ENV === "live" && baseUrl !== SIPAY_LIVE_API_BASE) {
+    throw new Error(
+      `SIPAY_ENV=live iken base URL ${SIPAY_LIVE_API_BASE} olmalıdır (şu an: ${baseUrl}).`,
+    );
   }
   if (env.SIPAY_ENV === "test" && baseUrl.includes("app.sipay.com.tr")) {
     throw new Error("SIPAY_ENV=test iken live domain kullanılamaz.");
   }
-  if (!SIPAY_ALLOWED_BASE_URLS.some((allowed) => baseUrl.startsWith(allowed))) {
+  if (!SIPAY_ALLOWED_ORIGINS.some((origin) => baseUrl.startsWith(origin))) {
     throw new Error("SIPAY base URL allowlist dışında.");
   }
+
+  logSipaySafeConfigDebug("startup-validation");
 
   if (isProduction()) {
     assertHttpsUrl("SIPAY_RETURN_URL", env.SIPAY_RETURN_URL);

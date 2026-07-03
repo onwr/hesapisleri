@@ -1,4 +1,5 @@
-import { SIPAY_ALLOWED_BASE_URLS } from "./sipay-env";
+import { SIPAY_ALLOWED_ORIGINS } from "./sipay-env";
+import { buildSipayUrl } from "./sipay-endpoints";
 import { SipayNetworkError } from "./sipay-errors";
 
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -9,7 +10,7 @@ export type SipayPostOptions = {
 };
 
 function assertAllowedUrl(url: string): void {
-  const allowed = SIPAY_ALLOWED_BASE_URLS.some((base) => url.startsWith(base));
+  const allowed = SIPAY_ALLOWED_ORIGINS.some((origin) => url.startsWith(origin));
   if (!allowed) {
     throw new SipayNetworkError(`Sipay request blocked — URL not in allowlist: ${url}`);
   }
@@ -80,7 +81,7 @@ export async function sipayPost<T>(
   token: string,
   options?: SipayPostOptions,
 ): Promise<T> {
-  const url = `${baseUrl}${path}`;
+  const url = buildSipayUrl(baseUrl, path);
   return executePost<T>(
     url,
     path,
@@ -102,7 +103,7 @@ export async function sipayPostToken<T>(
   path: string,
   body: Record<string, unknown>,
 ): Promise<T> {
-  const url = `${baseUrl}${path}`;
+  const url = buildSipayUrl(baseUrl, path);
   assertAllowedUrl(url);
 
   const controller = new AbortController();

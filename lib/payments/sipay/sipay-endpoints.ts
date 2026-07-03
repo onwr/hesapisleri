@@ -1,31 +1,38 @@
-// Resmî Sipay API endpoint sabitleri (base URL + bu path = tam URL)
-// Base URL: https://provisioning.sipay.com.tr (test) | https://app.sipay.com.tr (live)
+import { normalizeSipayBaseUrl } from "./sipay-env";
+
+// API path'leri base URL'nin (/ccpayment) altına eklenir.
+// Tam URL örneği: https://app.sipay.com.tr/ccpayment/api/token
 export const SIPAY_ENDPOINTS = {
-  TOKEN: "/ccpayment/api/token",
-  PURCHASE_LINK: "/ccpayment/purchase/link",
-  CHECKSTATUS: "/ccpayment/api/checkstatus",
-  REFUND: "/ccpayment/api/refund",
+  TOKEN: "/api/token",
+  PURCHASE_LINK: "/purchase/link",
+  CHECKSTATUS: "/api/checkstatus",
+  REFUND: "/api/refund",
 } as const;
 
 // Bu fazda kullanılmıyor — referans için saklandı
 export const SIPAY_ENDPOINTS_BACKLOG = {
-  PAY_SMART_2D: "/ccpayment/api/paySmart2D",       // Non-Secure 2D — bu fazda disabled
-  PAY_SMART_3D: "/ccpayment/api/paySmart3D",       // 3D secure form submit — hosted link tercih edildi
-  PAYMENT_COMPLETE: "/ccpayment/payment/complete",  // Hosted form tamamlama
-  CONFIRM_PAYMENT: "/ccpayment/api/confirmPayment", // 2-step confirm
-  RECURRING_ORDER: "/ccpayment/api/recurringOrder", // Otomatik kart çekimi — bu fazda disabled
-  SAVE_CARD: "/ccpayment/api/saveCreditCard",       // Kart saklama — bu fazda disabled
-  LIST_CARDS: "/ccpayment/api/getUserSavedCards",   // Kayıtlı kartlar
-  DELETE_CARD: "/ccpayment/api/deleteSavedCards",   // Kayıtlı kart silme
+  PAY_SMART_2D: "/api/paySmart2D",
+  PAY_SMART_3D: "/api/paySmart3D",
+  PAYMENT_COMPLETE: "/payment/complete",
+  CONFIRM_PAYMENT: "/api/confirmPayment",
+  RECURRING_ORDER: "/api/recurringOrder",
+  SAVE_CARD: "/api/saveCreditCard",
+  LIST_CARDS: "/api/getUserSavedCards",
+  DELETE_CARD: "/api/deleteSavedCards",
 } as const;
 
-// URL birleşimi doğrulama — çift /ccpayment/ccpayment veya eksik path oluşmamalı
 export function buildSipayUrl(baseUrl: string, path: string): string {
-  const normalizedBase = baseUrl.replace(/\/$/, "");
+  const normalizedBase = normalizeSipayBaseUrl(baseUrl);
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+
+  if (normalizedPath.startsWith("/ccpayment")) {
+    throw new Error(
+      `Sipay path must not include /ccpayment prefix when base URL already includes it: ${path}`,
+    );
+  }
+
   const url = `${normalizedBase}${normalizedPath}`;
-  // Guard: çift segment olmamalı
-  if (url.includes("//ccpayment") || url.includes("ccpayment/ccpayment")) {
+  if (url.includes("ccpayment/ccpayment")) {
     throw new Error(`Sipay URL path duplication detected: ${url}`);
   }
   return url;

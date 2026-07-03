@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { SIPAY_ALLOWED_BASE_URLS, validateReturnUrl } from "./sipay-env";
+import { SIPAY_ALLOWED_ORIGINS, validateReturnUrl } from "./sipay-env";
 
 describe("sipay redirect URL allowlist", () => {
   it("test URL allowlist'te", () => {
@@ -24,7 +24,7 @@ describe("sipay redirect URL allowlist", () => {
     );
   });
 
-  it("allowlist array'i 2 eleman içerir", () => {
-    assert.equal(SIPAY_ALLOWED_BASE_URLS.length, 2);
+  it("allowlist array'i 2 origin içerir", () => {
+    assert.equal(SIPAY_ALLOWED_ORIGINS.length, 2);
   });
 });

@@ -22,8 +22,8 @@ describe("billing resolver — arşivlenmiş plan", () => {
     // ayrı bir kod-bazlı katalog planı arama fallback'i artık yok, bkz.
     // membership-billing-canonical-plan.test.ts
     assert.ok(
-      fnBody.includes("const subscriptionPlan = subscription.plan;"),
-      "getMembershipBillingData, subscription.plan'ı doğrudan kullanmalı"
+      fnBody.includes("resolveBillingPlanForCompany"),
+      "getMembershipBillingData, resolveBillingPlanForCompany kullanmalı"
     );
     // getDefaultMembershipPlan gerçek kod satırlarında ÇAĞRILMAMALI (yorum satırları hariç)
     const codeLines = fnBody.split("\n").filter((l) => !l.trimStart().startsWith("//"));
@@ -62,15 +62,11 @@ describe("billing resolver — arşivlenmiş plan", () => {
     );
   });
 
-  it("getDefaultMembershipPlan checkout için planStatus:ACTIVE şartını koruyor", async () => {
-    const content = await fs.readFile("lib/membership-service.ts", "utf8");
-    // getDefaultMembershipPlan fonksiyonu hâlâ ACTIVE filtresi içermeli
-    const fnStart = content.indexOf("export async function getDefaultMembershipPlan");
-    const fnEnd = content.indexOf("\nexport async function", fnStart + 1);
-    const fnBody = fnStart === -1 ? "" : content.slice(fnStart, fnEnd === -1 ? fnStart + 500 : fnEnd);
+  it("resolveActiveMembershipPlanForCheckout checkout için planStatus:ACTIVE şartını koruyor", async () => {
+    const content = await fs.readFile("lib/billing/membership-plan-resolution.ts", "utf8");
     assert.ok(
-      fnBody.includes('planStatus: "ACTIVE"'),
-      "getDefaultMembershipPlan hâlâ planStatus:ACTIVE zorunlu kılmalı (checkout güvenliği)"
+      content.includes('planStatus: "ACTIVE"'),
+      "checkout plan resolver ACTIVE filtresi içermeli"
     );
   });
 

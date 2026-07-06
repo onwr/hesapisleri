@@ -22,6 +22,13 @@ import {
 } from "@/lib/pos-checkout-service";
 import { db } from "@/lib/prisma";
 
+// TEST_DATABASE_URL yoksa gerçek DB testleri KONTROLLÜ skip edilir — before()
+// hook'u hiç çalışmaz, bağlantı hatası fırlatıp suite'i "cancelled" duruma
+// düşürmez.
+const dbTestOptions = process.env.TEST_DATABASE_URL
+  ? {}
+  : { skip: "TEST_DATABASE_URL tanımlı değil — gerçek DB entegrasyon testi atlandı." };
+
 const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const repoRoot = path.resolve(webRoot, "..");
 
@@ -251,7 +258,7 @@ describe("Faz 21 — POS idempotency unit", () => {
   });
 });
 
-describe("Faz 21 — POS idempotency gerçek DB", { concurrency: false }, () => {
+describe("Faz 21 — POS idempotency gerçek DB", { concurrency: false, ...dbTestOptions }, () => {
   let fixture: PosFixture | null = null;
 
   before(async () => {

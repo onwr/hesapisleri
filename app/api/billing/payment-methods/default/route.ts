@@ -3,6 +3,10 @@ import { z } from "zod";
 import { getAppSession } from "@/lib/app-session";
 import { canManageMembership } from "@/lib/permission-utils";
 import { setDefaultPaymentMethod } from "@/lib/payments/payment-method-service";
+import {
+  MembershipServiceError,
+  assertCanManageActiveCompanyBilling,
+} from "@/lib/membership-service";
 
 const schema = z.object({ paymentMethodId: z.string().min(1) });
 
@@ -17,6 +21,11 @@ export async function POST(request: Request) {
         { status: 403 }
       );
     }
+
+    await assertCanManageActiveCompanyBilling({
+      userId: session.user.id,
+      activeCompanyId: session.company.id,
+    });
 
     const parsed = schema.safeParse(await request.json());
     if (!parsed.success) {
@@ -34,6 +43,12 @@ export async function POST(request: Request) {
       }),
     });
   } catch (error) {
+    if (error instanceof MembershipServiceError) {
+      return NextResponse.json(
+        { success: false, message: error.message },
+        { status: error.status }
+      );
+    }
     return NextResponse.json(
       {
         success: false,

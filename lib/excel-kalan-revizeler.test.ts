@@ -110,13 +110,17 @@ describe("excel kalan revizeler", () => {
 
   it("kasa satır menüsü doğru linkleri içerir", () => {
     const actions = read("components/cash-bank/cash-bank-list-actions.tsx");
-    assert.match(actions, /Detay/);
-    assert.match(actions, /Hareketler/);
-    assert.match(actions, /Düzenle/);
+    assert.match(actions, /Hesabı Görüntüle/);
+    assert.match(actions, /Hareketleri Görüntüle/);
+    assert.match(actions, /Hesabı Düzenle/);
+    assert.match(actions, /Transfer Yap/);
+    assert.match(actions, /Tahsilat Al/);
+    assert.match(actions, /Ödeme Yap/);
     assert.match(actions, /Varsayılan Yap/);
     assert.match(actions, /Arşivle/);
     assert.match(actions, /\/cash-bank\/\$\{accountId\}/);
     assert.match(actions, /#movements/);
+    assert.match(actions, /CashBankTransferModal/);
   });
 
   it("finans hareket detayında düzenle/sil aksiyonu yok", () => {
@@ -130,7 +134,10 @@ describe("excel kalan revizeler", () => {
     const card = read("components/cards/compact-action-card.tsx");
     assert.match(card, /min-h-\[72px\]/);
     assert.match(card, /max-h-\[88px\]/);
-    assert.match(card, /bg-white/);
+    // Kart artık renkli gradient tonuyla beyaza dönüyor (to-white) —
+    // düz bg-white değil, ama açıklama metninin bulunduğu alan hâlâ
+    // beyaza yakın (kontrast korunuyor).
+    assert.match(card, /to-white/);
 
     const sales = read("app/sales/page.tsx");
     assert.match(sales, /CompactActionCard/);

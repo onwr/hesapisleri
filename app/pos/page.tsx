@@ -40,11 +40,17 @@ import { WarehouseSelectField } from "@/components/shared/warehouse-select-field
 import { formatMoney } from "@/lib/format-utils";
 import type { PosQuickActionKey } from "@/lib/pos-page-ui-utils";
 import {
+  adjustCartQuantity,
   filterPosProducts,
   findPosProductByCode,
   getPosProductStock,
+  setCartItemQuantity,
   type PosQuickFilter,
 } from "@/lib/pos-page-utils";
+import {
+  validateSaleCartQuantityAgainstStock,
+} from "@/lib/sale-cart-quantity-utils";
+import { isServiceProductType } from "@/lib/product-type-utils";
 import {
   buildPosSaleItemTotal,
   calculatePosTotals,
@@ -153,6 +159,10 @@ export default function PosPage() {
   const [receivedAmount, setReceivedAmount] = useState("");
   const [discount, setDiscount] = useState("0");
   const [note, setNote] = useState("");
+  const [allowNegativeStock, setAllowNegativeStock] = useState(false);
+  const [quantityErrors, setQuantityErrors] = useState<Record<string, string>>(
+    {}
+  );
 
   const [loading, setLoading] = useState(true);
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -204,6 +214,18 @@ export default function PosPage() {
         const productsData = await productsRes.json();
         if (productsData.success) setProducts(productsData.data);
 
+        try {
+          const settingsRes = await fetch("/api/settings");
+          const settingsData = await settingsRes.json();
+          if (settingsRes.ok && settingsData.success) {
+            setAllowNegativeStock(
+              settingsData.data?.settings?.allowNegativeStockSales ?? false
+            );
+          }
+        } catch {
+          // Ayarlar yüklenemezse varsayılan: negatif stok kapalı
+        }
+
         if (meData.success && meData.data) {
           setCompanyName(meData.data.company?.name ?? "İşletme");
           setUserName(meData.data.user?.name ?? "");
@@ -252,7 +274,16 @@ export default function PosPage() {
               const stock = product
                 ? getSaleProductStock(product, useWarehouseStock)
                 : item.stock;
-              return { ...item, stock, quantity: Math.min(item.quantity, stock) };
+              const nextQuantity =
+                product && isServiceProductType(product.productType)
+                  ? item.quantity
+                  : Math.min(item.quantity, stock);
+              return {
+                ...item,
+                stock,
+                productType: product?.productType ?? item.productType,
+                quantity: nextQuantity,
+              };
             })
             .filter((item) => item.quantity > 0)
         );
@@ -356,7 +387,12 @@ export default function PosPage() {
       if (existing) {
         return prev.map((item) =>
           item.productId === product.id
-            ? { ...item, quantity: item.quantity + 1, stock: availableStock }
+            ? {
+                ...item,
+                quantity: item.quantity + 1,
+                stock: availableStock,
+                productType: product.productType,
+              }
             : item
         );
       }
@@ -369,33 +405,67 @@ export default function PosPage() {
           unitPrice: price,
           vatRate: product.vatRate,
           stock: availableStock,
+          productType: product.productType,
         },
       ];
     });
   }
 
+  function clearQuantityError(productId: string) {
+    setQuantityErrors((prev) => {
+      if (!prev[productId]) return prev;
+      const next = { ...prev };
+      delete next[productId];
+      return next;
+    });
+  }
+
   function increaseQuantity(productId: string) {
-    setCart((prev) =>
-      prev.map((item) => {
-        if (item.productId !== productId) return item;
-        return { ...item, quantity: item.quantity + 1 };
-      })
-    );
+    setCart((prev) => {
+      const item = prev.find((entry) => entry.productId === productId);
+      if (!item) return prev;
+
+      const nextQuantity = item.quantity + 1;
+      const stockError = validateSaleCartQuantityAgainstStock(
+        item,
+        nextQuantity,
+        { allowNegativeStock }
+      );
+
+      if (stockError) {
+        setQuantityErrors((current) => ({
+          ...current,
+          [productId]: stockError,
+        }));
+        return prev;
+      }
+
+      clearQuantityError(productId);
+      return adjustCartQuantity(prev, productId, 1);
+    });
   }
 
   function decreaseQuantity(productId: string) {
-    setCart((prev) =>
-      prev
-        .map((item) =>
-          item.productId === productId
-            ? { ...item, quantity: item.quantity - 1 }
-            : item
-        )
-        .filter((item) => item.quantity > 0)
-    );
+    clearQuantityError(productId);
+    setCart((prev) => adjustCartQuantity(prev, productId, -1));
+  }
+
+  function changeQuantity(productId: string, quantity: number) {
+    clearQuantityError(productId);
+    setCart((prev) => setCartItemQuantity(prev, productId, quantity));
+  }
+
+  function handleQuantityError(productId: string, error: string | null) {
+    if (!error) {
+      clearQuantityError(productId);
+      return;
+    }
+
+    setQuantityErrors((prev) => ({ ...prev, [productId]: error }));
   }
 
   function removeFromCart(productId: string) {
+    clearQuantityError(productId);
     setCart((prev) => prev.filter((item) => item.productId !== productId));
   }
 
@@ -412,6 +482,7 @@ export default function PosPage() {
 
   function clearCart() {
     setCart([]);
+    setQuantityErrors({});
     setDiscount("0");
     setNote("");
     setReceivedAmount("");
@@ -447,6 +518,12 @@ export default function PosPage() {
       setError("Satışı tamamlamak için sepete ürün ekleyin.");
       return;
     }
+
+    if (Object.keys(quantityErrors).length > 0) {
+      setError("Sepette geçersiz miktar bulunuyor. Lütfen düzeltin.");
+      return;
+    }
+
     setError("");
     setPaymentMode("single");
     setPaymentLines([
@@ -469,6 +546,11 @@ export default function PosPage() {
 
     if (cart.length === 0) {
       setError("Satışı tamamlamak için sepete ürün ekleyin.");
+      return;
+    }
+
+    if (Object.keys(quantityErrors).length > 0) {
+      setError("Sepette geçersiz miktar bulunuyor. Lütfen düzeltin.");
       return;
     }
 
@@ -613,7 +695,7 @@ export default function PosPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f7f8ff] px-4 py-4 sm:px-5 sm:py-5">
+    <main className="min-h-screen min-w-0 overflow-x-hidden bg-[#f7f8ff] px-4 py-4 sm:px-5 sm:py-5">
       {successReceipt ? (
         <PosReceipt
           companyName={companyName}
@@ -635,7 +717,7 @@ export default function PosPage() {
         />
       ) : null}
 
-      <div className="mx-auto max-w-[1600px]">
+      <div className="mx-auto min-w-0 max-w-[1600px]">
         {isPosStaff ? (
           <PosStaffHeader
             companyName={companyName}
@@ -749,8 +831,8 @@ export default function PosPage() {
           </section>
         ) : null}
 
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
-          <section className={`${POS_CARD_CLASS} p-4 sm:p-5`}>
+        <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+          <section className={`${POS_CARD_CLASS} min-w-0 p-4 sm:p-5`}>
             <PosSummaryMetrics
               todaySalesCount={stats.todaySalesCount}
               todaySalesTotal={stats.todaySalesTotal}
@@ -840,6 +922,11 @@ export default function PosPage() {
               }
               onIncrease={increaseQuantity}
               onDecrease={decreaseQuantity}
+              onQuantityChange={changeQuantity}
+              onQuantityRemove={removeFromCart}
+              onQuantityError={handleQuantityError}
+              quantityErrors={quantityErrors}
+              allowNegativeStock={allowNegativeStock}
               onRemove={removeFromCart}
               onClear={clearCart}
               onOpenPayment={openPaymentModal}
@@ -890,6 +977,11 @@ export default function PosPage() {
               }
               onIncrease={increaseQuantity}
               onDecrease={decreaseQuantity}
+              onQuantityChange={changeQuantity}
+              onQuantityRemove={removeFromCart}
+              onQuantityError={handleQuantityError}
+              quantityErrors={quantityErrors}
+              allowNegativeStock={allowNegativeStock}
               onRemove={removeFromCart}
               onClear={clearCart}
               onOpenPayment={() => {

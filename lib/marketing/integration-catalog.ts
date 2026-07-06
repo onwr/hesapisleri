@@ -62,8 +62,8 @@ export const MARKETING_BUILTIN_INTEGRATIONS: BuiltinIntegration[] = [
     status: "active",
   },
   {
-    key: "paytr",
-    name: "PayTR",
+    key: "sipay",
+    name: "Sipay",
     description: "Online ödeme altyapısı",
     tag: "Ödeme",
     status: "active",

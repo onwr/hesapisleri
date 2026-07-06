@@ -8,6 +8,7 @@ import {
   getPosStockBadge,
   isPosProductOutOfStock,
   POS_QUICK_FILTER_LABELS,
+  setCartItemQuantity,
 } from "./pos-page-utils";
 
 describe("pos page utils", () => {
@@ -64,6 +65,20 @@ describe("pos page utils", () => {
       1
     );
     assert.equal(beyond[0]?.quantity, 4);
+  });
+
+  it("doğrudan miktar atama sıfırda satırı kaldırır", () => {
+    const items = [
+      { productId: "p1", quantity: 2, stock: 5 },
+      { productId: "p2", quantity: 4, stock: 8 },
+    ];
+
+    const next = setCartItemQuantity(items, "p1", 0);
+    assert.equal(next.length, 1);
+    assert.equal(next[0]?.productId, "p2");
+
+    const updated = setCartItemQuantity(items, "p2", 6);
+    assert.equal(updated[1]?.quantity, 6);
   });
 
   it("barkod ile ürün bulur", () => {

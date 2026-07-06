@@ -7,7 +7,14 @@ import {
   requireCompanyLimit,
 } from "./entitlement-enforcement-service";
 
-describe("entitlement-enforcement-service operational unlimited", () => {
+// getResolvedLimit/getResolvedFeature gerçek DB'ye sorgu atıyor (usage
+// hesaplaması enforcement flag kontrolünden ÖNCE yapılıyor) — bu yüzden
+// TEST_DATABASE_URL yoksa kontrollü skip edilir.
+const dbTestOptions = process.env.TEST_DATABASE_URL
+  ? {}
+  : { skip: "TEST_DATABASE_URL tanımlı değil — gerçek DB entegrasyon testi atlandı." };
+
+describe("entitlement-enforcement-service operational unlimited", dbTestOptions, () => {
   it("checkCompanyFeature always allows operational features", async () => {
     assert.equal(await checkCompanyFeature("any-company", "E_DOCUMENT"), true);
     assert.equal(await checkCompanyFeature("any-company", "MULTI_WAREHOUSE"), true);

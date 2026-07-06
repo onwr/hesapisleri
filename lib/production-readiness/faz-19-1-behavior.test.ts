@@ -32,6 +32,13 @@ import { assertOptionalTenantCustomer } from "@/lib/tenant/tenant-resource";
 import { applyWarehouseStockMovement } from "@/lib/warehouse-service";
 import { executeWarehouseTransfer } from "@/lib/warehouse-transfer-service";
 
+// TEST_DATABASE_URL yoksa gerçek DB testleri KONTROLLÜ skip edilir — before()
+// hook'u hiç çalışmaz, bağlantı hatası fırlatıp suite'i "cancelled" duruma
+// düşürmez. Bu, DB'siz testlerin "cancelled" görünmesine yol açan kök nedendi.
+const dbTestOptions = process.env.TEST_DATABASE_URL
+  ? {}
+  : { skip: "TEST_DATABASE_URL tanımlı değil — gerçek DB entegrasyon testi atlandı." };
+
 const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 function readSrc(rel: string) {
@@ -409,7 +416,7 @@ describe("Faz 19.1 — onboarding birleşik regression (statik)", () => {
   });
 });
 
-describe("Faz 19.1 — gerçek DB tenant isolation", { concurrency: false }, () => {
+describe("Faz 19.1 — gerçek DB tenant isolation", { concurrency: false, ...dbTestOptions }, () => {
   before(async () => {
     await db.$queryRaw`SELECT 1`;
     fixture = await buildFixture();
@@ -598,7 +605,7 @@ describe("Faz 19.1 — gerçek DB tenant isolation", { concurrency: false }, () 
   });
 });
 
-describe("Faz 19.1 — concurrent POS stock race", { concurrency: false }, () => {
+describe("Faz 19.1 — concurrent POS stock race", { concurrency: false, ...dbTestOptions }, () => {
   let raceFixture: Fixture | null = null;
 
   before(async () => {
@@ -715,7 +722,7 @@ describe("Faz 19.1 — warehouse transfer idempotency (POS idempotency proxy)", 
   });
 });
 
-describe("Faz 19.1 — warehouse transfer idempotency gerçek DB", { concurrency: false }, () => {
+describe("Faz 19.1 — warehouse transfer idempotency gerçek DB", { concurrency: false, ...dbTestOptions }, () => {
   let transferFixture: Fixture | null = null;
   let secondWarehouseId: string | null = null;
 

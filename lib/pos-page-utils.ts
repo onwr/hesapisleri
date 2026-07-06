@@ -164,11 +164,9 @@ export function calculatePosChange(received: number, total: number) {
   return Math.max(0, roundMoney(received - total));
 }
 
-export function adjustCartQuantity(
-  items: Array<{ productId: string; quantity: number; stock: number }>,
-  productId: string,
-  delta: number
-) {
+export function adjustCartQuantity<
+  T extends { productId: string; quantity: number },
+>(items: T[], productId: string, delta: number): T[] {
   return items
     .map((item) => {
       if (item.productId !== productId) return item;
@@ -176,6 +174,18 @@ export function adjustCartQuantity(
       return { ...item, quantity: nextQuantity };
     })
     .filter((item) => item.quantity > 0);
+}
+
+export function setCartItemQuantity<
+  T extends { productId: string; quantity: number },
+>(items: T[], productId: string, quantity: number): T[] {
+  if (quantity <= 0) {
+    return items.filter((item) => item.productId !== productId);
+  }
+
+  return items.map((item) =>
+    item.productId === productId ? { ...item, quantity } : item
+  );
 }
 
 export const POS_QUICK_FILTER_LABELS: Record<PosQuickFilter, string> = {

@@ -43,7 +43,11 @@ describe("Mobile POS barcode", () => {
 });
 
 describe("Mobile POS checkout price tampering", () => {
-  it("unit price değişikliği PRICE_CHANGED fırlatır", async () => {
+  it("unit price değişikliği PRICE_CHANGED fırlatır", async (t) => {
+    if (!process.env.TEST_DATABASE_URL) {
+      t.skip("TEST_DATABASE_URL tanımlı değil — gerçek DB entegrasyon testi atlandı.");
+      return;
+    }
     const { db } = await import("@/lib/prisma");
     const product = await db.product.findFirst({
       where: { status: "ACTIVE" },
@@ -291,7 +295,11 @@ describe("Mobile POS checkout status", () => {
     assert.ok(!src.includes("sessionKey"));
   });
 
-  it("checkout status PROCESSING bekleyen satış", async () => {
+  it("checkout status PROCESSING bekleyen satış", async (t) => {
+    if (!process.env.TEST_DATABASE_URL) {
+      t.skip("TEST_DATABASE_URL tanımlı değil — gerçek DB entegrasyon testi atlandı.");
+      return;
+    }
     const { resolveMobilePosCheckoutStatus } = await import("./mobile-pos-checkout-status");
     const { db } = await import("@/lib/prisma");
 
@@ -328,7 +336,11 @@ describe("Mobile POS checkout status", () => {
     assert.equal(withDiscount.total, 110);
   });
 
-  it("aynı idempotency farklı payload CONFLICT", async () => {
+  it("aynı idempotency farklı payload CONFLICT", async (t) => {
+    if (!process.env.TEST_DATABASE_URL) {
+      t.skip("TEST_DATABASE_URL tanımlı değil — gerçek DB entegrasyon testi atlandı.");
+      return;
+    }
     const { resolveMobilePosCheckoutStatus } = await import("./mobile-pos-checkout-status");
     const { db } = await import("@/lib/prisma");
 

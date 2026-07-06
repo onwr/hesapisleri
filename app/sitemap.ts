@@ -1,12 +1,15 @@
 import type { MetadataRoute } from "next";
 import { publicSiteUrl } from "@/lib/route-seo";
 
+// /partner ve /partnership BURADA YOK: ikisi de girişe zorunlu, herkese açık
+// içerikleri yok — anonim ziyaretçi/arama motoru botu her zaman giriş
+// sayfasına yönlendiriliyor. Sitemap'te tutmak crawler'ların "içerik yerine
+// yönlendirme" görmesine neden oluyordu (QA raporunda 500/güvenilirlik
+// sorunu olarak işaretlenmişti).
 const PUBLIC_ROUTES = [
   "/",
   "/kvkk",
   "/kvkk-aydinlatma-metni",
-  "/partner",
-  "/partnership",
 ] as const;
 
 export default function sitemap(): MetadataRoute.Sitemap {

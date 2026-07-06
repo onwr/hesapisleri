@@ -32,6 +32,7 @@ export function CashBankTransferModal({
   const [toAccountId, setToAccountId] = useState("");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
 
   useEffect(() => {
     if (open) {
@@ -41,6 +42,7 @@ export function CashBankTransferModal({
       setNote("");
       setError("");
       setWarning("");
+      setIdempotencyKey(crypto.randomUUID());
     }
   }, [open, defaultFromAccountId, accounts]);
 
@@ -82,6 +84,7 @@ export function CashBankTransferModal({
         toAccountId,
         amount: parsedAmount,
         note: note.trim() || undefined,
+        idempotencyKey,
       }),
     });
 
@@ -91,6 +94,11 @@ export function CashBankTransferModal({
       }
       return;
     }
+
+    // Başarılı gönderimden sonra anahtar sıfırlanır — bir sonraki transfer
+    // yeni bir idempotency anahtarı kullanır (double-submit koruması aynı
+    // istek için geçerlidir, farklı bir transferi engellemez).
+    setIdempotencyKey(crypto.randomUUID());
 
     const payload = result.data as { negativeBalanceWarning?: boolean } | undefined;
     if (payload?.negativeBalanceWarning) {

@@ -6,9 +6,14 @@ export function getAllowedMutationOrigins() {
   const origins = new Set<string>();
 
   const candidates = [
+    process.env.APP_URL,
     process.env.NEXT_PUBLIC_SITE_URL,
     process.env.WEBSITE_URL,
     process.env.NEXTAUTH_URL,
+    process.env.SIPAY_RETURN_URL,
+    process.env.SIPAY_CANCEL_URL,
+    process.env.PAYTR_OK_URL,
+    process.env.PAYTR_FAIL_URL,
     process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
     "http://localhost:3000",
     "http://127.0.0.1:3000",

@@ -3,7 +3,10 @@ import { z } from "zod";
 import { verifyApiMutationOrigin } from "@/lib/api-origin-guard";
 import { getAppSession } from "@/lib/app-session";
 import { canManageMembership } from "@/lib/permission-utils";
-import { MembershipServiceError } from "@/lib/membership-service";
+import {
+  MembershipServiceError,
+  assertCanManageActiveCompanyBilling,
+} from "@/lib/membership-service";
 import { db } from "@/lib/prisma";
 import { finalizeSipayPayment } from "@/lib/payments/sipay/sipay-checkout-service";
 import { checkRateLimitAsync } from "@/lib/rate-limit";
@@ -39,6 +42,11 @@ export async function POST(request: Request) {
         { status: 403 },
       );
     }
+
+    await assertCanManageActiveCompanyBilling({
+      userId: session.user.id,
+      activeCompanyId: session.company.id,
+    });
 
     const rate = await checkRateLimitAsync({
       key: buildFinalizeRateLimitKey({

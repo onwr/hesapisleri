@@ -72,7 +72,7 @@ export default async function DashboardPage() {
 
   const membershipAlert =
     companyUser && canManageMembership(companyUser.role, companyUser.isOwner)
-      ? await getMembershipAlertForCompany(company.id)
+      ? await getMembershipAlertForCompany(company.id, user.id)
       : null;
 
   return (

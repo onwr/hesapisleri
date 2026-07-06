@@ -17,8 +17,8 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
-import { ActionCard } from "@/components/cards/action-card";
 import { StatCard } from "@/components/cards/stat-card";
+import { DashboardQuickActionTile } from "@/components/dashboard/dashboard-quick-action-tile";
 import { DashboardIncomeChart } from "@/components/dashboard/dashboard-income-chart";
 import { DashboardExchangeRates } from "@/components/dashboard/dashboard-exchange-rates";
 import { DashboardShortcutsPanel } from "@/components/dashboard/dashboard-shortcuts-panel";
@@ -215,8 +215,32 @@ export function DashboardContent({
         />
       ) : null}
 
-      <motion.div variants={dashboardFadeUp} className="flex justify-end">
-        <AiPageTriggerButton moduleKey="dashboard" />
+      <motion.div
+        variants={dashboardFadeUp}
+        className="relative overflow-hidden rounded-[24px] bg-linear-to-br from-[#0f1f4d] via-[#1c3d8f] to-[#2f6fed] px-5 py-5 shadow-[0_18px_38px_rgba(15,31,77,0.28)] sm:px-7 sm:py-6"
+      >
+        <span
+          className="pointer-events-none absolute -right-10 -top-16 h-56 w-56 rounded-full bg-white/10 blur-2xl"
+          aria-hidden="true"
+        />
+        <span
+          className="pointer-events-none absolute -bottom-16 left-1/3 h-40 w-40 rounded-full bg-sky-300/20 blur-2xl"
+          aria-hidden="true"
+        />
+
+        <div className="relative flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-[13px] font-bold text-white/70">{monthLabel}</p>
+            <h1 className="mt-1 text-[22px] font-extrabold tracking-[-0.02em] text-white sm:text-[26px]">
+              Merhaba, {firstName} 👋
+            </h1>
+            <p className="mt-1 text-[13px] font-medium text-white/80">
+              İşletmen bugün de yolunda — özet aşağıda seni bekliyor.
+            </p>
+          </div>
+
+          <AiPageTriggerButton moduleKey="dashboard" />
+        </div>
       </motion.div>
 
       <motion.section
@@ -261,7 +285,7 @@ export function DashboardContent({
           },
         ].map((card) => (
           <motion.div key={card.href} variants={dashboardFadeUp}>
-            <ActionCard {...card} />
+            <DashboardQuickActionTile {...card} />
           </motion.div>
         ))}
       </motion.section>
@@ -355,9 +379,14 @@ export function DashboardContent({
           >
             <motion.div variants={dashboardFadeUp} className={cardClassName}>
               <div className="mb-4 flex items-center justify-between gap-3">
-                <h3 className="text-[16px] font-extrabold tracking-[-0.02em] text-[#0f1f4d]">
-                  Son İşlemler
-                </h3>
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-linear-to-br from-emerald-500 to-green-600 text-white shadow-[0_6px_14px_rgba(16,185,129,0.35)]">
+                    <ShoppingCart size={15} strokeWidth={2.4} />
+                  </span>
+                  <h3 className="text-[16px] font-extrabold tracking-[-0.02em] text-[#0f1f4d]">
+                    Son İşlemler
+                  </h3>
+                </div>
 
                 <Link
                   href="/sales"
@@ -530,9 +559,14 @@ export function DashboardContent({
 
             <motion.div variants={dashboardFadeUp} className={cardClassName}>
               <div className="mb-4 flex items-center justify-between gap-3">
-                <h3 className="text-[16px] font-extrabold tracking-[-0.02em] text-[#0f1f4d]">
-                  Banka Hesapları
-                </h3>
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-linear-to-br from-sky-400 to-blue-600 text-white shadow-[0_6px_14px_rgba(37,99,235,0.35)]">
+                    <Banknote size={15} strokeWidth={2.4} />
+                  </span>
+                  <h3 className="text-[16px] font-extrabold tracking-[-0.02em] text-[#0f1f4d]">
+                    Banka Hesapları
+                  </h3>
+                </div>
 
                 <Link
                   href="/cash-bank"
@@ -619,9 +653,14 @@ export function DashboardContent({
             className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_28px_rgba(15,23,42,0.04)]"
           >
             <div className="mb-4 flex items-center justify-between gap-3">
-              <h3 className="text-[16px] font-extrabold text-[#0f1f4d]">
-                Yaklaşan Ödemeler
-              </h3>
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-linear-to-br from-amber-400 to-orange-600 text-white shadow-[0_6px_14px_rgba(234,88,12,0.35)]">
+                  <CalendarClock size={15} strokeWidth={2.4} />
+                </span>
+                <h3 className="text-[16px] font-extrabold text-[#0f1f4d]">
+                  Yaklaşan Ödemeler
+                </h3>
+              </div>
 
               <Link
                 href={links.pendingCollection}

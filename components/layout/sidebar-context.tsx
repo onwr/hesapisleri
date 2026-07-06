@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useState,
@@ -33,21 +34,26 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     setReady(true);
   }, []);
 
-  function toggle() {
+  // useCallback ile kararlı referans — aksi halde her SidebarProvider
+  // render'ında yeni fonksiyon oluşur; AppSidebar'daki
+  // `useEffect(() => closeMobile(), [pathname, closeMobile])` bağımlılık
+  // dizisi her render'da değişip closeMobile'ı hemen tekrar çağırıyor ve
+  // mobil menü açılır açılmaz kapanıyordu (görünürde "menü açılmıyor").
+  const toggle = useCallback(() => {
     setCollapsed((prev) => {
       const next = !prev;
       localStorage.setItem(STORAGE_KEY, String(next));
       return next;
     });
-  }
+  }, []);
 
-  function openMobile() {
+  const openMobile = useCallback(() => {
     setMobileOpen(true);
-  }
+  }, []);
 
-  function closeMobile() {
+  const closeMobile = useCallback(() => {
     setMobileOpen(false);
-  }
+  }, []);
 
   return (
     <SidebarContext.Provider

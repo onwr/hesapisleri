@@ -46,6 +46,7 @@ export function SipayResultPoller({ invoiceId, initialStatus }: Props) {
           const res = await fetch("/api/billing/sipay/finalize", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
             body: JSON.stringify({ invoiceId }),
           });
           const json: FinalizeResponse = await res.json();

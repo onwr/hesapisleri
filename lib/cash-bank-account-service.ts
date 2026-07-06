@@ -1,10 +1,14 @@
+import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/prisma";
 import { buildTransferActivityMessage } from "@/lib/activity-log-utils";
 import { invalidateDashboardCache } from "@/lib/dashboard-cache-invalidation";
 import { getActiveAccountOptions } from "@/lib/account-read-service";
-import { runTransactionWithRetry } from "@/lib/prisma-transaction-utils";
+import {
+  isPrismaUniqueConstraintError,
+  runTransactionWithRetry,
+} from "@/lib/prisma-transaction-utils";
 import {
   attachRunningBalances,
   computeAccountMetrics,
@@ -34,6 +38,7 @@ export const transferSchema = z.object({
   toAccountId: z.string().min(1),
   amount: z.number().positive("Transfer tutarı 0'dan büyük olmalıdır."),
   note: z.string().optional(),
+  idempotencyKey: z.string().uuid("Geçerli bir idempotency anahtarı gerekir."),
 });
 
 export type ManualTransactionInput = z.infer<typeof manualTransactionSchema>;
@@ -302,6 +307,17 @@ export async function applyManualAccountTransaction(input: {
   return result;
 }
 
+function hashTransferPayload(input: {
+  fromAccountId: string;
+  toAccountId: string;
+  amount: number;
+  note?: string | null;
+}) {
+  return createHash("sha256")
+    .update(JSON.stringify(input))
+    .digest("hex");
+}
+
 export async function applyAccountTransfer(input: {
   companyId: string;
   userId: string;
@@ -328,127 +344,250 @@ export async function applyAccountTransfer(input: {
     input.companyId
   );
 
-  const result = await runTransactionWithRetry(async (tx) => {
-    const locked = await lockCompanyAccountsForUpdate(
-      tx,
-      input.companyId,
-      input.data.fromAccountId,
-      input.data.toAccountId,
-    );
+  const payloadHash = hashTransferPayload({
+    fromAccountId: input.data.fromAccountId,
+    toAccountId: input.data.toAccountId,
+    amount,
+    note,
+  });
 
-    if (!locked) {
-      return {
-        ok: false as const,
-        status: 404,
-        message: "Hesap bulunamadı.",
-      };
-    }
-
-    const [fromAccount, toAccount] = await Promise.all([
-      tx.account.findFirst({
+  try {
+    const result = await runTransactionWithRetry(async (tx) => {
+      // İdempotency claim — aynı transaction içinde. Aynı key + aynı payload
+      // → tamamlanmış sonucu replay eder. Aynı key + farklı payload → hata.
+      const existing = await tx.accountTransferIdempotency.findUnique({
         where: {
-          id: input.data.fromAccountId,
-          companyId: input.companyId,
+          companyId_idempotencyKey: {
+            companyId: input.companyId,
+            idempotencyKey: input.data.idempotencyKey,
+          },
         },
-      }),
-      tx.account.findFirst({
-        where: {
-          id: input.data.toAccountId,
-          companyId: input.companyId,
-        },
-      }),
-    ]);
+      });
 
-    if (!fromAccount || !toAccount) {
-      return {
-        ok: false as const,
-        status: 404,
-        message: "Hesap bulunamadı.",
-      };
-    }
+      if (existing) {
+        if (existing.payloadHash !== payloadHash) {
+          return {
+            ok: false as const,
+            status: 409,
+            message: "Aynı işlem anahtarı farklı transfer verisiyle kullanıldı.",
+          };
+        }
+        if (existing.status === "COMPLETED" && existing.result) {
+          return {
+            ok: true as const,
+            replayed: true,
+            data: existing.result as unknown as {
+              fromBalance: number;
+              toBalance: number;
+              negativeBalanceWarning: boolean;
+              transferGroupId: string;
+            },
+          };
+        }
+        // PROCESSING durumunda (nadir yarış durumu) — güvenli, açık hata.
+        return {
+          ok: false as const,
+          status: 409,
+          message: "Transfer işleniyor, lütfen kısa süre sonra tekrar deneyin.",
+        };
+      }
 
-    if (
-      hasInsufficientCashBalance(
-        fromAccount.balance,
-        amount,
-        allowNegativeCashBalance
-      )
-    ) {
-      return {
-        ok: false as const,
-        status: 400,
-        message: "Kaynak hesapta yetersiz bakiye.",
-      };
-    }
-
-    const fromBalance = roundCashMoney(Number(fromAccount.balance) - amount);
-    const toBalance = roundCashMoney(Number(toAccount.balance) + amount);
-
-    const [outTransaction, inTransaction] = await Promise.all([
-      tx.accountTransaction.create({
+      const claim = await tx.accountTransferIdempotency.create({
         data: {
-          accountId: fromAccount.id,
-          type: "TRANSFER",
-          title: `Transfer Çıkışı - ${toAccount.name}`,
-          amount,
-          date: transferDate,
-          note,
+          companyId: input.companyId,
+          idempotencyKey: input.data.idempotencyKey,
+          payloadHash,
+          status: "PROCESSING",
         },
-      }),
-      tx.accountTransaction.create({
+      });
+
+      const locked = await lockCompanyAccountsForUpdate(
+        tx,
+        input.companyId,
+        input.data.fromAccountId,
+        input.data.toAccountId,
+      );
+
+      if (!locked) {
+        return {
+          ok: false as const,
+          status: 404,
+          message: "Hesap bulunamadı.",
+        };
+      }
+
+      const [fromAccount, toAccount] = await Promise.all([
+        tx.account.findFirst({
+          where: {
+            id: input.data.fromAccountId,
+            companyId: input.companyId,
+          },
+        }),
+        tx.account.findFirst({
+          where: {
+            id: input.data.toAccountId,
+            companyId: input.companyId,
+          },
+        }),
+      ]);
+
+      if (!fromAccount || !toAccount) {
+        return {
+          ok: false as const,
+          status: 404,
+          message: "Hesap bulunamadı.",
+        };
+      }
+
+      if (fromAccount.currency !== toAccount.currency) {
+        return {
+          ok: false as const,
+          status: 400,
+          message:
+            "Farklı para birimine sahip hesaplar arası doğrudan transfer desteklenmiyor. Hesapların para birimleri eşleşmelidir.",
+        };
+      }
+
+      if (
+        hasInsufficientCashBalance(
+          fromAccount.balance,
+          amount,
+          allowNegativeCashBalance
+        )
+      ) {
+        return {
+          ok: false as const,
+          status: 400,
+          message: "Kaynak hesapta yetersiz bakiye.",
+        };
+      }
+
+      const fromBalance = roundCashMoney(Number(fromAccount.balance) - amount);
+      const toBalance = roundCashMoney(Number(toAccount.balance) + amount);
+      const transferGroupId = randomUUID();
+
+      const [outTransaction, inTransaction] = await Promise.all([
+        tx.accountTransaction.create({
+          data: {
+            accountId: fromAccount.id,
+            type: "TRANSFER",
+            title: `Transfer Çıkışı - ${toAccount.name}`,
+            amount,
+            date: transferDate,
+            note,
+            transferGroupId,
+          },
+        }),
+        tx.accountTransaction.create({
+          data: {
+            accountId: toAccount.id,
+            type: "TRANSFER",
+            title: `Transfer Girişi - ${fromAccount.name}`,
+            amount,
+            date: transferDate,
+            note,
+            transferGroupId,
+          },
+        }),
+      ]);
+
+      await Promise.all([
+        tx.account.update({
+          where: { id: fromAccount.id },
+          data: { balance: fromBalance },
+        }),
+        tx.account.update({
+          where: { id: toAccount.id },
+          data: { balance: toBalance },
+        }),
+      ]);
+
+      await tx.activityLog.create({
         data: {
-          accountId: toAccount.id,
-          type: "TRANSFER",
-          title: `Transfer Girişi - ${fromAccount.name}`,
-          amount,
-          date: transferDate,
-          note,
+          companyId: input.companyId,
+          userId: input.userId,
+          action: "TRANSFER",
+          module: "cash-bank",
+          message: buildTransferActivityMessage(
+            fromAccount.name,
+            toAccount.name,
+            amount
+          ),
         },
-      }),
-    ]);
+      });
 
-    await Promise.all([
-      tx.account.update({
-        where: { id: fromAccount.id },
-        data: { balance: fromBalance },
-      }),
-      tx.account.update({
-        where: { id: toAccount.id },
-        data: { balance: toBalance },
-      }),
-    ]);
-
-    await tx.activityLog.create({
-      data: {
-        companyId: input.companyId,
-        userId: input.userId,
-        action: "TRANSFER",
-        module: "cash-bank",
-        message: buildTransferActivityMessage(
-          fromAccount.name,
-          toAccount.name,
-          amount
-        ),
-      },
-    });
-
-    return {
-      ok: true as const,
-      data: {
-        outTransaction,
-        inTransaction,
+      const resultData = {
         fromBalance,
         toBalance,
         negativeBalanceWarning: fromBalance < 0,
-      },
-    };
-  });
+        transferGroupId,
+      };
 
-  if (result.ok) {
-    invalidateDashboardCache(input.companyId, "account-transfer");
+      await tx.accountTransferIdempotency.update({
+        where: { id: claim.id },
+        data: {
+          status: "COMPLETED",
+          transferGroupId,
+          result: resultData,
+          completedAt: new Date(),
+        },
+      });
+
+      return {
+        ok: true as const,
+        replayed: false,
+        data: {
+          ...resultData,
+          outTransaction,
+          inTransaction,
+        },
+      };
+    });
+
+    if (result.ok) {
+      invalidateDashboardCache(input.companyId, "account-transfer");
+    }
+
+    return result;
+  } catch (error) {
+    if (isPrismaUniqueConstraintError(error, "idempotencyKey")) {
+      // Eşzamanlı iki istek aynı key ile yarıştı — ikinci istek burada yakalanır.
+      const existing = await db.accountTransferIdempotency.findUnique({
+        where: {
+          companyId_idempotencyKey: {
+            companyId: input.companyId,
+            idempotencyKey: input.data.idempotencyKey,
+          },
+        },
+      });
+      if (existing?.payloadHash !== payloadHash) {
+        return {
+          ok: false as const,
+          status: 409,
+          message: "Aynı işlem anahtarı farklı transfer verisiyle kullanıldı.",
+        };
+      }
+      if (existing?.status === "COMPLETED" && existing.result) {
+        return {
+          ok: true as const,
+          replayed: true,
+          data: existing.result as unknown as {
+            fromBalance: number;
+            toBalance: number;
+            negativeBalanceWarning: boolean;
+            transferGroupId: string;
+          },
+        };
+      }
+      return {
+        ok: false as const,
+        status: 409,
+        message: "Transfer işleniyor, lütfen kısa süre sonra tekrar deneyin.",
+      };
+    }
+
+    throw error;
   }
-
-  return result;
 }
 
 export async function assertAccountBelongsToCompany(

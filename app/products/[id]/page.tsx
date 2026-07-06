@@ -7,6 +7,7 @@ import { guardPageModule } from "@/lib/module-access";
 import { ProductDetailView } from "@/components/products/product-detail-view";
 import { getCachedProductDetailData } from "@/lib/tenant-cache/cached-tenant-page-data";
 import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
+import { toIsoString } from "@/lib/format-utils";
 import {
   PRODUCT_UNIT_LABELS,
   type ProductUnitType,
@@ -101,8 +102,8 @@ const { id } = await params;
             vatRate: product.vatRate,
             warehouseLocation: product.warehouseLocation,
             unitType: product.unitType,
-            createdAt: product.createdAt.toISOString(),
-            updatedAt: product.updatedAt.toISOString(),
+            createdAt: toIsoString(product.createdAt) ?? new Date(0).toISOString(),
+            updatedAt: toIsoString(product.updatedAt) ?? new Date(0).toISOString(),
             isService: product.isService,
             productType: product.productType,
           }}
@@ -114,13 +115,13 @@ const { id } = await params;
             type: movement.type,
             quantity: movement.quantity,
             note: movement.note,
-            movementDate: movement.movementDate?.toISOString() ?? null,
-            createdAt: movement.createdAt.toISOString(),
+            movementDate: toIsoString(movement.movementDate),
+            createdAt: toIsoString(movement.createdAt) ?? new Date(0).toISOString(),
             warehouse: movement.warehouse,
           }))}
           recentSales={recentSales.map((sale) => ({
             ...sale,
-            createdAt: sale.createdAt.toISOString(),
+            createdAt: toIsoString(sale.createdAt) ?? new Date(0).toISOString(),
           }))}
           channelMappings={channelMappings}
         />

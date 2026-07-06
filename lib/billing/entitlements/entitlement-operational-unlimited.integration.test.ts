@@ -18,6 +18,12 @@ function read(relativePath: string) {
   return readFileSync(join(webRoot, relativePath), "utf8");
 }
 
+// checkCompanyLimit/checkCompanyFeature gerçek DB'ye sorgu atıyor — TEST_DATABASE_URL
+// yoksa kontrollü skip edilir.
+const dbTestOptions = process.env.TEST_DATABASE_URL
+  ? {}
+  : { skip: "TEST_DATABASE_URL tanımlı değil — gerçek DB entegrasyon testi atlandı." };
+
 describe("entitlement operational unlimited — API routes", () => {
   const enforcementPaths = [
     "lib/warehouse-api-handlers.ts",
@@ -51,7 +57,7 @@ describe("entitlement operational unlimited — API routes", () => {
   });
 });
 
-describe("entitlement operational unlimited — enforcement behavior", () => {
+describe("entitlement operational unlimited — enforcement behavior", dbTestOptions, () => {
   it("all operational limit codes are non-blocking", async () => {
     const codes = [
       "MAX_WAREHOUSES",

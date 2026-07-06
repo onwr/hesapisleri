@@ -26,12 +26,18 @@ describe("register KVKK aydınlatma", () => {
     assert.match(record, new RegExp(KVKK_AYDINLATMA_LAST_UPDATED));
   });
 
-  it("register API requires kvkkInformed and persists UserConsent", () => {
+  it("register API requires kvkkInformed (canonical shared schema) and persists UserConsent", () => {
+    const schemaSource = readFileSync(
+      join(webRoot, "lib/auth/register-schema.ts"),
+      "utf8"
+    );
+    assert.match(schemaSource, /kvkkInformed:\s*z\.literal\(true/);
+
     const source = readFileSync(
       join(webRoot, "app/api/auth/register/route.ts"),
       "utf8"
     );
-    assert.match(source, /kvkkInformed:\s*z\.literal\(true/);
+    assert.match(source, /from "@\/lib\/auth\/register-schema"/);
     assert.match(source, /userConsent\.create/);
     assert.match(source, /type:\s*"KVKK"/);
     assert.match(source, /KVKK_AYDINLATMA_VERSION/);

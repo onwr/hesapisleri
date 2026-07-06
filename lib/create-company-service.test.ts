@@ -145,6 +145,9 @@ function createMockTx() {
       create: async () => {
         operations.push("companyOnboarding");
       },
+      upsert: async () => {
+        operations.push("companyOnboarding");
+      },
     },
   };
 

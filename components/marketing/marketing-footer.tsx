@@ -47,15 +47,19 @@ export function MarketingFooter({ brandName, supportEmail, supportPhone, website
   const domain = websiteUrl.replace(/^https?:\/\//, "").replace(/\/$/, "");
 
   return (
-    <footer id="iletisim" className="bg-[#07162D] border-t border-white/[0.06]">
+    <footer className="bg-[#07162D] border-t border-white/[0.06]">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-14">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.6fr_repeat(4,1fr)]">
           {/* Brand column */}
           <div className="sm:col-span-2 lg:col-span-1">
-            <Link href="/" className="inline-flex items-center gap-2.5 mb-5">
+            <Link
+              href="/"
+              aria-label={`${brandName} — Ana sayfa`}
+              className="inline-flex items-center gap-2.5 mb-5"
+            >
               <Image
                 src="/logo.svg"
-                alt={brandName}
+                alt=""
                 width={130}
                 height={32}
                 className="h-8 w-auto brightness-0 invert"

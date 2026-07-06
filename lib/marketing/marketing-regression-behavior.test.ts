@@ -30,7 +30,7 @@ describe("integration catalog — kod tabanı uyumu", () => {
   it("builtin entegrasyonlar SMS veya mobil uygulama içermez", () => {
     const names = MARKETING_BUILTIN_INTEGRATIONS.map((item) => item.name);
     assert.ok(!names.some((name) => /SMS|Mobil Uygulama/i.test(name)));
-    assert.ok(names.includes("PayTR"));
+    assert.ok(names.includes("Sipay"));
     assert.ok(names.some((name) => name.includes("e-Fatura")));
   });
 

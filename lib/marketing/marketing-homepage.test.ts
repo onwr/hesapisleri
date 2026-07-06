@@ -104,8 +104,8 @@ describe("Section anchor IDs", () => {
     assert.match(src("components/marketing/faq-section.tsx"), /id="sss"/);
   });
 
-  it("id=iletisim exists in footer", () => {
-    assert.match(src("components/marketing/marketing-footer.tsx"), /id="iletisim"/);
+  it("id=iletisim exists (artık ayrı ContactSection'da — gerçek iletişim formu için taşındı)", () => {
+    assert.match(src("components/marketing/contact-section.tsx"), /id="iletisim"/);
   });
 });
 
@@ -338,8 +338,8 @@ describe("IntegrationsSection — doğru entegrasyon içeriği", () => {
     assert.doesNotMatch(integ, /GİB e-Fatura/);
   });
 
-  it("shows PayTR as payment integration", () => {
-    assert.match(integ, /PayTR/);
+  it("shows Sipay as payment integration (aktif sağlayıcı PayTR'dan Sipay'e güncellendi)", () => {
+    assert.match(integ, /Sipay/);
   });
 
   it("active marketplace keys match marketplace-types", () => {
@@ -541,8 +541,9 @@ describe("FinalCtaSection — CTA logic", () => {
 describe("MarketingFooter — real routes only", () => {
   const footer = src("components/marketing/marketing-footer.tsx");
 
-  it("has id=iletisim anchor", () => {
-    assert.match(footer, /id="iletisim"/);
+  it("id=iletisim artık footer'da değil, ayrı ContactSection'da (gerçek iletişim formu için taşındı)", () => {
+    assert.doesNotMatch(footer, /id="iletisim"/);
+    assert.match(src("components/marketing/contact-section.tsx"), /id="iletisim"/);
   });
 
   it("links to /kvkk-aydinlatma-metni", () => {

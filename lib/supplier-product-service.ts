@@ -198,7 +198,17 @@ export async function getSupplierProductsForSupplier(companyId: string, supplier
   return db.supplierProduct.findMany({
     where: { companyId, supplierId },
     include: {
-      product: { select: { id: true, name: true, sku: true, buyPrice: true, stock: true } },
+      product: {
+        select: {
+          id: true,
+          name: true,
+          sku: true,
+          barcode: true,
+          buyPrice: true,
+          stock: true,
+          imageUrl: true,
+        },
+      },
     },
     orderBy: [{ isPreferred: "desc" }, { updatedAt: "desc" }],
   });

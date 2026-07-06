@@ -278,6 +278,12 @@ export function LoginForm({
                 Beni hatırla
               </Label>
             </div>
+            <Link
+              href="/forgot-password"
+              className="text-sm font-semibold text-blue-600 hover:text-blue-700"
+            >
+              Şifremi unuttum
+            </Link>
           </div>
 
           <AuthAlert message={error} />

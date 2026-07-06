@@ -5,6 +5,10 @@ import { canManageMembership } from "@/lib/permission-utils";
 import { db } from "@/lib/prisma";
 import { initializePaytrMembershipPayment } from "@/lib/payments/payment-service";
 import { getTrustedClientIp } from "@/lib/payments/trusted-client-ip";
+import {
+  MembershipServiceError,
+  assertCanManageActiveCompanyBilling,
+} from "@/lib/membership-service";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -24,6 +28,11 @@ export async function POST(request: Request, { params }: RouteParams) {
         { status: 403 }
       );
     }
+
+    await assertCanManageActiveCompanyBilling({
+      userId: session.user.id,
+      activeCompanyId: session.company.id,
+    });
 
     const parsed = schema.safeParse(await request.json());
     if (!parsed.success) {
@@ -69,6 +78,12 @@ export async function POST(request: Request, { params }: RouteParams) {
 
     return NextResponse.json({ success: true, data: result });
   } catch (error) {
+    if (error instanceof MembershipServiceError) {
+      return NextResponse.json(
+        { success: false, message: error.message },
+        { status: error.status }
+      );
+    }
     return NextResponse.json(
       {
         success: false,

@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/app-session";
 import { canManageMembership } from "@/lib/permission-utils";
-import { MembershipServiceError } from "@/lib/membership-service";
+import {
+  MembershipServiceError,
+  assertCanManageActiveCompanyBilling,
+} from "@/lib/membership-service";
 import { resumePaytrMembershipPayment } from "@/lib/payments/payment-service";
 import { getTrustedClientIp } from "@/lib/payments/trusted-client-ip";
 
@@ -16,6 +19,11 @@ export async function POST(_request: Request, { params }: RouteParams) {
         { status: 403 }
       );
     }
+
+    await assertCanManageActiveCompanyBilling({
+      userId: session.user.id,
+      activeCompanyId: session.company.id,
+    });
 
     const { id } = await params;
     const result = await resumePaytrMembershipPayment({

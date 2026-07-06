@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getAppSession } from "@/lib/app-session";
 import { canManageMembership } from "@/lib/permission-utils";
-import { MembershipServiceError } from "@/lib/membership-service";
+import {
+  MembershipServiceError,
+  assertCanManageActiveCompanyBilling,
+} from "@/lib/membership-service";
 import { initializeAddOnPurchase } from "@/lib/billing/addons/addon-purchase-service";
 import { getTrustedClientIp } from "@/lib/payments/trusted-client-ip";
 
@@ -24,6 +27,11 @@ export async function POST(request: Request) {
         { status: 403 }
       );
     }
+
+    await assertCanManageActiveCompanyBilling({
+      userId: session.user.id,
+      activeCompanyId: session.company.id,
+    });
 
     const parsed = schema.safeParse(await request.json());
     if (!parsed.success) {

@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useState } from "react";
 import {
   Archive,
-  Banknote,
+  ArrowDownLeft,
+  ArrowUpRight,
   Eye,
   Loader2,
-  MoreVertical,
+  MoreHorizontal,
   Pencil,
   Plus,
   Repeat,
@@ -200,6 +201,10 @@ export function CashBankAccountRowActions({
   }
 
   const busy = isSubmitting || loadingAction !== null;
+  const isActive = status === "ACTIVE";
+  const menuLabel = accountName?.trim()
+    ? `${accountName.trim()} işlemleri`
+    : "Hesap işlemleri";
 
   return (
     <>
@@ -208,46 +213,105 @@ export function CashBankAccountRowActions({
           <button
             type="button"
             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:border-blue-100 hover:bg-blue-50 hover:text-blue-600"
-            aria-label="Hesap işlemleri"
+            aria-label={menuLabel}
+            onClick={(event) => event.stopPropagation()}
           >
             {busy ? (
               <Loader2 size={14} className="animate-spin" />
             ) : (
-              <MoreVertical size={14} />
+              <MoreHorizontal size={14} />
             )}
           </button>
         </DropdownMenuTrigger>
 
-        <DropdownMenuContent align="end" className="w-48 rounded-xl p-1">
+        <DropdownMenuContent
+          align="end"
+          className="w-52 rounded-xl p-1"
+          onClick={(event) => event.stopPropagation()}
+        >
           <DropdownMenuItem asChild>
-            <Link href={`/cash-bank/${accountId}`} className="cursor-pointer gap-2">
+            <Link
+              href={`/cash-bank/${accountId}`}
+              className="cursor-pointer gap-2"
+              onClick={(event) => event.stopPropagation()}
+            >
               <Eye size={14} />
-              Detay
+              Hesabı Görüntüle
             </Link>
           </DropdownMenuItem>
 
           <DropdownMenuItem asChild>
-            <Link href={`/cash-bank/${accountId}#movements`} className="cursor-pointer gap-2">
-              <Banknote size={14} />
-              Hareketler
+            <Link
+              href={`/cash-bank/${accountId}#movements`}
+              className="cursor-pointer gap-2"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <Wallet size={14} />
+              Hareketleri Görüntüle
             </Link>
           </DropdownMenuItem>
 
-          {canManage && account ? (
+          {canManage && account && isActive ? (
             <DropdownMenuItem
               className="cursor-pointer gap-2"
-              onClick={() => setEditOpen(true)}
+              onClick={(event) => {
+                event.stopPropagation();
+                setEditOpen(true);
+              }}
             >
               <Pencil size={14} />
-              Düzenle
+              Hesabı Düzenle
             </DropdownMenuItem>
           ) : null}
 
-          {canManage && !isDefault ? (
+          {canManage && isActive ? (
+            <>
+              <DropdownMenuSeparator />
+
+              <DropdownMenuItem
+                className="cursor-pointer gap-2"
+                disabled={busy}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setTransferOpen(true);
+                }}
+              >
+                <Repeat size={14} />
+                Transfer Yap
+              </DropdownMenuItem>
+
+              <DropdownMenuItem asChild>
+                <Link
+                  href={`/cash-bank/${accountId}?movement=1`}
+                  className="cursor-pointer gap-2"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <ArrowDownLeft size={14} />
+                  Tahsilat Al
+                </Link>
+              </DropdownMenuItem>
+
+              <DropdownMenuItem asChild>
+                <Link
+                  href="/expenses"
+                  className="cursor-pointer gap-2"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <ArrowUpRight size={14} />
+                  Ödeme Yap
+                </Link>
+              </DropdownMenuItem>
+            </>
+          ) : null}
+
+          {canManage && !isDefault && isActive ? (
             <DropdownMenuItem
               className="cursor-pointer gap-2"
               disabled={busy}
-              onClick={() => void handleSetDefault()}
+              onClick={(event) => {
+                event.stopPropagation();
+                void handleSetDefault();
+              }}
             >
               <Star size={14} />
               Varsayılan Yap
@@ -258,12 +322,15 @@ export function CashBankAccountRowActions({
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                className="cursor-pointer gap-2"
-                disabled={busy || (isDefault && status === "ACTIVE")}
-                onClick={() => void handleToggleStatus()}
+                className="cursor-pointer gap-2 text-rose-600 focus:text-rose-600"
+                disabled={busy || (isDefault && isActive)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void handleToggleStatus();
+                }}
               >
                 <Archive size={14} />
-                {status === "ACTIVE" ? "Arşivle" : "Aktifleştir"}
+                {isActive ? "Arşivle" : "Aktifleştir"}
               </DropdownMenuItem>
             </>
           ) : null}

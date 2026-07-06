@@ -23,14 +23,14 @@ describe("billing — tek canonical plan kaynağı", () => {
     );
   });
 
-  it("getMembershipBillingData yalnız subscription.plan kullanır", async () => {
+  it("getMembershipBillingData resolveBillingPlanForCompany kullanır", async () => {
     const content = await fs.readFile(SERVICE_PATH, "utf8");
     const fnStart = content.indexOf("export async function getMembershipBillingData");
     const fnEnd = content.indexOf("export async function createMembershipPayment");
     const fnBody = content.slice(fnStart, fnEnd);
     assert.ok(
-      fnBody.includes("const subscriptionPlan = subscription.plan;"),
-      "subscriptionPlan doğrudan subscription.plan olmalı"
+      fnBody.includes("resolveBillingPlanForCompany"),
+      "billing planı paylaşılan resolver ile çözülmeli"
     );
     assert.ok(
       !fnBody.includes("displayPlan"),
@@ -142,12 +142,12 @@ describe("billing — abonelik plan alanları", () => {
     );
   });
 
-  it("subscriptionPlan yoksa (planId null) açık hata döner, sessizce yanlış plana düşmez", async () => {
+  it("plan çözülemezse MembershipPlanNotFoundError → MembershipServiceError döner", async () => {
     const content = await fs.readFile(SERVICE_PATH, "utf8");
     assert.ok(
-      content.includes("if (!subscriptionPlan) {") &&
+      content.includes("MembershipPlanNotFoundError") &&
         content.includes('"Aktif üyelik paketi bulunamadı."'),
-      "plan bulunamadığında açık hata dönmeli, sessiz fallback olmamalı"
+      "plan bulunamadığında açık hata dönmeli"
     );
   });
 });

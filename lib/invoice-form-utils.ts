@@ -3,6 +3,10 @@ import {
   calculateInvoiceTotals as calculateInvoiceTotalsCore,
   type InvoiceLineInput,
 } from "@/lib/invoice-tax-calculation-utils";
+import {
+  isServiceProductType,
+  getProductStockDisplayLabel,
+} from "@/lib/product-type-utils";
 
 export type InvoiceLineItem = InvoiceLineInput & {
   id: string;
@@ -16,10 +20,31 @@ export type CatalogProduct = {
   stock: number;
   sellPrice: string | number;
   vatRate: number;
+  productType?: string | null;
   category?: {
     name: string;
   } | null;
 };
+
+/** Hizmet ürünü stoksuzdur — stok kısıtları/uyarıları hiçbir zaman uygulanmaz. */
+export function isServiceCatalogProduct(product: { productType?: string | null }) {
+  return isServiceProductType(product.productType);
+}
+
+/** Ürün faturaya eklenebilir mi? Hizmet ürünleri stok=0 olsa bile her zaman eklenebilir. */
+export function canAddProductToInvoice(
+  product: CatalogProduct,
+  usedQty: number
+) {
+  if (isServiceCatalogProduct(product)) return true;
+  if (allowsNegativeStock()) return true;
+  return product.stock - usedQty > 0;
+}
+
+/** Katalog kartında gösterilecek stok etiketi — hizmet ürünü için "Stoksuz". */
+export function getCatalogStockLabel(product: CatalogProduct) {
+  return getProductStockDisplayLabel(product);
+}
 
 export { formatMoney } from "@/lib/format-utils";
 
@@ -62,6 +87,9 @@ export function getMaxQuantityForItem(
 
   const product = products.find((entry) => entry.id === item.productId);
   if (!product) return null;
+
+  // Hizmet ürünleri stok takibi yapmaz — miktar sınırı uygulanmaz.
+  if (isServiceCatalogProduct(product)) return null;
 
   const usedElsewhere = items
     .filter(

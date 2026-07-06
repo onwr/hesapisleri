@@ -37,7 +37,7 @@ export function HeroSection({ registrationEnabled, trialDays, brandName }: Props
               İşletmenizi tek{" "}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-300 to-blue-400">
                 platformdan
-              </span>
+              </span>{" "}
               <br />
               yönetin
             </h1>

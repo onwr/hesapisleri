@@ -59,7 +59,7 @@ export function PosProductGrid({
   }
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+    <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
       {products.map((product) => {
         const displayStock = getPosProductStock(product, showWarehouseStock);
         const stockBadge = getPosStockBadge(displayStock, product.productType);

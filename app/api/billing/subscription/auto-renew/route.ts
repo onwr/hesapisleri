@@ -4,6 +4,10 @@ import { getAppSession } from "@/lib/app-session";
 import { canManageMembership } from "@/lib/permission-utils";
 import { db } from "@/lib/prisma";
 import { getPaytrCapabilities } from "@/lib/payments/paytr-capabilities";
+import {
+  MembershipServiceError,
+  assertCanManageActiveCompanyBilling,
+} from "@/lib/membership-service";
 
 const schema = z.object({ autoRenew: z.boolean() });
 
@@ -16,6 +20,11 @@ export async function PATCH(request: Request) {
         { status: 403 }
       );
     }
+
+    await assertCanManageActiveCompanyBilling({
+      userId: session.user.id,
+      activeCompanyId: session.company.id,
+    });
 
     const parsed = schema.safeParse(await request.json());
     if (!parsed.success) {
@@ -86,6 +95,12 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
+    if (error instanceof MembershipServiceError) {
+      return NextResponse.json(
+        { success: false, message: error.message },
+        { status: error.status }
+      );
+    }
     return NextResponse.json(
       {
         success: false,

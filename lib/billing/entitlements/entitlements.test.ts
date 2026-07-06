@@ -66,7 +66,13 @@ describe("entitlement-errors", () => {
   });
 });
 
-describe("entitlement operational unlimited policy", () => {
+// checkCompanyLimit/checkCompanyFeature gerçek DB'ye sorgu atıyor —
+// TEST_DATABASE_URL yoksa kontrollü skip edilir.
+const dbTestOptions = process.env.TEST_DATABASE_URL
+  ? {}
+  : { skip: "TEST_DATABASE_URL tanımlı değil — gerçek DB entegrasyon testi atlandı." };
+
+describe("entitlement operational unlimited policy", dbTestOptions, () => {
   it("operational enforcement is disabled for plan limits and features", async () => {
     const { isOperationalLimitEnforcementEnabled } = await import(
       "./entitlement-operational-policy"

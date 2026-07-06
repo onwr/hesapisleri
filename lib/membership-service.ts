@@ -27,8 +27,10 @@ import { getSerializedPaytrCapabilities } from "@/lib/payments/paytr-capabilitie
 import { getCheckoutProviderForClient } from "@/lib/payments/billing-provider-resolver";
 import { getActivePendingChange } from "@/lib/billing/subscription-pending-change-service";
 import { loadTargetActivePricesByPeriod } from "@/lib/admin/plans/admin-plan-target-price-utils";
+import { DEFAULT_MEMBERSHIP_PLAN_CODE } from "@/lib/billing/membership-plan-constants";
+import { resolveActiveMembershipPlanForCheckout, resolveBillingPlanForCompany } from "@/lib/billing/membership-plan-resolution";
 
-export const DEFAULT_MEMBERSHIP_PLAN_CODE = "standard";
+export { DEFAULT_MEMBERSHIP_PLAN_CODE } from "@/lib/billing/membership-plan-constants";
 
 export class MembershipServiceError extends Error {
   status: number;
@@ -184,18 +186,14 @@ function serializePayment(payment: {
 }
 
 export async function getDefaultMembershipPlan() {
-  const plan = await db.membershipPlan.findFirst({
-    where: {
-      code: DEFAULT_MEMBERSHIP_PLAN_CODE,
-      planStatus: "ACTIVE",
-    },
-  });
-
-  if (!plan) {
-    throw new MembershipServiceError("Aktif üyelik paketi bulunamadı.", 404);
+  try {
+    return await resolveActiveMembershipPlanForCheckout();
+  } catch (error) {
+    if (error instanceof Error && error.name === "MembershipPlanNotFoundError") {
+      throw new MembershipServiceError("Aktif üyelik paketi bulunamadı.", 404);
+    }
+    throw error;
   }
-
-  return plan;
 }
 
 export async function ensureCompanySubscription(companyId: string) {
@@ -261,29 +259,58 @@ export async function getMembershipBillingData(input: {
   // planStatus:"ACTIVE" şartı koyar ve plan arşivlenmişse throw eder.
   // Burada subscription'ın kendi planını kullanıyoruz; plan arşivlense de
   // mevcut abonelik görünmeye devam etmeli.
-  const [subscription, payments, pendingPayment, paytrCapabilities] =
-    await Promise.all([
-      ensureCompanySubscription(input.companyId),
-      db.membershipPayment.findMany({
-        where: {
-          companyId: input.companyId,
-          provider: { not: "TRIAL" },
-        },
-        orderBy: { createdAt: "desc" },
-        take: 50,
-      }),
-      findPendingMembershipPayment(input.companyId),
-      Promise.resolve(getSerializedPaytrCapabilities()),
-    ]);
+  // Firma değiştirince abonelik "kaybolmasın" diye — bkz. resolveUserCompanyEntitlement.
+  // Abonelik kullanıcıya aittir; bu firmanın kendi geçerli aboneliği yoksa
+  // kullanıcının erişebildiği başka bir firmadaki geçerli abonelik kullanılır
+  // (yeni kayıt oluşturulmaz, yalnız hangi kaydın gösterileceği çözülür).
+  const [
+    { subscription, isSharedEntitlement, canManageBilling, sourceCompanyId },
+    payments,
+    pendingPayment,
+    paytrCapabilities,
+  ] = await Promise.all([
+    resolveUserCompanyEntitlement({
+      userId: input.userId,
+      companyId: input.companyId,
+    }),
+    db.membershipPayment.findMany({
+      where: {
+        companyId: input.companyId,
+        provider: { not: "TRIAL" },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    }),
+    findPendingMembershipPayment(input.companyId),
+    Promise.resolve(getSerializedPaytrCapabilities()),
+  ]);
+
+  // Paylaşılan aboneliğin gerçek sahibi firmanın adı — yalnız UI mesajı için
+  // ("Bu paket {firma adı} üzerinden kullanılmaktadır."). Faturalama
+  // aksiyonları zaten sunucu tarafında sahibi firmanın companyId'sine göre
+  // kilitli; bu isim yalnız bilgilendirme amaçlıdır.
+  const sourceCompanyName = isSharedEntitlement
+    ? (
+        await db.company.findUnique({
+          where: { id: sourceCompanyId },
+          select: { name: true },
+        })
+      )?.name ?? null
+    : null;
 
   // Tek canonical kaynak: aboneliğin GERÇEKTEN bağlı olduğu plan relation'ı.
   // Ayrı bir "katalog planı" arama/fallback mekanizması KULLANILMAZ — bu,
   // kod eşleşmesi yanlış olduğunda (ör. "standard" vs "standart") yanlışlıkla
   // arşivlenmiş eski planı göstermeye yol açıyordu.
-  const subscriptionPlan = subscription.plan;
-  if (!subscriptionPlan) {
-    throw new MembershipServiceError("Aktif üyelik paketi bulunamadı.", 404);
-  }
+  const subscriptionPlan = await resolveBillingPlanForCompany({
+    companyId: input.companyId,
+    subscription,
+  }).catch((error) => {
+    if (error instanceof Error && error.name === "MembershipPlanNotFoundError") {
+      throw new MembershipServiceError("Aktif üyelik paketi bulunamadı.", 404);
+    }
+    throw error;
+  });
 
   // Arşiv uyarısı YALNIZ aboneliğin gerçek planının durumundan hesaplanır.
   const isOnArchivedPlan = subscriptionPlan.planStatus === "ARCHIVED";
@@ -322,6 +349,9 @@ export async function getMembershipBillingData(input: {
       remainingDays,
       isExpired: effectiveStatus === "EXPIRED",
     },
+    isSharedEntitlement,
+    canManageBilling,
+    sharedEntitlementSourceCompanyName: sourceCompanyName,
     lastPayment: lastPaid ? serializePayment(lastPaid) : null,
     pendingPayment: pendingPayment ? serializePayment(pendingPayment) : null,
     payments: payments.map(serializePayment),
@@ -598,8 +628,214 @@ export async function listMembershipPlans() {
   return plans.map(serializePlan);
 }
 
-export async function getMembershipAlertForCompany(companyId: string) {
-  const subscription = await ensureCompanySubscription(companyId);
+/**
+ * ensureCompanySubscription güvenli sarmalayıcısı — panel/sidebar gibi her
+ * sayfada render edilen okuma yollarını asla 500'e düşürmemeli. Eksik
+ * default plan (katalog/ops sorunu) veya başka beklenmeyen bir hata olursa
+ * null döner; çağıran taraf boş/nötr bir durum göstermelidir.
+ * Bkz. lib/mobile/mobile-dashboard-service.ts'deki aynı .catch(() => null)
+ * deseni — bu fonksiyon o deseni canonical hale getirir.
+ */
+async function ensureCompanySubscriptionSafe(companyId: string) {
+  try {
+    return await ensureCompanySubscription(companyId);
+  } catch (error) {
+    console.error("MEMBERSHIP_SUBSCRIPTION_RESOLVE_FAILED", {
+      companyId,
+      errorCode: error instanceof MembershipServiceError ? error.status : "UNKNOWN",
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
+/**
+ * Ürün kuralı: abonelik KULLANICIYA aittir, tek tek firmalara değil. Bir
+ * kullanıcının erişebildiği herhangi bir firmada geçerli (süresi dolmamış)
+ * ücretli/deneme aboneliği varsa, firma değiştirdiğinde bu hak korunur —
+ * yeniden satın alma istenmez. Bu fonksiyon YENİ bir CompanySubscription
+ * kaydı OLUŞTURMAZ (duplicate yok) — yalnız hangi kaydın kullanılacağını
+ * çözer (read-time resolution).
+ *
+ * Öncelik: (1) mevcut firmanın kendi geçerli aboneliği, (2) kullanıcının
+ * erişebildiği diğer firmalardan en uygun geçerli abonelik (en uzak
+ * currentPeriodEnd — en "değerli"/en son biteni), (3) hiçbiri yoksa mevcut
+ * firma için normal (yeni TRIAL) bootstrap akışına düşer.
+ */
+export async function resolveUserCompanyEntitlement(input: {
+  userId: string;
+  companyId: string;
+}) {
+  const ownSubscription = await db.companySubscription.findUnique({
+    where: { companyId: input.companyId },
+    include: { plan: true },
+  });
+
+  if (ownSubscription && getMembershipStatus(ownSubscription) !== "EXPIRED") {
+    return {
+      subscription: ownSubscription,
+      sourceCompanyId: input.companyId,
+      activeCompanyId: input.companyId,
+      isSharedEntitlement: false,
+      canManageBilling: true,
+    };
+  }
+
+  // Kullanıcının erişebildiği DİĞER firmalar arasında geçerli abonelik ara.
+  const accessibleCompanyIds = await db.companyUser.findMany({
+    where: {
+      userId: input.userId,
+      status: "ACTIVE",
+      companyId: { not: input.companyId },
+      company: { status: "ACTIVE" },
+    },
+    select: { companyId: true },
+  });
+
+  if (accessibleCompanyIds.length > 0) {
+    const otherSubscriptions = await db.companySubscription.findMany({
+      where: { companyId: { in: accessibleCompanyIds.map((c) => c.companyId) } },
+      include: { plan: true },
+    });
+
+    // Paylaşıma uygun (shareable) durumlar: ACTIVE, TRIAL, GRACE_PERIOD,
+    // CANCEL_AT_PERIOD_END (dönem sonuna kadar hâlâ kullanılabilir). EXPIRED,
+    // CANCELLED, SUSPENDED, PAST_DUE hiçbir zaman başka firmaya paylaşılmaz.
+    const SHAREABLE_STATUSES = new Set([
+      "ACTIVE",
+      "TRIAL",
+      "GRACE_PERIOD",
+      "CANCEL_AT_PERIOD_END",
+    ]);
+    const validOthers = otherSubscriptions.filter((sub) =>
+      SHAREABLE_STATUSES.has(getMembershipStatus(sub))
+    );
+
+    if (validOthers.length > 0) {
+      // En uzun kalan süreye sahip olanı tercih et (en "değerli" abonelik).
+      const best = validOthers.reduce((a, b) => {
+        const aEnd = a.currentPeriodEnd?.getTime() ?? 0;
+        const bEnd = b.currentPeriodEnd?.getTime() ?? 0;
+        return bEnd > aEnd ? b : a;
+      });
+      // Paylaşılan (borrowed) abonelik — bu firma sahibi değil. Kullanım
+      // hakkı gösterilir ama faturalama aksiyonları (iptal, plan değişimi,
+      // yenileme, ödeme yöntemi) yalnız sahibi firma üzerinden yapılabilir.
+      // canManageBilling=false burada UI'da aksiyonların gizlenmesi için
+      // kullanılır; ASIL güvenlik sınırı sunucu tarafında mutation route'ların
+      // kendi companyId'sine göre sorgu yapması (bkz. auto-renew/payment-methods
+      // route'ları) — bu sayede borrowing firma hiçbir zaman sahibi firmanın
+      // subscription/payment kaydını mutasyona uğratamaz.
+      return {
+        subscription: best,
+        sourceCompanyId: best.companyId,
+        activeCompanyId: input.companyId,
+        isSharedEntitlement: true,
+        canManageBilling: false,
+      };
+    }
+
+    // Kullanıcının başka firmalarında abonelik GEÇMİŞİ var ama hiçbiri
+    // paylaşıma uygun değil (hepsi EXPIRED/CANCELLED/SUSPENDED/PAST_DUE).
+    // Bu, kullanıcının aboneliğinin bittiği anlamına gelir — yeni firma için
+    // "temiz sayfa" TRIAL bootstrap edip bu durumu MASKELEMİYORUZ. En son
+    // biteni (en "yakın zamanda geçerli" olanı) restricted temel olarak
+    // döndürüyoruz; getMembershipStatus bunu EXPIRED gösterip paneli kısıtlar.
+    if (otherSubscriptions.length > 0) {
+      const mostRecent = otherSubscriptions.reduce((a, b) => {
+        const aEnd = a.currentPeriodEnd?.getTime() ?? 0;
+        const bEnd = b.currentPeriodEnd?.getTime() ?? 0;
+        return bEnd > aEnd ? b : a;
+      });
+      return {
+        subscription: mostRecent,
+        sourceCompanyId: mostRecent.companyId,
+        activeCompanyId: input.companyId,
+        isSharedEntitlement: false,
+        canManageBilling: false,
+      };
+    }
+  }
+
+  // Kullanıcının hiçbir firmasında (kendi dahil) ŞİMDİYE KADAR bir abonelik
+  // GEÇMİŞİ yok — bu gerçekten yeni bir kullanıcı/firma. Bu durumda normal
+  // (yeni TRIAL) bootstrap akışına düş. Bu, yeni bir CompanySubscription
+  // satırı OLUŞTURABİLİR (yalnız bu firma için, duplicate değil — zaten
+  // hiçbiri yoktu).
+  const bootstrapped = await ensureCompanySubscription(input.companyId);
+  return {
+    subscription: bootstrapped,
+    sourceCompanyId: input.companyId,
+    activeCompanyId: input.companyId,
+    isSharedEntitlement: false,
+    canManageBilling: true,
+  };
+}
+
+/**
+ * Kanonik faturalama mutasyon guard'ı. TÜM billing mutation route'ları
+ * (cancel, resume, retry, auto-renew, plan change, payment method
+ * create/update/delete/default, renewal, checkout başlatma) bu fonksiyonu
+ * çağırmalı. UI'da aksiyonların gizlenmesi TEK koruma değildir — asıl
+ * güvenlik sınırı burasıdır. Aboneliğin gerçek sahibi firma dışında hiçbir
+ * mutasyon yapılamaz.
+ */
+export class BillingOwnershipError extends MembershipServiceError {
+  constructor() {
+    super("Bu abonelik başka bir firma üzerinden kullanılmaktadır.", 403);
+  }
+}
+
+export async function assertCanManageActiveCompanyBilling(input: {
+  userId: string;
+  activeCompanyId: string;
+}) {
+  const entitlement = await resolveUserCompanyEntitlement({
+    userId: input.userId,
+    companyId: input.activeCompanyId,
+  });
+
+  if (
+    entitlement.isSharedEntitlement ||
+    entitlement.sourceCompanyId !== input.activeCompanyId
+  ) {
+    throw new BillingOwnershipError();
+  }
+
+  return entitlement;
+}
+
+async function resolveUserCompanyEntitlementSafe(input: {
+  userId?: string;
+  companyId: string;
+}) {
+  if (!input.userId) {
+    return ensureCompanySubscriptionSafe(input.companyId);
+  }
+
+  try {
+    const resolved = await resolveUserCompanyEntitlement({
+      userId: input.userId,
+      companyId: input.companyId,
+    });
+    return resolved.subscription;
+  } catch (error) {
+    console.error("MEMBERSHIP_SUBSCRIPTION_RESOLVE_FAILED", {
+      companyId: input.companyId,
+      userId: input.userId,
+      errorCode: error instanceof MembershipServiceError ? error.status : "UNKNOWN",
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
+export async function getMembershipAlertForCompany(
+  companyId: string,
+  userId?: string
+) {
+  const subscription = await resolveUserCompanyEntitlementSafe({ companyId, userId });
+  if (!subscription) return null;
   const status = getMembershipStatus(subscription);
 
   if (status === "EXPIRED") {
@@ -646,8 +882,19 @@ const EFFECTIVE_MEMBERSHIP_STATUS_LABELS: Record<
   SUSPENDED: "Askıda",
 };
 
-export async function getSidebarMembershipSummary(companyId: string) {
-  const subscription = await ensureCompanySubscription(companyId);
+export async function getSidebarMembershipSummary(companyId: string, userId?: string) {
+  const subscription = await resolveUserCompanyEntitlementSafe({ companyId, userId });
+  if (!subscription) {
+    return {
+      status: "UNKNOWN" as const,
+      statusLabel: "Kurulum bekleniyor",
+      remainingDays: 0,
+      isExpired: false,
+      periodEndLabel: null,
+      policyNote:
+        "Üyelik paketi bilgisi şu anda alınamadı. Destek ekibimizle iletişime geçin.",
+    };
+  }
   const status = getMembershipStatus(subscription);
   const remainingDays = getRemainingMembershipDays(subscription.currentPeriodEnd);
   const periodEnd = subscription.currentPeriodEnd;

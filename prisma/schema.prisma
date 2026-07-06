@@ -760,6 +760,8 @@ model Company {
   adminNotes                     AdminCompanyNote[]
   onboarding                     CompanyOnboarding?
   invoiceCollectionIdempotencies InvoiceCollectionIdempotency[]
+  employeePaymentIdempotencies   EmployeePaymentIdempotency[]
+  accountTransferIdempotencies   AccountTransferIdempotency[]
 
   referringPartnerId String?
   referringPartner   PartnerProfile? @relation("ReferredCompanies", fields: [referringPartnerId], references: [id], onDelete: SetNull)
@@ -1784,10 +1786,33 @@ model AccountTransaction {
   employeePayments    EmployeePayment[]    @relation("EmployeePaymentTransaction")
   supplierLedgerEntry SupplierLedgerEntry?
 
+  // Hesaplar arası transferin iki bacağını (çıkış+giriş) ilişkilendirir.
+  transferGroupId String?
+
   createdAt DateTime @default(now())
 
   @@index([invoiceId])
   @@index([supplierId])
+  @@index([transferGroupId])
+}
+
+// Kasa/banka transferi için DB-backed idempotency — in-memory değil (process
+// restart / çoklu instance güvenli). Aynı desen: EmployeePaymentIdempotency,
+// InvoiceCollectionIdempotency.
+model AccountTransferIdempotency {
+  id              String    @id @default(cuid())
+  companyId       String
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  idempotencyKey  String
+  payloadHash     String
+  status          String    @default("PROCESSING")
+  transferGroupId String?
+  result          Json?
+  createdAt       DateTime  @default(now())
+  completedAt     DateTime?
+
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, status])
 }
 
 model StockMovement {
@@ -2943,6 +2968,22 @@ model PasswordResetToken {
   @@index([userId, expiresAt])
 }
 
+// Login / forgot-password brute-force koruması — DB-backed, process restart
+// ve çoklu instance'a karşı güvenli (in-memory Map GÜVENLİK KAYNAĞI olamaz;
+// bkz. EmployeePaymentIdempotency ile aynı ders). scope: "login" | "forgot-password".
+model AuthRateLimit {
+  id             String   @id @default(cuid())
+  scope          String
+  key            String
+  attemptCount   Int      @default(0)
+  windowStartAt  DateTime @default(now())
+  lockedUntil    DateTime?
+  lastAttemptAt  DateTime @default(now())
+
+  @@unique([scope, key])
+  @@index([scope, lockedUntil])
+}
+
 enum AdminSubscriptionNoteCategory {
   GENERAL
   BILLING
@@ -3869,5 +3910,33 @@ model InvoiceCollectionIdempotency {
   completedAt          DateTime?
 
   @@unique([companyId, idempotencyKey])
+  @@index([companyId, status])
+}
+
+enum EmployeePaymentIdempotencyStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// Kalıcı (process-restart / multi-instance güvenli) çalışan ödemesi idempotency
+// kaydı — InvoiceCollectionIdempotency ile aynı desen. In-memory Map yalnız
+// performans amaçlı olabilir, güvenlik kaynağı bu tablo.
+model EmployeePaymentIdempotency {
+  id             String                           @id @default(cuid())
+  companyId      String
+  company        Company                          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employeeId     String
+  idempotencyKey String
+  payloadHash    String
+  status         EmployeePaymentIdempotencyStatus @default(PROCESSING)
+  paymentId      String?
+  userId         String?
+  result         Json?
+  createdAt      DateTime                         @default(now())
+  completedAt    DateTime?
+
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, employeeId])
   @@index([companyId, status])
 }

@@ -23,6 +23,11 @@ import { db } from "@/lib/prisma";
 const TEST_PREFIX = "__test_job_17_1_";
 const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
+// TEST_DATABASE_URL yoksa gerçek DB testleri KONTROLLÜ skip edilir.
+const dbTestOptions = process.env.TEST_DATABASE_URL
+  ? {}
+  : { skip: "TEST_DATABASE_URL tanımlı değil — gerçek DB entegrasyon testi atlandı." };
+
 function readSrc(rel: string) {
   return readFileSync(join(webRoot, rel), "utf8");
 }
@@ -78,7 +83,7 @@ describe("parameterized advisory lock", () => {
   });
 });
 
-describe("DB claim davranışı", () => {
+describe("DB claim davranışı", dbTestOptions, () => {
   after(async () => {
     await cleanupTestRuns();
   });

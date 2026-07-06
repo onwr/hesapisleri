@@ -15,6 +15,7 @@ import { SecuritySection } from "@/components/marketing/security-section";
 import { MobileExperienceSection } from "@/components/marketing/mobile-experience-section";
 import { PricingSection } from "@/components/marketing/pricing-section";
 import { FaqSection } from "@/components/marketing/faq-section";
+import { ContactSection } from "@/components/marketing/contact-section";
 import { FinalCtaSection } from "@/components/marketing/final-cta-section";
 import { MarketingFooter } from "@/components/marketing/marketing-footer";
 
@@ -182,6 +183,7 @@ export default async function HomePage() {
         <MobileExperienceSection />
         <PricingSection plans={plans} registrationEnabled={settings.registrationEnabled} />
         <FaqSection />
+        <ContactSection supportEmail={settings.supportEmail} />
         <FinalCtaSection
           registrationEnabled={settings.registrationEnabled}
           trialDays={settings.trialDays}

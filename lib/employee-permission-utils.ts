@@ -44,6 +44,21 @@ export function getEmployeeModulePermissions(
   };
 }
 
+/**
+ * Maaş görünürlüğü — bu şemada ayrı bir viewSalary/canViewSalary alanı yok
+ * (bkz. EmployeeModulePermissions). Web davranışından kesin çıkarılan policy:
+ * yalnız çalışan kayıtlarını YÖNETEBİLEN roller (OWNER/ADMIN — canManageRecords)
+ * maaş görebilir. Salt-okunur erişimi olan roller (ACCOUNTANT — isReadOnlyViewer)
+ * ve erişimi olmayan roller (STAFF/POS_STAFF) maaş alanlarını GÖREMEZ.
+ * Tek yer: liste ve detay DTO'su bu fonksiyonu kullanır.
+ */
+export function canViewEmployeeSalary(
+  _role: PermissionRole,
+  permissions: Pick<EmployeeModulePermissions, "canManageRecords">
+): boolean {
+  return permissions.canManageRecords;
+}
+
 export function hasEmployeeApiPermission(
   role: PermissionRole,
   permission: EmployeeApiPermission,

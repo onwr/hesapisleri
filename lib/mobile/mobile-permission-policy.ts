@@ -5,6 +5,9 @@ export type MobileModule =
   | "customers"
   | "invoices"
   | "expenses"
+  | "orders"
+  | "suppliers"
+  | "employees"
   | "reports"
   | "settings"
   | "company";
@@ -19,6 +22,9 @@ export const ROLE_PERMISSIONS: Record<string, Record<MobileModule, MobileAction[
     customers: ["read", "write", "delete"],
     invoices: ["read", "write", "delete"],
     expenses: ["read", "write", "delete"],
+    orders: ["read", "write", "delete"],
+    suppliers: ["read", "write"],
+    employees: ["read", "write"],
     reports: ["read"],
     settings: ["read", "write", "admin"],
     company: ["read", "write", "admin"],
@@ -30,6 +36,9 @@ export const ROLE_PERMISSIONS: Record<string, Record<MobileModule, MobileAction[
     customers: ["read", "write", "delete"],
     invoices: ["read", "write", "delete"],
     expenses: ["read", "write", "delete"],
+    orders: ["read", "write", "delete"],
+    suppliers: ["read", "write"],
+    employees: ["read", "write"],
     reports: ["read"],
     settings: ["read", "write"],
     company: ["read"],
@@ -41,6 +50,9 @@ export const ROLE_PERMISSIONS: Record<string, Record<MobileModule, MobileAction[
     customers: ["read"],
     invoices: ["read", "write"],
     expenses: ["read", "write"],
+    orders: [],
+    suppliers: ["read"],
+    employees: ["read"],
     reports: ["read"],
     settings: [],
     company: ["read"],
@@ -52,6 +64,9 @@ export const ROLE_PERMISSIONS: Record<string, Record<MobileModule, MobileAction[
     customers: ["read", "write"],
     invoices: ["read"],
     expenses: [],
+    orders: ["read", "write"],
+    suppliers: ["read"],
+    employees: [],
     reports: [],
     settings: [],
     company: ["read"],
@@ -63,6 +78,9 @@ export const ROLE_PERMISSIONS: Record<string, Record<MobileModule, MobileAction[
     customers: ["read"],
     invoices: [],
     expenses: [],
+    orders: [],
+    suppliers: [],
+    employees: [],
     reports: [],
     settings: [],
     company: [],

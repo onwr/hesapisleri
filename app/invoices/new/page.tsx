@@ -26,11 +26,14 @@ import {
 import { AppLoadingScreen } from "@/components/layout/app-loading-screen";
 import {
   calculateInvoiceTotals,
+  canAddProductToInvoice,
   createEmptyItem,
   formatMoney,
+  getCatalogStockLabel,
   getMaxQuantityForItem,
   getStockClass,
   getUsedProductQuantity,
+  isServiceCatalogProduct,
   previewInvoiceNo,
   type CatalogProduct,
   type InvoiceLineItem,
@@ -378,6 +381,9 @@ export default function NewInvoicePage() {
 
       const product = products.find((entry) => entry.id === item.productId);
       if (!product) continue;
+
+      // Hizmet ürünleri stok takibi yapmaz — miktar kontrolü uygulanmaz.
+      if (isServiceCatalogProduct(product)) continue;
 
       const totalQty = getUsedProductQuantity(validItems, item.productId);
 
@@ -879,19 +885,21 @@ export default function NewInvoicePage() {
               <div className="grid gap-3 p-4 md:grid-cols-2 2xl:grid-cols-3">
                 {filteredProducts.map((product) => {
                   const usedQty = usedQtyByProduct.get(product.id) ?? 0;
+                  const isService = isServiceCatalogProduct(product);
                   const remaining = Math.max(0, product.stock - usedQty);
-                  const isOutOfStock = product.stock <= 0;
-                  const isLimitReached = remaining <= 0;
+                  const canAdd = canAddProductToInvoice(product, usedQty);
+                  const isOutOfStock = !isService && product.stock <= 0;
+                  const isLimitReached = !isService && remaining <= 0;
 
                   return (
                     <button
                       key={product.id}
                       type="button"
                       onClick={() => addProductToItems(product)}
-                      disabled={isOutOfStock || isLimitReached}
+                      disabled={!canAdd}
                       className={[
                         "group rounded-2xl border p-4 text-left transition",
-                        isOutOfStock || isLimitReached
+                        !canAdd
                           ? "cursor-not-allowed border-slate-100 bg-slate-50 opacity-60"
                           : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-blue-100 hover:bg-blue-50/30 hover:shadow-[0_14px_30px_rgba(37,99,235,0.10)]",
                       ].join(" ")}
@@ -905,12 +913,12 @@ export default function NewInvoicePage() {
                           <span
                             className={[
                               "inline-flex rounded-md px-2 py-1 text-[10px] font-black",
-                              getStockClass(product.stock),
+                              isService ? "bg-blue-50 text-blue-600" : getStockClass(product.stock),
                             ].join(" ")}
                           >
-                            Stok: {product.stock}
+                            {isService ? getCatalogStockLabel(product) : `Stok: ${product.stock}`}
                           </span>
-                          {usedQty > 0 ? (
+                          {!isService && usedQty > 0 ? (
                             <p className="mt-1 text-[10px] font-bold text-slate-500">
                               Kalan: {remaining}
                             </p>

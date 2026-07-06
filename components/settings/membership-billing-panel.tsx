@@ -76,6 +76,9 @@ type BillingData = {
     currency: string;
   };
   isOnArchivedPlan?: boolean;
+  isSharedEntitlement?: boolean;
+  canManageBilling?: boolean;
+  sharedEntitlementSourceCompanyName?: string | null;
   scheduledPlanChange?: { targetPlanName: string; effectiveAt: string } | null;
   bankTransferInfo: { note: string };
   paytr: {
@@ -569,6 +572,14 @@ export function MembershipBillingPanel({
       {data.subscription.isExpired ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-semibold text-red-800">
           Üyelik süreniz doldu. Devam etmek için paket seçip ödeme yapın.
+        </div>
+      ) : null}
+
+      {data.isSharedEntitlement ? (
+        <div className="rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-[12px] font-semibold text-violet-800">
+          Bu paket {data.sharedEntitlementSourceCompanyName ?? "başka bir firma"}{" "}
+          üzerinden kullanılmaktadır. Paket değişikliği, iptal, yenileme ve ödeme
+          yöntemi işlemleri yalnız aboneliğin sahibi firma üzerinden yapılabilir.
         </div>
       ) : null}
 

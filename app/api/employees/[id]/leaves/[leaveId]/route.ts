@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   approveEmployeeLeave,
+  cancelEmployeeLeave,
   EmployeeServiceError,
   rejectEmployeeLeave,
 } from "@/lib/employee-service";
@@ -34,12 +35,12 @@ export async function PATCH(req: Request, context: RouteContext) {
         leaveId,
       });
     } else if (body.action === "cancel") {
-      const { db } = await import("@/lib/prisma");
-      const updated = await db.employeeLeave.update({
-        where: { id: leaveId, employeeId: id, companyId: auth.companyId },
-        data: { status: "CANCELLED" },
+      leave = await cancelEmployeeLeave({
+        companyId: auth.companyId,
+        actorUserId: auth.userId,
+        employeeId: id,
+        leaveId,
       });
-      leave = updated;
     } else {
       return NextResponse.json(
         { success: false, message: "Geçersiz işlem." },

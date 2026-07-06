@@ -552,6 +552,7 @@ describe("mobile finance DB", { skip: SKIP_REASON }, () => {
             fromAccountId: accountAId,
             toAccountId: accountAId,
             amount: 10,
+            idempotencyKey: randomUUID(),
           },
         }),
       (e: unknown) =>
@@ -811,7 +812,7 @@ describe("mobile finance DB", { skip: SKIP_REASON }, () => {
         userId: ownerAId,
         role: "OWNER",
         isOwner: true,
-        body: { fromAccountId: accountAId, toAccountId: accountTo.id, amount: 250 },
+        body: { fromAccountId: accountAId, toAccountId: accountTo.id, amount: 250, idempotencyKey: randomUUID() },
       });
       const from = await db.account.findUnique({ where: { id: accountAId } });
       const to = await db.account.findUnique({ where: { id: accountTo.id } });
@@ -849,7 +850,7 @@ describe("mobile finance DB", { skip: SKIP_REASON }, () => {
             userId: ownerAId,
             role: "OWNER",
             isOwner: true,
-            body: { fromAccountId: accountAId, toAccountId: accountTo.id, amount: 50 },
+            body: { fromAccountId: accountAId, toAccountId: accountTo.id, amount: 50, idempotencyKey: randomUUID() },
           }),
         (e: unknown) => e instanceof MobileFinanceError && e.code === "INSUFFICIENT_BALANCE"
       );
@@ -897,11 +898,11 @@ describe("mobile finance DB", { skip: SKIP_REASON }, () => {
       const results = await Promise.allSettled([
         transferMobileFinance({
           ...base,
-          body: { fromAccountId: fromAccount.id, toAccountId: toAccount.id, amount: 350 },
+          body: { fromAccountId: fromAccount.id, toAccountId: toAccount.id, amount: 350, idempotencyKey: randomUUID() },
         }),
         transferMobileFinance({
           ...base,
-          body: { fromAccountId: fromAccount.id, toAccountId: toAccount.id, amount: 350 },
+          body: { fromAccountId: fromAccount.id, toAccountId: toAccount.id, amount: 350, idempotencyKey: randomUUID() },
         }),
       ]);
       const fulfilled = results.filter((r) => r.status === "fulfilled");
@@ -969,11 +970,11 @@ describe("mobile finance DB", { skip: SKIP_REASON }, () => {
         const results = await Promise.allSettled([
           transferMobileFinance({
             ...base,
-            body: { fromAccountId: fromAccount.id, toAccountId: toAccount.id, amount: 350 },
+            body: { fromAccountId: fromAccount.id, toAccountId: toAccount.id, amount: 350, idempotencyKey: randomUUID() },
           }),
           transferMobileFinance({
             ...base,
-            body: { fromAccountId: fromAccount.id, toAccountId: toAccount.id, amount: 350 },
+            body: { fromAccountId: fromAccount.id, toAccountId: toAccount.id, amount: 350, idempotencyKey: randomUUID() },
           }),
         ]);
 

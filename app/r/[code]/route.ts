@@ -7,14 +7,34 @@ import {
 import { ensurePartnerSettings } from "@/lib/partner-conversion-service";
 import { recordReferralClick } from "@/lib/partner-service";
 import { sanitizeReferralCode } from "@/lib/partner-utils";
+import { getAuthToken, verifyToken } from "@/lib/auth";
+import { getTrustedClientIp } from "@/lib/payments/trusted-client-ip";
 
 type RouteContext = {
   params: Promise<{ code: string }>;
 };
 
-function buildSafeRegisterRedirect(origin: string, code?: string | null) {
-  const redirectUrl = new URL("/register", origin);
+/**
+ * Referans linkine tıklayan kullanıcı oturum açıksa doğrudan /register'a
+ * gönderilmez (zaten kayıtlı kullanıcı için anlamsız/kafa karıştırıcı) —
+ * paket seçimi/checkout'un yapıldığı /settings/billing'e ?ref= korunarak
+ * yönlendirilir. Oturum yoksa kayıt sayfasına gider.
+ */
+async function resolveReferralDestination(origin: string, code?: string | null) {
   const sanitized = code ? sanitizeReferralCode(code) : null;
+
+  let isAuthenticated = false;
+  try {
+    const token = await getAuthToken();
+    isAuthenticated = Boolean(token && verifyToken(token));
+  } catch {
+    isAuthenticated = false;
+  }
+
+  const redirectUrl = new URL(
+    isAuthenticated ? "/settings/billing" : "/register",
+    origin
+  );
 
   if (sanitized) {
     redirectUrl.searchParams.set("ref", sanitized);
@@ -29,7 +49,7 @@ export async function GET(req: Request, context: RouteContext) {
   try {
     const { code } = await context.params;
     const sanitizedCode = sanitizeReferralCode(code);
-    const redirectUrl = buildSafeRegisterRedirect(url.origin, sanitizedCode);
+    const redirectUrl = await resolveReferralDestination(url.origin, sanitizedCode);
     const response = NextResponse.redirect(redirectUrl);
 
     if (!sanitizedCode) {
@@ -39,9 +59,7 @@ export async function GET(req: Request, context: RouteContext) {
     const settings = await ensurePartnerSettings();
     const click = await recordReferralClick({
       referralCode: sanitizedCode,
-      ip:
-        req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-        req.headers.get("x-real-ip"),
+      ip: getTrustedClientIp(req),
       userAgent: req.headers.get("user-agent"),
       referrer: req.headers.get("referer"),
       landingUrl: url.toString(),
@@ -70,6 +88,8 @@ export async function GET(req: Request, context: RouteContext) {
     return response;
   } catch (error) {
     console.error("PARTNER_REFERRAL_REDIRECT_ERROR", error);
-    return NextResponse.redirect(buildSafeRegisterRedirect(url.origin));
+    // Hata durumunda da açık internal detay sızdırılmaz — güvenli, kod'suz
+    // fallback (register sayfası).
+    return NextResponse.redirect(new URL("/register", url.origin));
   }
 }

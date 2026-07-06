@@ -31,7 +31,11 @@ describe("GET /api/health/db", () => {
     process.env.CRON_SECRET = oldCron;
   });
 
-  it("doğru secret ile SELECT 1 sonucu döner", async () => {
+  it("doğru secret ile SELECT 1 sonucu döner", async (t) => {
+    if (!process.env.TEST_DATABASE_URL) {
+      t.skip("TEST_DATABASE_URL tanımlı değil — gerçek DB entegrasyon testi atlandı.");
+      return;
+    }
     const oldCron = process.env.CRON_SECRET;
     process.env.CRON_SECRET = "health-test-secret";
     delete process.env.DB_HEALTH_SECRET;
@@ -54,7 +58,11 @@ describe("GET /api/health/db", () => {
     process.env.CRON_SECRET = oldCron;
   });
 
-  it("response connection string içermez", async () => {
+  it("response connection string içermez", async (t) => {
+    if (!process.env.TEST_DATABASE_URL) {
+      t.skip("TEST_DATABASE_URL tanımlı değil — gerçek DB entegrasyon testi atlandı.");
+      return;
+    }
     const oldCron = process.env.CRON_SECRET;
     process.env.CRON_SECRET = "health-test-secret";
 

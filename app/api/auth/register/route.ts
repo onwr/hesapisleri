@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { db } from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth";
 import {
@@ -21,24 +20,8 @@ import {
   MARKETING_CONSENT_VERSION,
 } from "@/lib/legal/kvkk-consent";
 import { getTrustedClientIp } from "@/lib/payments/trusted-client-ip";
-
-const registerSchema = z.object({
-  name: z.string().min(2, "Ad soyad en az 2 karakter olmalıdır."),
-  email: z.string().email("Geçerli bir e-posta girin."),
-  phone: z.string().optional(),
-  password: z.string().min(6, "Şifre en az 6 karakter olmalıdır."),
-  referralCode: z.string().optional(),
-  kvkkInformed: z.literal(true, {
-    message: "KVKK aydınlatma metnini okuduğunuzu ve bilgilendirildiğinizi onaylamalısınız.",
-  }),
-  marketingConsent: z.boolean().optional(),
-
-  wantsCompanyInfo: z.boolean().optional(),
-
-  companyName: z.string().optional(),
-  taxNo: z.string().optional(),
-  taxOffice: z.string().optional(),
-});
+import { registerSchema, REGISTER_FIELD_ERROR_MESSAGES } from "@/lib/auth/register-schema";
+import { isPrismaUniqueConstraintError } from "@/lib/prisma-transaction-utils";
 
 export async function POST(req: Request) {
   try {
@@ -77,7 +60,8 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           success: false,
-          message: "Bu e-posta adresiyle kayıtlı bir kullanıcı zaten var.",
+          message: REGISTER_FIELD_ERROR_MESSAGES.emailTaken,
+          errors: { email: [REGISTER_FIELD_ERROR_MESSAGES.emailTaken] },
         },
         { status: 409 }
       );
@@ -201,7 +185,24 @@ export async function POST(req: Request) {
         { status: error.status }
       );
     }
-    console.error("REGISTER_ERROR", error);
+
+    // Eşzamanlı iki register isteği aynı e-posta ile yarışırsa (double
+    // submit / iki sekme), DB unique constraint bunu yakalar — genel 500
+    // yerine aynı açık duplicate mesajını döner.
+    if (isPrismaUniqueConstraintError(error, "email")) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: REGISTER_FIELD_ERROR_MESSAGES.emailTaken,
+          errors: { email: [REGISTER_FIELD_ERROR_MESSAGES.emailTaken] },
+        },
+        { status: 409 }
+      );
+    }
+
+    console.error("REGISTER_ERROR", {
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
 
     return NextResponse.json(
       {

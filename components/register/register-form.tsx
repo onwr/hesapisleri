@@ -34,6 +34,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { registerSchema } from "@/lib/auth/register-schema";
 
 const TRANSITION_MIN_MS = 1000;
 
@@ -75,10 +76,12 @@ export function RegisterForm({
   const [kvkkInformed, setKvkkInformed] = useState(false);
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [kvkkModalOpen, setKvkkModalOpen] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof FormState, string>>>({});
 
   function updateForm(key: keyof FormState, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
     setError("");
+    setFieldErrors((prev) => ({ ...prev, [key]: undefined }));
   }
 
   function openKvkkModal() {
@@ -94,33 +97,44 @@ export function RegisterForm({
     setKvkkInformed(false);
   }
 
-  function validate(): string | null {
-    if (form.name.trim().length < 2) {
-      return "Ad soyad en az 2 karakter olmalıdır.";
+  function validate(): boolean {
+    const parsed = registerSchema.safeParse({
+      name: form.name,
+      email: form.email,
+      password: form.password,
+      wantsCompanyInfo: true,
+      companyName: form.companyName,
+      kvkkInformed,
+      marketingConsent,
+    });
+
+    if (parsed.success) {
+      setFieldErrors({});
+      setError("");
+      return true;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-      return "Geçerli bir e-posta girin.";
+
+    const flattened = parsed.error.flatten().fieldErrors;
+    setFieldErrors({
+      name: flattened.name?.[0],
+      email: flattened.email?.[0],
+      password: flattened.password?.[0],
+      companyName: flattened.companyName?.[0],
+    });
+
+    if (flattened.kvkkInformed?.[0]) {
+      setError(flattened.kvkkInformed[0]);
+    } else {
+      setError("Bilgileri kontrol edin.");
     }
-    if (form.password.length < 6) {
-      return "Şifre en az 6 karakter olmalıdır.";
-    }
-    if (form.companyName.trim().length < 2) {
-      return "Firma adı en az 2 karakter olmalıdır.";
-    }
-    if (!kvkkInformed) {
-      return "Devam etmek için aydınlatma metnini okuyup bilgilendirildiğinizi onaylamalısınız.";
-    }
-    return null;
+    return false;
   }
 
   async function handleRegister(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    const validationError = validate();
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
+    if (loading || transitioning) return; // double submit engeli
+    if (!validate()) return;
 
     setLoading(true);
     setError("");
@@ -150,6 +164,14 @@ export function RegisterForm({
       if (!res.ok || !data.success) {
         setTransitioning(false);
         setError(data.message || "Kayıt oluşturulamadı.");
+        if (data.errors) {
+          setFieldErrors({
+            name: data.errors.name?.[0],
+            email: data.errors.email?.[0],
+            password: data.errors.password?.[0],
+            companyName: data.errors.companyName?.[0],
+          });
+        }
         setLoading(false);
         return;
       }
@@ -227,9 +249,13 @@ export function RegisterForm({
                 className={authInputWithIconClassName}
                 placeholder="Ahmet Yılmaz"
                 disabled={loading || transitioning}
+                aria-invalid={Boolean(fieldErrors.name)}
                 required
               />
             </div>
+            {fieldErrors.name ? (
+              <p className="text-xs font-semibold text-red-600">{fieldErrors.name}</p>
+            ) : null}
           </div>
 
           <div className="space-y-2">
@@ -246,9 +272,13 @@ export function RegisterForm({
                 className={authInputWithIconClassName}
                 placeholder="ornek@mail.com"
                 disabled={loading || transitioning}
+                aria-invalid={Boolean(fieldErrors.email)}
                 required
               />
             </div>
+            {fieldErrors.email ? (
+              <p className="text-xs font-semibold text-red-600">{fieldErrors.email}</p>
+            ) : null}
           </div>
 
           <div className="space-y-2">
@@ -266,8 +296,9 @@ export function RegisterForm({
                 value={form.password}
                 onChange={(e) => updateForm("password", e.target.value)}
                 className={authInputWithToggleClassName}
-                placeholder="En az 6 karakter"
+                placeholder="En az 8 karakter"
                 disabled={loading || transitioning}
+                aria-invalid={Boolean(fieldErrors.password)}
                 required
               />
               <button
@@ -283,6 +314,9 @@ export function RegisterForm({
                 )}
               </button>
             </div>
+            {fieldErrors.password ? (
+              <p className="text-xs font-semibold text-red-600">{fieldErrors.password}</p>
+            ) : null}
           </div>
 
           <div className="space-y-2">
@@ -301,9 +335,13 @@ export function RegisterForm({
                 className={authInputWithIconClassName}
                 placeholder="Örnek Ticaret Ltd. Şti."
                 disabled={loading || transitioning}
+                aria-invalid={Boolean(fieldErrors.companyName)}
                 required
               />
             </div>
+            {fieldErrors.companyName ? (
+              <p className="text-xs font-semibold text-red-600">{fieldErrors.companyName}</p>
+            ) : null}
           </div>
 
           <div className="space-y-3">

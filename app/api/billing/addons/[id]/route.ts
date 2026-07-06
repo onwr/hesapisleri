@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { getAppSession } from "@/lib/app-session";
 import { canManageMembership } from "@/lib/permission-utils";
-import { MembershipServiceError } from "@/lib/membership-service";
+import {
+  MembershipServiceError,
+  assertCanManageActiveCompanyBilling,
+} from "@/lib/membership-service";
 import { cancelAddOnSubscription } from "@/lib/billing/addons/addon-purchase-service";
 import { db } from "@/lib/prisma";
 
@@ -16,6 +19,11 @@ export async function PATCH(req: Request, context: RouteContext) {
         { status: 403 }
       );
     }
+
+    await assertCanManageActiveCompanyBilling({
+      userId: session.user.id,
+      activeCompanyId: session.company.id,
+    });
 
     const { id } = await context.params;
     const body = await req.json();
@@ -38,6 +46,12 @@ export async function PATCH(req: Request, context: RouteContext) {
       data: updated,
     });
   } catch (error) {
+    if (error instanceof MembershipServiceError) {
+      return NextResponse.json(
+        { success: false, message: error.message },
+        { status: error.status }
+      );
+    }
     console.error("BILLING_ADDON_AUTORENEW_ERROR", error);
     return NextResponse.json(
       { success: false, message: "Güncellenemedi." },
@@ -55,6 +69,11 @@ export async function POST(req: Request, context: RouteContext) {
         { status: 403 }
       );
     }
+
+    await assertCanManageActiveCompanyBilling({
+      userId: session.user.id,
+      activeCompanyId: session.company.id,
+    });
 
     const { id } = await context.params;
     const body = await req.json();

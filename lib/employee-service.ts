@@ -1294,6 +1294,9 @@ export async function createEmployeePayment(input: {
   relatedExpenseId?: string;
   relatedAccountId?: string;
   payImmediately?: boolean;
+  /** Verilirse dıştan yönetilen bir transaction içinde çalışır (ör. mobil
+   * idempotency claim ile aynı transaction) — kendi $transaction'ını açmaz. */
+  tx?: Prisma.TransactionClient;
 }) {
   const validation = validateEmployeePaymentCreateInput({
     type: input.type,
@@ -1321,7 +1324,7 @@ export async function createEmployeePayment(input: {
   if (payImmediately && validation.accountId) {
     const paidAt = input.dueDate ?? new Date();
 
-    const result = await db.$transaction(async (tx) => {
+    const runner = async (tx: Prisma.TransactionClient) => {
       await assertFinancePaymentAccount(
         tx,
         input.companyId,
@@ -1361,7 +1364,9 @@ export async function createEmployeePayment(input: {
       });
 
       return paid.payment;
-    });
+    };
+
+    const result = input.tx ? await runner(input.tx) : await db.$transaction(runner);
 
     return serializePayment(result);
   }
@@ -1946,6 +1951,114 @@ export async function rejectEmployeeLeave(input: {
     actionUrl: buildEmployeeActionUrl(input.employeeId),
     title: "İzin reddedildi",
     message: `${formatEmployeeDisplayName(employee)} izin talebi reddedildi.`,
+  });
+
+  return serializeLeave(updated);
+}
+
+/**
+ * Canonical izin iptal servisi — hem web hem mobil bu fonksiyonu kullanır.
+ * Web'in eski route-inline `db.employeeLeave.update` ve mobilin kopya iptal
+ * mantığı buraya taşındı; artık route katmanında doğrudan EmployeeLeave
+ * update YOK.
+ */
+export async function cancelEmployeeLeave(input: {
+  companyId: string;
+  actorUserId: string;
+  employeeId: string;
+  leaveId: string;
+}) {
+  const leave = await db.employeeLeave.findFirst({
+    where: {
+      id: input.leaveId,
+      employeeId: input.employeeId,
+      companyId: input.companyId,
+    },
+  });
+
+  if (!leave) {
+    throw new EmployeeServiceError("İzin kaydı bulunamadı.", 404);
+  }
+
+  // İdempotent tekrar iptal — zaten iptal edilmiş bir kaydı ikinci kez iptal
+  // etmek hata değil, mevcut durumu aynen döner (side-effect tekrarlanmaz).
+  if (leave.status === "CANCELLED") {
+    return serializeLeave(leave);
+  }
+
+  if (leave.status !== "PENDING" && leave.status !== "APPROVED") {
+    throw new EmployeeServiceError("Bu izin talebi iptal edilemez.", 409);
+  }
+
+  // Geçmişte tamamlanmış (bitiş tarihi geçmiş) onaylı bir izin artık iptal
+  // edilemez — geriye dönük iptal iş kuralına aykırıdır.
+  if (leave.status === "APPROVED" && leave.endAt.getTime() < Date.now()) {
+    throw new EmployeeServiceError("Geçmişte tamamlanmış izin iptal edilemez.", 409);
+  }
+
+  const employee = await getEmployeeInCompany(input.employeeId, input.companyId);
+  const wasApproved = leave.status === "APPROVED";
+
+  const updated = await db.$transaction(async (tx) => {
+    const result = await tx.employeeLeave.update({
+      where: { id: leave.id },
+      data: { status: "CANCELLED" },
+    });
+
+    // Onaylı izin iptal edilince ve çalışan hâlâ ON_LEAVE görünüyorsa aktif
+    // duruma geri al (başka aktif/onaylı izin yoksa).
+    if (wasApproved) {
+      const stillOnLeave = await tx.employeeLeave.findFirst({
+        where: {
+          employeeId: input.employeeId,
+          companyId: input.companyId,
+          status: "APPROVED",
+          NOT: { id: leave.id },
+          startAt: { lte: new Date() },
+          endAt: { gte: new Date() },
+        },
+      });
+      if (!stillOnLeave) {
+        await tx.employee.updateMany({
+          where: { id: input.employeeId, companyId: input.companyId, status: "ON_LEAVE" },
+          data: { status: "ACTIVE" },
+        });
+      }
+    }
+
+    // Bu izne bağlı bir CalendarEvent varsa (relatedType/relatedId ile
+    // ilişkilendirilmiş olabilir) temizle. Bugün hiçbir yerde bu izin türü
+    // için CalendarEvent oluşturulmuyor (bkz. approveEmployeeLeave TODO),
+    // ancak ileride oluşturulursa iptal akışı otomatik temizlik yapsın diye
+    // bu adım baştan eklendi — yeni bir takvim mantığı icat edilmedi, yalnız
+    // mevcut CalendarEvent modelinin polimorfik related alanları kullanıldı.
+    await tx.calendarEvent.deleteMany({
+      where: {
+        companyId: input.companyId,
+        relatedType: "EMPLOYEE_LEAVE",
+        relatedId: leave.id,
+      },
+    });
+
+    await logEmployeeActivity(tx, {
+      companyId: input.companyId,
+      userId: input.actorUserId,
+      action: "LEAVE_CANCEL",
+      message: `${formatEmployeeDisplayName(employee)} izin talebi iptal edildi.`,
+    });
+
+    return result;
+  });
+
+  await createNotification({
+    companyId: input.companyId,
+    category: "TEAM",
+    module: "employees",
+    entityType: "employee_leave",
+    entityId: leave.id,
+    actionUrl: buildEmployeeActionUrl(input.employeeId),
+    title: "İzin iptal edildi",
+    message: `${formatEmployeeDisplayName(employee)} izin talebi iptal edildi.`,
   });
 
   return serializeLeave(updated);

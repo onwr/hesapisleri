@@ -118,6 +118,13 @@ export async function createCompanyForUser(
     },
   });
 
+  // Tek canonical plan-kodu sabiti (lib/membership-service.ts) reuse edildi —
+  // ayrı bir hard-coded plan kodu literal'i burada TEKRAR yazılmadı.
+  // Sorgu transaction (tx) scope'unda kalır — testlerde mock'lanan
+  // tx ile uyumlu ve tüm bootstrap tek transaction'da tutarlı kalır. Plan
+  // katalogda yoksa (ops/seed eksikliği) kayıt akışı YİNE DE tamamlanır;
+  // subscription eksik kalır ama panel artık bunu güvenle tolere ediyor
+  // (bkz. ensureCompanySubscriptionSafe / getSidebarMembershipSummary).
   const defaultPlan = await tx.membershipPlan.findFirst({
     where: { code: DEFAULT_MEMBERSHIP_PLAN_CODE, planStatus: "ACTIVE" },
   });
@@ -133,6 +140,8 @@ export async function createCompanyForUser(
         trialEndsAt: trialEnd,
       },
     });
+  } else {
+    console.error("COMPANY_BOOTSTRAP_DEFAULT_PLAN_MISSING", { companyId: company.id });
   }
 
   await tx.warehouse.create({

@@ -8,11 +8,29 @@ import {
   getPostAuthRedirectPath,
   resolveEffectiveRole,
 } from "@/lib/permission-utils";
+import { getTrustedClientIp } from "@/lib/payments/trusted-client-ip";
+import {
+  checkAuthRateLimit,
+  clearAuthRateLimit,
+  registerAuthFailure,
+} from "@/lib/auth/auth-rate-limit-service";
 
 const loginSchema = z.object({
   email: z.string().min(1, "E-posta veya kullanıcı adı zorunludur."),
   password: z.string().min(1, "Şifre zorunludur."),
 });
+
+function tooManyAttemptsResponse(retryAfterSeconds: number) {
+  return NextResponse.json(
+    {
+      success: false,
+      message: `Çok fazla başarısız deneme. Lütfen ${Math.max(1, Math.ceil(retryAfterSeconds / 60))} dakika sonra tekrar deneyin.`,
+      code: "RATE_LIMITED",
+      retryAfterSeconds,
+    },
+    { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } }
+  );
+}
 
 function resolveLoginRedirectTo(input: {
   role: string;
@@ -31,6 +49,12 @@ function resolveLoginRedirectTo(input: {
 
 export async function POST(req: Request) {
   try {
+    const clientIp = getTrustedClientIp(req);
+    const rateLimit = await checkAuthRateLimit("login", clientIp);
+    if (rateLimit.limited) {
+      return tooManyAttemptsResponse(rateLimit.retryAfterSeconds);
+    }
+
     const body = await req.json();
     const parsed = loginSchema.safeParse(body);
 
@@ -75,6 +99,10 @@ export async function POST(req: Request) {
     });
 
     if (!user) {
+      const failure = await registerAuthFailure("login", clientIp);
+      if (failure.limited) {
+        return tooManyAttemptsResponse(failure.retryAfterSeconds);
+      }
       return NextResponse.json(
         {
           success: false,
@@ -87,6 +115,10 @@ export async function POST(req: Request) {
     const isPasswordValid = await comparePassword(password, user.password);
 
     if (!isPasswordValid) {
+      const failure = await registerAuthFailure("login", clientIp);
+      if (failure.limited) {
+        return tooManyAttemptsResponse(failure.retryAfterSeconds);
+      }
       return NextResponse.json(
         {
           success: false,
@@ -95,6 +127,8 @@ export async function POST(req: Request) {
         { status: 401 }
       );
     }
+
+    await clearAuthRateLimit("login", clientIp);
 
     if (user.status !== "ACTIVE") {
       return NextResponse.json(

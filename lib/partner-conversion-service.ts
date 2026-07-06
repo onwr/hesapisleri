@@ -59,6 +59,16 @@ export async function createPartnerSignupConversion(input: {
   const partner = await getActivePartnerById(input.partnerId);
   if (!partner) return null;
 
+  // Self-referral engeli — ortak kendi koduyla kendi hesabına/şirketine
+  // referans veremez (komisyon/güvenlik istismarını önler).
+  if (partner.userId && partner.userId === input.userId) {
+    console.warn("PARTNER_SELF_REFERRAL_BLOCKED", {
+      partnerId: partner.id,
+      userId: input.userId,
+    });
+    return null;
+  }
+
   const now = new Date();
 
   return db.$transaction(async (tx) => {

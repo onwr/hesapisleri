@@ -103,15 +103,27 @@ const iconMap: Record<CompactActionIconName, LucideIcon> = {
 };
 
 const iconToneMap: Record<CompactActionColor, string> = {
-  emerald: "bg-emerald-50 text-emerald-600",
-  blue: "bg-blue-50 text-blue-600",
-  violet: "bg-violet-50 text-violet-600",
-  orange: "bg-orange-50 text-orange-600",
-  rose: "bg-rose-50 text-rose-600",
-  sky: "bg-sky-50 text-sky-600",
-  amber: "bg-amber-50 text-amber-600",
-  slate: "bg-slate-100 text-slate-600",
-  navy: "bg-[#0f1f4d]/10 text-[#0f1f4d]",
+  emerald: "bg-linear-to-br from-emerald-500 to-green-600 text-white shadow-[0_6px_14px_rgba(16,185,129,0.35)]",
+  blue: "bg-linear-to-br from-sky-400 to-blue-600 text-white shadow-[0_6px_14px_rgba(37,99,235,0.35)]",
+  violet: "bg-linear-to-br from-violet-500 to-purple-600 text-white shadow-[0_6px_14px_rgba(139,92,246,0.35)]",
+  orange: "bg-linear-to-br from-amber-400 to-orange-600 text-white shadow-[0_6px_14px_rgba(234,88,12,0.35)]",
+  rose: "bg-linear-to-br from-rose-500 to-pink-600 text-white shadow-[0_6px_14px_rgba(225,29,72,0.35)]",
+  sky: "bg-linear-to-br from-sky-400 to-cyan-600 text-white shadow-[0_6px_14px_rgba(2,132,199,0.35)]",
+  amber: "bg-linear-to-br from-amber-400 to-yellow-600 text-white shadow-[0_6px_14px_rgba(217,119,6,0.35)]",
+  slate: "bg-linear-to-br from-slate-400 to-slate-600 text-white shadow-[0_6px_14px_rgba(71,85,105,0.3)]",
+  navy: "bg-linear-to-br from-[#1c3d8f] to-[#0f1f4d] text-white shadow-[0_6px_14px_rgba(15,31,77,0.35)]",
+};
+
+const cardTintMap: Record<CompactActionColor, string> = {
+  emerald: "from-emerald-50/70",
+  blue: "from-blue-50/70",
+  violet: "from-violet-50/70",
+  orange: "from-orange-50/70",
+  rose: "from-rose-50/70",
+  sky: "from-sky-50/70",
+  amber: "from-amber-50/70",
+  slate: "from-slate-100/60",
+  navy: "from-slate-100/60",
 };
 
 type CompactActionCardBaseProps = {
@@ -186,10 +198,16 @@ function CardInner({
   );
 }
 
-const cardClassName =
-  "group flex h-[80px] max-h-[88px] min-h-[72px] items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white px-3.5 py-3 shadow-[0_8px_22px_rgba(15,23,42,0.04)] transition hover:border-slate-300/80 hover:shadow-[0_12px_28px_rgba(15,23,42,0.07)] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-200";
+function buildCardClassName(color: CompactActionColor) {
+  return [
+    "group flex h-[80px] max-h-[88px] min-h-[72px] items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-linear-to-br to-white px-3.5 py-3 shadow-[0_8px_22px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 hover:border-slate-300/80 hover:shadow-[0_14px_28px_rgba(15,23,42,0.09)] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-200",
+    cardTintMap[color],
+  ].join(" ");
+}
 
 export function CompactActionCard(props: CompactActionCardProps) {
+  const cardClassName = buildCardClassName(props.color ?? "blue");
+
   if ("href" in props && props.href) {
     const { href, className, ...rest } = props;
 

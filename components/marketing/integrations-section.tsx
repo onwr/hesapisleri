@@ -43,10 +43,9 @@ function BuiltinCard({
   return (
     <div className="group flex flex-col items-center gap-3 rounded-2xl bg-white p-5 shadow-sm border border-slate-100 hover:shadow-md hover:-translate-y-0.5 transition-all">
       <div className="flex h-12 w-full flex-col items-center justify-center gap-0.5 text-center">
-        {name === "PayTR" ? (
-          <span className="text-[22px] font-extrabold tracking-tight">
-            <span className="text-[#e85d26]">Pay</span>
-            <span className="text-[#1a4fa0]">TR</span>
+        {name === "Sipay" ? (
+          <span className="text-[22px] font-extrabold tracking-tight text-[#1a4fa0]">
+            Sipay
           </span>
         ) : (
           <>

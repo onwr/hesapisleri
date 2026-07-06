@@ -2,7 +2,8 @@ import "server-only";
 
 import type { MembershipPeriod, Prisma } from "@prisma/client";
 import { db } from "@/lib/prisma";
-import { getDefaultMembershipPlan, MembershipServiceError } from "@/lib/membership-service";
+import { resolveActiveMembershipPlanForCheckout } from "@/lib/billing/membership-plan-resolution";
+import { MembershipServiceError } from "@/lib/membership-service";
 import { getMembershipPeriodLabel } from "@/lib/membership-utils";
 import type { CheckoutProvider, CheckStatusResult } from "../checkout-provider";
 import { canFinalize, canCancel, isTerminalStatus, assertValidTransition } from "./sipay-state-machine";
@@ -104,7 +105,7 @@ export async function initializeSipayCheckout(
   const [plan, company, subscription] = await Promise.all([
     input.planId
       ? db.membershipPlan.findFirst({ where: { id: input.planId, planStatus: "ACTIVE" } })
-      : getDefaultMembershipPlan(),
+      : resolveActiveMembershipPlanForCheckout(),
     db.company.findUnique({
       where: { id: input.companyId },
       select: { id: true, name: true, email: true, phone: true },

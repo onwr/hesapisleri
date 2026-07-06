@@ -128,11 +128,13 @@ describe("products compact management ui", () => {
     assert.doesNotMatch(shell, /ToolbarButton/);
   });
 
-  it("quick action component siparişler stiline benzer gradient kartlar kullanır", () => {
+  it("quick action component siparişler stiline benzer gradient kartlar kullanır (paylaşılan CompactActionCard üzerinden)", () => {
     const actions = read("components/products/products-quick-actions.tsx");
+    const card = read("components/cards/compact-action-card.tsx");
     const utils = read("lib/products-page-ui-utils.ts");
-    assert.match(actions, /rounded-2xl/);
-    assert.match(actions, /ArrowRight/);
+    assert.match(actions, /CompactActionCard/);
+    assert.match(card, /rounded-2xl/);
+    assert.match(card, /ChevronRight/);
     assert.match(utils, /Yeni Ürün/);
     assert.match(utils, /Yeni Hizmet/);
     assert.match(utils, /Stok Hareketi/);

@@ -26,6 +26,12 @@ import {
 } from "lucide-react";
 import { AppLoadingScreen } from "@/components/layout/app-loading-screen";
 import { formatMoney } from "@/lib/format-utils";
+import {
+  canAddProductToInvoice,
+  getCatalogStockLabel,
+  isServiceCatalogProduct,
+  type CatalogProduct,
+} from "@/lib/invoice-form-utils";
 
 type Customer = {
   id: string;
@@ -33,16 +39,7 @@ type Customer = {
   phone?: string | null;
 };
 
-type Product = {
-  id: string;
-  name: string;
-  stock: number;
-  sellPrice: string | number;
-  vatRate: number;
-  category?: {
-    name: string;
-  } | null;
-};
+type Product = CatalogProduct;
 
 type InvoiceItem = {
   id: string;
@@ -102,6 +99,9 @@ function getMaxQuantityForItem(
 
   const product = products.find((entry) => entry.id === item.productId);
   if (!product) return null;
+
+  // Hizmet ürünleri stok takibi yapmaz — miktar sınırı uygulanmaz.
+  if (isServiceCatalogProduct(product)) return null;
 
   const usedElsewhere = items
     .filter(
@@ -459,6 +459,9 @@ export default function EInvoicePage() {
 
       const product = products.find((entry) => entry.id === item.productId);
       if (!product) continue;
+
+      // Hizmet ürünleri stok takibi yapmaz — miktar kontrolü uygulanmaz.
+      if (isServiceCatalogProduct(product)) continue;
 
       const totalQty = getUsedProductQuantity(validItems, item.productId);
 
@@ -920,19 +923,19 @@ export default function EInvoicePage() {
               <div className="grid gap-3 p-4 md:grid-cols-2 2xl:grid-cols-3">
                 {filteredProducts.map((product) => {
                   const usedQty = usedQtyByProduct.get(product.id) ?? 0;
+                  const isService = isServiceCatalogProduct(product);
                   const remaining = Math.max(0, product.stock - usedQty);
-                  const isOutOfStock = product.stock <= 0;
-                  const isLimitReached = remaining <= 0;
+                  const canAdd = canAddProductToInvoice(product, usedQty);
 
                   return (
                   <button
                     key={product.id}
                     type="button"
                     onClick={() => addProductToItems(product)}
-                    disabled={isOutOfStock || isLimitReached}
+                    disabled={!canAdd}
                     className={[
                       "group rounded-2xl border p-4 text-left transition",
-                      isOutOfStock || isLimitReached
+                      !canAdd
                         ? "cursor-not-allowed border-slate-100 bg-slate-50 opacity-60"
                         : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-blue-100 hover:bg-blue-50/30 hover:shadow-[0_14px_30px_rgba(37,99,235,0.10)]",
                     ].join(" ")}
@@ -946,12 +949,12 @@ export default function EInvoicePage() {
                         <span
                           className={[
                             "inline-flex rounded-md px-2 py-1 text-[10px] font-black",
-                            getStockClass(product.stock),
+                            isService ? "bg-blue-50 text-blue-600" : getStockClass(product.stock),
                           ].join(" ")}
                         >
-                          Stok: {product.stock}
+                          {isService ? getCatalogStockLabel(product) : `Stok: ${product.stock}`}
                         </span>
-                        {usedQty > 0 ? (
+                        {!isService && usedQty > 0 ? (
                           <p className="mt-1 text-[10px] font-bold text-slate-500">
                             Kalan: {remaining}
                           </p>
@@ -975,9 +978,7 @@ export default function EInvoicePage() {
                       <span
                         className={[
                           "flex h-9 w-9 items-center justify-center rounded-xl text-white transition",
-                          isOutOfStock || isLimitReached
-                            ? "bg-slate-300"
-                            : "bg-blue-600 group-hover:scale-105",
+                          !canAdd ? "bg-slate-300" : "bg-blue-600 group-hover:scale-105",
                         ].join(" ")}
                       >
                         <Plus size={17} strokeWidth={3} />

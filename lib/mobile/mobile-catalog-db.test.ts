@@ -1,17 +1,20 @@
 /**
  * Mobile catalog archive + tenant isolation DB entegrasyon testleri.
- * TEST_DATABASE_URL veya DATABASE_URL gerekir.
+ * TEST_DATABASE_URL gerekir.
  */
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import type { PrismaClient } from "@prisma/client";
 import { MobileCatalogError } from "./mobile-catalog-errors";
 
-const TEST_DB_URL = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
-const DB_AVAILABLE = !!TEST_DB_URL;
+// Yalnız TEST_DATABASE_URL kontrol edilir — DATABASE_URL .env'de her zaman
+// tanımlı olabilir (ör. localhost:5432) ama sandbox'ta erişilemez olabilir;
+// DATABASE_URL'e fallback etmek testi "available" sayıp gerçek bağlantı
+// hatasıyla suite'i cancel ettiriyordu.
+const DB_AVAILABLE = !!process.env.TEST_DATABASE_URL;
 const SKIP_REASON = DB_AVAILABLE
   ? false
-  : "SKIP: mobile catalog DB tests require TEST_DATABASE_URL or DATABASE_URL";
+  : "SKIP: mobile catalog DB tests require TEST_DATABASE_URL";
 
 describe("mobile catalog DB", { skip: SKIP_REASON }, () => {
   let db: PrismaClient;
@@ -29,7 +32,7 @@ describe("mobile catalog DB", { skip: SKIP_REASON }, () => {
 
   before(async () => {
     const { PrismaClient } = await import("@prisma/client");
-    db = new PrismaClient({ datasources: { db: { url: TEST_DB_URL } } });
+    db = new PrismaClient({ datasources: { db: { url: process.env.TEST_DATABASE_URL } } });
     await db.$connect();
 
     const { hashPassword } = await import("@/lib/auth");

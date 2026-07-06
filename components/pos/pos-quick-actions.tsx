@@ -13,7 +13,7 @@ export function PosQuickActions({ onAction }: PosQuickActionsProps) {
   const cards = buildPosQuickActionCards();
 
   return (
-    <section className="flex gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0 lg:grid-cols-5 [&::-webkit-scrollbar]:hidden">
+    <section className="flex min-w-0 gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0 lg:grid-cols-5 [&::-webkit-scrollbar]:hidden">
       {cards.map((card) => {
         const Icon = card.icon;
 

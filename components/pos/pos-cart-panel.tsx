@@ -2,9 +2,7 @@
 
 import {
   Loader2,
-  Minus,
   Percent,
-  Plus,
   ShoppingCart,
   Trash2,
   X,
@@ -16,6 +14,7 @@ import {
   POS_GRADIENT_TOTAL_CLASS,
 } from "@/components/pos/pos-ui-tokens";
 import { SaleLineEditFields } from "@/components/sales/sale-line-edit-fields";
+import { SaleCartQuantityInput } from "@/components/sales/sale-cart-quantity-input";
 import { calculateLineSubtotal } from "@/lib/sale-calculation-utils";
 
 export type PosCartItem = {
@@ -25,6 +24,7 @@ export type PosCartItem = {
   unitPrice: number;
   vatRate: number;
   stock: number;
+  productType?: "STOCK" | "SERVICE";
 };
 
 type PosCartPanelProps = {
@@ -41,6 +41,11 @@ type PosCartPanelProps = {
   onVatRateChange: (productId: string, value: number) => void;
   onIncrease: (productId: string) => void;
   onDecrease: (productId: string) => void;
+  onQuantityChange: (productId: string, quantity: number) => void;
+  onQuantityRemove: (productId: string) => void;
+  onQuantityError?: (productId: string, error: string | null) => void;
+  quantityErrors?: Record<string, string>;
+  allowNegativeStock?: boolean;
   onRemove: (productId: string) => void;
   onClear: () => void;
   onOpenPayment: () => void;
@@ -63,6 +68,11 @@ export function PosCartPanel({
   onVatRateChange,
   onIncrease,
   onDecrease,
+  onQuantityChange,
+  onQuantityRemove,
+  onQuantityError,
+  quantityErrors = {},
+  allowNegativeStock = false,
   onRemove,
   onClear,
   onOpenPayment,
@@ -150,26 +160,22 @@ export function PosCartPanel({
                 />
               </div>
 
-              <div className="mt-3 flex items-center justify-between">
-                <div className="flex items-center gap-1 rounded-2xl border border-slate-200/80 bg-white p-1">
-                  <button
-                    type="button"
-                    onClick={() => onDecrease(item.productId)}
-                    className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-600"
-                  >
-                    <Minus size={14} />
-                  </button>
-                  <span className="min-w-8 text-center text-sm font-extrabold text-[#0f1f4d]">
-                    {item.quantity}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => onIncrease(item.productId)}
-                    className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#0f1f4d] text-white"
-                  >
-                    <Plus size={14} />
-                  </button>
-                </div>
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <SaleCartQuantityInput
+                  productId={item.productId}
+                  productName={item.name}
+                  quantity={item.quantity}
+                  item={item}
+                  allowNegativeStock={allowNegativeStock}
+                  disabled={checkingOut}
+                  compact
+                  error={quantityErrors[item.productId] ?? null}
+                  onQuantityChange={onQuantityChange}
+                  onQuantityRemove={onQuantityRemove}
+                  onQuantityError={onQuantityError}
+                  onIncrease={onIncrease}
+                  onDecrease={onDecrease}
+                />
                 <p className="text-sm font-extrabold text-[#0f1f4d]">
                   {formatMoney(calculateLineSubtotal(item))}
                 </p>

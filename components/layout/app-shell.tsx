@@ -12,7 +12,10 @@ type AppShellProps = {
 
 export async function AppShell({ children }: AppShellProps) {
   const session = await getAppSession();
-  const membershipSummary = await getSidebarMembershipSummary(session.company.id);
+  const membershipSummary = await getSidebarMembershipSummary(
+    session.company.id,
+    session.user.id
+  );
 
   // canUseAi = yalnızca rol/modül permission'ı (platform durumundan bağımsız).
   // STAFF ve POS_STAFF launcher göremez; platform disabled/config_missing olsa bile

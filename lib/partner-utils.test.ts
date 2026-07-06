@@ -47,6 +47,7 @@ describe("partner utils", () => {
     const valid = partnerApplicationSchema.safeParse({
       fullName: "Onur Test",
       email: "onur@test.com",
+      phone: "05551234567",
       audienceType: "INFLUENCER",
       termsAccepted: true,
     });

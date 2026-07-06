@@ -22,6 +22,7 @@ import { AppLoadingScreen } from "@/components/layout/app-loading-screen";
 import { CollectionAccountSelect } from "@/components/cash-bank/collection-account-select";
 import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 import { SaleLineEditFields } from "@/components/sales/sale-line-edit-fields";
+import { SaleCartQuantityInput } from "@/components/sales/sale-cart-quantity-input";
 import { WarehouseSelectField } from "@/components/shared/warehouse-select-field";
 import {
   buildProductsListUrl,
@@ -37,6 +38,14 @@ import {
   validateSaleDiscountInput,
   validateSaleLineItems,
 } from "@/lib/sale-calculation-utils";
+import {
+  adjustCartQuantity,
+  setCartItemQuantity,
+} from "@/lib/pos-page-utils";
+import { isServiceProductType } from "@/lib/product-type-utils";
+import {
+  validateSaleCartQuantityAgainstStock,
+} from "@/lib/sale-cart-quantity-utils";
 import { useCollectionAccounts } from "@/hooks/use-collection-accounts";
 
 const SALES_HERO_CLASS =
@@ -64,6 +73,7 @@ type Product = {
   barcode?: string | null;
   stock: number;
   warehouseStock?: number;
+  productType?: "STOCK" | "SERVICE";
   sellPrice: string | number;
   vatRate: number;
   category?: {
@@ -78,6 +88,7 @@ type CartItem = {
   unitPrice: number;
   vatRate: number;
   stock: number;
+  productType?: "STOCK" | "SERVICE";
 };
 
 function getStockClass(stock: number) {
@@ -113,6 +124,10 @@ export default function NewSalePage() {
 
   const [productSearch, setProductSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [allowNegativeStock, setAllowNegativeStock] = useState(false);
+  const [quantityErrors, setQuantityErrors] = useState<Record<string, string>>(
+    {}
+  );
 
   const [loading, setLoading] = useState(true);
   const { mutate, isSubmitting } = useTenantMutation<{ id: string }>({
@@ -166,6 +181,18 @@ export default function NewSalePage() {
         if (productsData.success) {
           setProducts(productsData.data);
         }
+
+        try {
+          const settingsRes = await fetch("/api/settings");
+          const settingsData = await settingsRes.json();
+          if (settingsRes.ok && settingsData.success) {
+            setAllowNegativeStock(
+              settingsData.data?.settings?.allowNegativeStockSales ?? false
+            );
+          }
+        } catch {
+          // Ayarlar yüklenemezse varsayılan: negatif stok kapalı
+        }
       } catch {
         setError("Veriler yüklenirken bir hata oluştu.");
       } finally {
@@ -207,7 +234,11 @@ export default function NewSalePage() {
               return {
                 ...item,
                 stock,
-                quantity: Math.min(item.quantity, stock),
+                productType: product?.productType ?? item.productType,
+                quantity:
+                  product && isServiceProductType(product.productType)
+                    ? item.quantity
+                    : Math.min(item.quantity, stock),
               };
             })
             .filter((item) => item.quantity > 0)
@@ -304,6 +335,7 @@ export default function NewSalePage() {
                 ...item,
                 quantity: item.quantity + 1,
                 stock: availableStock,
+                productType: product.productType,
               }
             : item
         );
@@ -318,41 +350,68 @@ export default function NewSalePage() {
           unitPrice: price,
           vatRate: product.vatRate,
           stock: availableStock,
+          productType: product.productType,
         },
       ];
     });
   }
 
+  function clearQuantityError(productId: string) {
+    setQuantityErrors((prev) => {
+      if (!prev[productId]) return prev;
+      const next = { ...prev };
+      delete next[productId];
+      return next;
+    });
+  }
+
   function increaseQuantity(productId: string) {
     setError("");
-    setCart((prev) =>
-      prev.map((entry) =>
-        entry.productId === productId
-          ? {
-              ...entry,
-              quantity: entry.quantity + 1,
-            }
-          : entry
-      )
-    );
+    setCart((prev) => {
+      const item = prev.find((entry) => entry.productId === productId);
+      if (!item) return prev;
+
+      const nextQuantity = item.quantity + 1;
+      const stockError = validateSaleCartQuantityAgainstStock(
+        item,
+        nextQuantity,
+        { allowNegativeStock }
+      );
+
+      if (stockError) {
+        setQuantityErrors((current) => ({
+          ...current,
+          [productId]: stockError,
+        }));
+        return prev;
+      }
+
+      clearQuantityError(productId);
+      return adjustCartQuantity(prev, productId, 1);
+    });
   }
 
   function decreaseQuantity(productId: string) {
-    setCart((prev) =>
-      prev
-        .map((item) =>
-          item.productId === productId
-            ? {
-                ...item,
-                quantity: item.quantity - 1,
-              }
-            : item
-        )
-        .filter((item) => item.quantity > 0)
-    );
+    clearQuantityError(productId);
+    setCart((prev) => adjustCartQuantity(prev, productId, -1));
+  }
+
+  function changeQuantity(productId: string, quantity: number) {
+    clearQuantityError(productId);
+    setCart((prev) => setCartItemQuantity(prev, productId, quantity));
+  }
+
+  function handleQuantityError(productId: string, error: string | null) {
+    if (!error) {
+      clearQuantityError(productId);
+      return;
+    }
+
+    setQuantityErrors((prev) => ({ ...prev, [productId]: error }));
   }
 
   function removeItem(productId: string) {
+    clearQuantityError(productId);
     setCart((prev) => prev.filter((item) => item.productId !== productId));
   }
 
@@ -372,6 +431,11 @@ export default function NewSalePage() {
 
     if (cart.length === 0) {
       setError("Satış oluşturmak için en az bir ürün ekleyin.");
+      return;
+    }
+
+    if (Object.keys(quantityErrors).length > 0) {
+      setError("Sepette geçersiz miktar bulunuyor. Lütfen düzeltin.");
       return;
     }
 
@@ -893,7 +957,9 @@ export default function NewSalePage() {
 
               <div className="max-h-[360px] space-y-3 overflow-y-auto p-4">
                 {cart.map((item) => {
-                  const hasStockWarning = item.quantity > item.stock;
+                  const hasStockWarning =
+                    !isServiceProductType(item.productType) &&
+                    item.quantity > item.stock;
 
                   return (
                     <div
@@ -911,7 +977,9 @@ export default function NewSalePage() {
                           </p>
 
                           <p className="mt-1 text-[10px] font-semibold text-slate-400">
-                            Stok: {item.stock} adet
+                            {isServiceProductType(item.productType)
+                              ? "Hizmet ürünü"
+                              : `Stok: ${item.stock} adet`}
                             {hasStockWarning ? (
                               <span className="ml-1 text-amber-600">
                                 · Bu işlem sonrası stok eksiye düşebilir.
@@ -944,28 +1012,21 @@ export default function NewSalePage() {
                         />
                       </div>
 
-                      <div className="mt-3 flex items-center justify-between">
-                        <div className="flex items-center gap-2 rounded-xl bg-white p-1">
-                          <button
-                            type="button"
-                            onClick={() => decreaseQuantity(item.productId)}
-                            className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-600"
-                          >
-                            <Minus size={14} />
-                          </button>
-
-                          <span className="min-w-7 text-center text-[12px] font-black text-[#0f1f4d]">
-                            {item.quantity}
-                          </span>
-
-                          <button
-                            type="button"
-                            onClick={() => increaseQuantity(item.productId)}
-                            className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600 text-white"
-                          >
-                            <Plus size={14} />
-                          </button>
-                        </div>
+                      <div className="mt-3 flex items-center justify-between gap-3">
+                        <SaleCartQuantityInput
+                          productId={item.productId}
+                          productName={item.name}
+                          quantity={item.quantity}
+                          item={item}
+                          allowNegativeStock={allowNegativeStock}
+                          disabled={isSubmitting}
+                          error={quantityErrors[item.productId] ?? null}
+                          onQuantityChange={changeQuantity}
+                          onQuantityRemove={removeItem}
+                          onQuantityError={handleQuantityError}
+                          onIncrease={increaseQuantity}
+                          onDecrease={decreaseQuantity}
+                        />
 
                         <p className="text-[13px] font-black text-[#0f1f4d]">
                           {formatMoney(calculateLineSubtotal(item))}

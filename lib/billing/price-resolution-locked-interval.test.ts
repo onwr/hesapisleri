@@ -14,4 +14,9 @@ describe("price resolution locked interval", () => {
     assert.match(src, /lockedPlanPrice\?\.billingInterval === input\.billingInterval/);
     assert.match(src, /include:\s*\{\s*lockedPlanPrice:/);
   });
+
+  it("güncel plan fiyatı kilitli fiyattan düşükse yeni fiyat uygulanır", () => {
+    assert.match(src, /catalogTotal < lockedTotal/);
+    assert.match(src, /preferLockedPrice = false/);
+  });
 });

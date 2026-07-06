@@ -23,8 +23,8 @@ describe("billing checkout totals", () => {
       join(dirname(fileURLToPath(import.meta.url)), "../membership-service.ts"),
       "utf8"
     );
-    assert.match(src, /buildPriceTotals/);
-    assert.match(src, /totals\.totalMinor \/ 100/);
-    assert.doesNotMatch(src, /price\.salePriceMinor \/ 100/);
+    assert.match(src, /serializeBillingPlanForCompany/);
+    assert.match(src, /resolveSubscriptionPrice/);
+    assert.match(src, /resolved\.totalMinor \/ 100/);
   });
 });

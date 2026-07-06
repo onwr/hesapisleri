@@ -12,6 +12,7 @@ import {
 } from "@/lib/billing/discount-resolution-service";
 import {
   buildPriceTotals,
+  calculateVatBreakdown,
   type ResolvedPriceTotals,
 } from "@/lib/billing/pricing-utils";
 
@@ -50,6 +51,18 @@ import {
 import { getPlanFeaturesForDisplay } from "@/lib/admin/plans/admin-plan-feature-service";
 
 export { PriceResolutionConflictError };
+
+function checkoutTotalMinorFromSale(
+  salePriceMinor: number,
+  vatRate: number,
+  vatIncluded: boolean
+) {
+  return calculateVatBreakdown({
+    salePriceMinor,
+    vatRate,
+    vatIncluded,
+  }).totalMinor;
+}
 
 export class PriceResolutionError extends Error {
   status: number;
@@ -175,6 +188,32 @@ export async function resolveSubscriptionPrice(input: {
       subscription.priceLockType === "NEW_SUBSCRIBERS_ONLY" ||
       (subscription.nextPriceEffectiveAt != null && now < subscription.nextPriceEffectiveAt));
 
+  let preferLockedPrice = useLockedPrice;
+
+  if (preferLockedPrice && subscription?.lockedPriceMinor != null && planPrice) {
+    const lockedVatRate =
+      subscription.lockedPlanPrice?.vatRate ?? plan.vatRate;
+    const lockedVatIncluded =
+      subscription.lockedPlanPrice?.vatIncluded ?? plan.vatIncluded;
+    const lockedTotal = checkoutTotalMinorFromSale(
+      subscription.lockedPriceMinor,
+      lockedVatRate,
+      lockedVatIncluded
+    );
+    const catalogTotal = checkoutTotalMinorFromSale(
+      planPrice.salePriceMinor,
+      planPrice.vatRate ?? plan.vatRate,
+      planPrice.vatIncluded ?? plan.vatIncluded
+    );
+
+    if (catalogTotal < lockedTotal) {
+      preferLockedPrice = false;
+      explanation.push(
+        "Güncel plan fiyatı kilitli fiyattan düşük; yeni fiyat uygulandı."
+      );
+    }
+  }
+
   const scheduledNextPrice =
     subscription?.nextPlanPriceId &&
     subscription.nextPriceEffectiveAt &&
@@ -184,7 +223,7 @@ export async function resolveSubscriptionPrice(input: {
         })
       : null;
 
-  if (useLockedPrice && subscription) {
+  if (preferLockedPrice && subscription) {
     listPriceMinor =
       subscription.lockedListPriceMinor ?? subscription.lockedPriceMinor!;
     salePriceMinor = subscription.lockedPriceMinor!;

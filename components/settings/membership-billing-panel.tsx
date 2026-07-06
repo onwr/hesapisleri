@@ -77,6 +77,8 @@ type BillingData = {
     pricesAreCheckoutTotals?: boolean;
     vatRate?: number;
     vatIncluded?: boolean;
+    usesGrandfatheredPrice?: boolean;
+    priceLockNotice?: string | null;
   };
   isOnArchivedPlan?: boolean;
   isSharedEntitlement?: boolean;
@@ -677,6 +679,12 @@ export function MembershipBillingPanel({
               : `PayTR ${paytrForm?.mode === "iframe" ? "iFrame" : "3D Secure"}`}
           </p>
         </div>
+
+        {data.plan.priceLockNotice ? (
+          <div className="border-b border-amber-100 bg-amber-50 px-4 py-2.5 text-[11px] font-semibold text-amber-900">
+            {data.plan.priceLockNotice}
+          </div>
+        ) : null}
 
         <div className="grid gap-2 p-3 sm:grid-cols-2 lg:grid-cols-4">
           {MEMBERSHIP_PERIOD_OPTIONS.filter((option) => {

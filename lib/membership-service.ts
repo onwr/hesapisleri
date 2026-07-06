@@ -26,8 +26,10 @@ import {
 import { getSerializedPaytrCapabilities } from "@/lib/payments/paytr-capabilities";
 import { getCheckoutProviderForClient } from "@/lib/payments/billing-provider-resolver";
 import { getActivePendingChange } from "@/lib/billing/subscription-pending-change-service";
-import { loadTargetActivePricesByPeriod } from "@/lib/admin/plans/admin-plan-target-price-utils";
-import { buildPriceTotals } from "@/lib/billing/pricing-utils";
+import {
+  PriceResolutionError,
+  resolveSubscriptionPrice,
+} from "@/lib/billing/price-resolution-service";
 import { DEFAULT_MEMBERSHIP_PLAN_CODE } from "@/lib/billing/membership-plan-constants";
 import { resolveActiveMembershipPlanForCheckout, resolveBillingPlanForCompany } from "@/lib/billing/membership-plan-resolution";
 
@@ -104,39 +106,53 @@ function serializePlan(
   };
 }
 
+const BILLING_CHECKOUT_PERIODS: MembershipPeriod[] = [
+  "MONTHLY",
+  "QUARTERLY",
+  "SEMI_ANNUAL",
+  "YEARLY",
+];
+
 /**
- * Billing ekranı için canonical plan DTO'su — yalnız gerçek MembershipPlanPrice
- * kayıtlarından üretilir. MembershipPlan.monthlyPrice/quarterlyPrice/... legacy
- * alanları BURADA kaynak olarak kullanılmaz (statik/eski fiyat karışmasını önler).
+ * Billing ekranı ve checkout aynı fiyat çözümleyicisini kullanır.
+ * Kartlarda görünen tutar = Sipay'e giden tutar.
  */
-async function serializeBillingPlan(plan: {
-  id: string;
-  name: string;
-  code: string;
-  description: string | null;
-  currency: string;
-  isActive: boolean;
-  features: string[];
-  vatRate?: number;
-  vatIncluded?: boolean;
-}) {
-  const activePrices = await loadTargetActivePricesByPeriod(plan.id);
+async function serializeBillingPlanForCompany(
+  plan: {
+    id: string;
+    name: string;
+    code: string;
+    description: string | null;
+    currency: string;
+    isActive: boolean;
+    features: string[];
+    vatRate?: number;
+    vatIncluded?: boolean;
+  },
+  companyId: string
+) {
   const prices: Partial<Record<MembershipPeriod, number>> = {};
   const priceIds: Partial<Record<MembershipPeriod, string>> = {};
-  const defaultVatRate = plan.vatRate ?? 20;
-  const defaultVatIncluded = plan.vatIncluded ?? false;
+  let usesGrandfatheredPrice = false;
 
-  for (const [period, price] of activePrices.entries()) {
-    const totals = buildPriceTotals({
-      listPriceMinor: price.listPriceMinor,
-      salePriceMinor: price.salePriceMinor,
-      interval: period,
-      vatRate: price.vatRate ?? defaultVatRate,
-      vatIncluded: price.vatIncluded ?? defaultVatIncluded,
-    });
-    // Müşterinin ödeyeceği tutar (checkout ile aynı — KDV dahil veya hariç plan kuralına göre)
-    prices[period] = totals.totalMinor / 100;
-    priceIds[period] = price.id;
+  for (const period of BILLING_CHECKOUT_PERIODS) {
+    try {
+      const resolved = await resolveSubscriptionPrice({
+        companyId,
+        planId: plan.id,
+        billingInterval: period,
+        isRenewal: true,
+      });
+      prices[period] = resolved.totalMinor / 100;
+      priceIds[period] = resolved.planPriceId;
+      if (resolved.priceSource === "GRANDFATHERED") {
+        usesGrandfatheredPrice = true;
+      }
+    } catch (error) {
+      if (!(error instanceof PriceResolutionError)) {
+        throw error;
+      }
+    }
   }
 
   return {
@@ -150,8 +166,12 @@ async function serializeBillingPlan(plan: {
     prices: prices as Record<MembershipPeriod, number>,
     priceIds: priceIds as Record<MembershipPeriod, string>,
     pricesAreCheckoutTotals: true as const,
-    vatRate: defaultVatRate,
-    vatIncluded: defaultVatIncluded,
+    vatRate: plan.vatRate ?? 20,
+    vatIncluded: plan.vatIncluded ?? false,
+    usesGrandfatheredPrice,
+    priceLockNotice: usesGrandfatheredPrice
+      ? "Aboneliğinizde kilitli (eski) fiyat uygulanıyor. Plan fiyatını düşürdüyseniz ve yeni fiyatı görmüyorsanız destek ile iletişime geçin."
+      : null,
   };
 }
 
@@ -352,7 +372,10 @@ export async function getMembershipBillingData(input: {
   const remainingDays = getRemainingMembershipDays(subscription.currentPeriodEnd);
 
   const lastPaid = payments.find((payment) => payment.status === "PAID") ?? null;
-  const billingPlan = await serializeBillingPlan(subscriptionPlan);
+  const billingPlan = await serializeBillingPlanForCompany(
+    subscriptionPlan,
+    input.companyId
+  );
 
   return {
     subscription: {

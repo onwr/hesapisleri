@@ -37,8 +37,8 @@ describe("billing — tek canonical plan kaynağı", () => {
       "ayrı bir displayPlan fallback kavramı kalmamalı"
     );
     assert.ok(
-      fnBody.includes("serializeBillingPlan(subscriptionPlan)"),
-      "dönen plan DTO'su subscriptionPlan'dan üretilmeli"
+      fnBody.includes("serializeBillingPlanForCompany"),
+      "dönen plan DTO'su subscriptionPlan + firma fiyat çözümlemesinden üretilmeli"
     );
   });
 });
@@ -64,22 +64,22 @@ describe("billing — arşiv uyarısı yalnız gerçek relation'dan hesaplanır"
   });
 });
 
-describe("billing — fiyat kaynağı yalnız MembershipPlanPrice", () => {
-  it("serializeBillingPlan loadTargetActivePricesByPeriod kullanır (admin/migration ile aynı canonical resolver)", async () => {
+describe("billing — fiyat kaynağı checkout ile aynı", () => {
+  it("serializeBillingPlanForCompany resolveSubscriptionPrice kullanır", async () => {
     const content = await fs.readFile(SERVICE_PATH, "utf8");
     assert.ok(
-      content.includes("loadTargetActivePricesByPeriod"),
-      "billing fiyatları admin tablo/migration ile aynı paylaşılan resolver'dan gelmeli"
+      content.includes("resolveSubscriptionPrice"),
+      "billing fiyatları checkout ile aynı çözümleyiciden gelmeli"
     );
     assert.ok(
-      content.includes('from "@/lib/admin/plans/admin-plan-target-price-utils"'),
-      "ayrı/çelişkili bir fiyat çözümleme fonksiyonu icat edilmemeli"
+      content.includes("serializeBillingPlanForCompany"),
+      "firma bazlı fiyat serileştirmesi kullanılmalı"
     );
   });
 
-  it("serializeBillingPlan legacy monthlyPrice/quarterlyPrice/semiAnnualPrice/yearlyPrice alanlarını kullanmaz", async () => {
+  it("serializeBillingPlanForCompany legacy monthlyPrice/quarterlyPrice alanlarını kullanmaz", async () => {
     const content = await fs.readFile(SERVICE_PATH, "utf8");
-    const fnStart = content.indexOf("async function serializeBillingPlan");
+    const fnStart = content.indexOf("async function serializeBillingPlanForCompany");
     const fnEnd = content.indexOf("\nfunction serializePayment");
     const fnBody = content.slice(fnStart, fnEnd === -1 ? undefined : fnEnd);
     assert.ok(
@@ -87,11 +87,11 @@ describe("billing — fiyat kaynağı yalnız MembershipPlanPrice", () => {
         !fnBody.includes("plan.quarterlyPrice") &&
         !fnBody.includes("plan.semiAnnualPrice") &&
         !fnBody.includes("plan.yearlyPrice"),
-      "serializeBillingPlan legacy statik fiyat alanlarını okumamalı"
+      "serializeBillingPlanForCompany legacy statik fiyat alanlarını okumamalı"
     );
     assert.ok(
-      fnBody.includes("salePriceMinor"),
-      "fiyatlar MembershipPlanPrice.salePriceMinor üzerinden hesaplanmalı"
+      fnBody.includes("resolved.totalMinor"),
+      "fiyatlar resolveSubscriptionPrice totalMinor üzerinden hesaplanmalı"
     );
   });
 

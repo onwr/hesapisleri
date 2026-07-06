@@ -31,6 +31,7 @@ import {
   calculatePeriodPriceFromDiscount,
   minorToDisplayAmount,
 } from "@/lib/admin/plans/admin-plan-period-pricing-utils";
+import { calculateVatBreakdown } from "@/lib/billing/pricing-utils";
 import { ENTITLEMENT_REGISTRY } from "@/lib/billing/entitlements/entitlement-registry";
 
 const compactInputClass =
@@ -238,10 +239,17 @@ export function AdminPlanCreateForm({ planId }: { planId?: string } = {}) {
     const result: Partial<
       Record<
         PlanBillingPeriod,
-        { normalTotal: number; saleTotal: number; monthlyEq: number; discount: number }
+        { normalTotal: number; saleTotal: number; checkoutTotal: number; monthlyEq: number; discount: number }
       >
     > = {};
     if (!monthlyMinor) return result;
+
+    const toCheckoutTotal = (saleMinor: number) =>
+      calculateVatBreakdown({
+        salePriceMinor: saleMinor,
+        vatRate: 20,
+        vatIncluded: false,
+      }).totalMinor / 100;
 
     for (const interval of PLAN_BILLING_PERIODS) {
       const state = periods[interval];
@@ -250,6 +258,7 @@ export function AdminPlanCreateForm({ planId }: { planId?: string } = {}) {
         result.MONTHLY = {
           normalTotal: minorToDisplayAmount(monthlyMinor),
           saleTotal: minorToDisplayAmount(monthlyMinor),
+          checkoutTotal: toCheckoutTotal(monthlyMinor),
           monthlyEq: minorToDisplayAmount(monthlyMinor),
           discount: 0,
         };
@@ -266,6 +275,7 @@ export function AdminPlanCreateForm({ planId }: { planId?: string } = {}) {
           result[interval] = {
             normalTotal: minorToDisplayAmount(listMinor),
             saleTotal: manual,
+            checkoutTotal: toCheckoutTotal(manualMinor),
             monthlyEq: manual / (interval === "QUARTERLY" ? 3 : interval === "SEMI_ANNUAL" ? 6 : 12),
             discount: Math.round(discount * 10) / 10,
           };
@@ -279,6 +289,7 @@ export function AdminPlanCreateForm({ planId }: { planId?: string } = {}) {
           result[interval] = {
             normalTotal: minorToDisplayAmount(calc.listPriceMinor),
             saleTotal: minorToDisplayAmount(calc.salePriceMinor),
+            checkoutTotal: toCheckoutTotal(calc.salePriceMinor),
             monthlyEq: minorToDisplayAmount(calc.salePriceMinor) / months,
             discount: calc.discountPercent,
           };
@@ -547,7 +558,7 @@ export function AdminPlanCreateForm({ planId }: { planId?: string } = {}) {
         title={isEdit ? "Planı Düzenle" : "Yeni Plan"}
         description={
           isEdit
-            ? "Plan bilgileri, fiyatlandırma ve yetkileri güncelleyin."
+            ? "Kaydetmek yeni fiyat sürümü yayınlar; plan silinmez. Mevcut aboneler kilitli fiyatla devam edebilir."
             : "Plan bilgileri, fiyatlandırma ve yetkileri tek ekranda oluşturun."
         }
         backHref={isEdit && planId ? `/admin/plans/${planId}` : "/admin/plans"}
@@ -687,7 +698,8 @@ export function AdminPlanCreateForm({ planId }: { planId?: string } = {}) {
           <section className={`${appPanelClass} p-4`}>
             <h2 className={sectionTitleClass}>Fiyatlandırma</h2>
             <p className="mt-1 text-[11px] text-slate-500">
-              Aylık fiyat zorunludur. Diğer dönemler için indirim veya manuel toplam belirleyebilirsiniz.
+              Aylık fiyat KDV hariç girilir (%20 KDV checkout’ta eklenir). Diğer dönemler için
+              indirim veya manuel toplam belirleyebilirsiniz.
             </p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {PLAN_BILLING_PERIODS.map((interval) => {
@@ -783,7 +795,8 @@ export function AdminPlanCreateForm({ planId }: { planId?: string } = {}) {
                             )}
                             <p>
                               Müşterinin ödeyeceği:{" "}
-                              {formatCurrencyAmount(calc.saleTotal, currency)}
+                              {formatCurrencyAmount(calc.checkoutTotal, currency)}{" "}
+                              <span className="text-slate-500">(KDV dahil)</span>
                             </p>
                             <p>
                               Aylık karşılığı:{" "}
@@ -1041,7 +1054,8 @@ export function AdminPlanCreateForm({ planId }: { planId?: string } = {}) {
                 const calc = periodCalculations[interval]!;
                 return (
                   <p key={interval}>
-                    {PERIOD_UI_LABELS[interval]}: {formatCurrencyAmount(calc.saleTotal, currency)}
+                    {PERIOD_UI_LABELS[interval]}: {formatCurrencyAmount(calc.checkoutTotal, currency)}{" "}
+                    <span className="text-slate-500">(KDV dahil ödeme)</span>
                     {calc.discount > 0 ? ` — %${calc.discount} indirim` : ""}
                   </p>
                 );

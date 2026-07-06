@@ -18,6 +18,8 @@ export type TargetPlanActivePrice = {
   listPriceMinor: number;
   currency: string;
   status: string;
+  vatRate: number;
+  vatIncluded: boolean;
 };
 
 export async function loadTargetActivePricesByPeriod(
@@ -43,6 +45,8 @@ export async function loadTargetActivePricesByPeriod(
       listPriceMinor: true,
       currency: true,
       status: true,
+      vatRate: true,
+      vatIncluded: true,
       effectiveFrom: true,
       effectiveUntil: true,
     },
@@ -60,6 +64,8 @@ export async function loadTargetActivePricesByPeriod(
       listPriceMinor: effective.listPriceMinor,
       currency: effective.currency,
       status: effective.status,
+      vatRate: effective.vatRate,
+      vatIncluded: effective.vatIncluded,
     });
   }
   return result;

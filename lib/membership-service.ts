@@ -27,6 +27,7 @@ import { getSerializedPaytrCapabilities } from "@/lib/payments/paytr-capabilitie
 import { getCheckoutProviderForClient } from "@/lib/payments/billing-provider-resolver";
 import { getActivePendingChange } from "@/lib/billing/subscription-pending-change-service";
 import { loadTargetActivePricesByPeriod } from "@/lib/admin/plans/admin-plan-target-price-utils";
+import { buildPriceTotals } from "@/lib/billing/pricing-utils";
 import { DEFAULT_MEMBERSHIP_PLAN_CODE } from "@/lib/billing/membership-plan-constants";
 import { resolveActiveMembershipPlanForCheckout, resolveBillingPlanForCompany } from "@/lib/billing/membership-plan-resolution";
 
@@ -116,12 +117,25 @@ async function serializeBillingPlan(plan: {
   currency: string;
   isActive: boolean;
   features: string[];
+  vatRate?: number;
+  vatIncluded?: boolean;
 }) {
   const activePrices = await loadTargetActivePricesByPeriod(plan.id);
   const prices: Partial<Record<MembershipPeriod, number>> = {};
   const priceIds: Partial<Record<MembershipPeriod, string>> = {};
+  const defaultVatRate = plan.vatRate ?? 20;
+  const defaultVatIncluded = plan.vatIncluded ?? false;
+
   for (const [period, price] of activePrices.entries()) {
-    prices[period] = price.salePriceMinor / 100;
+    const totals = buildPriceTotals({
+      listPriceMinor: price.listPriceMinor,
+      salePriceMinor: price.salePriceMinor,
+      interval: period,
+      vatRate: price.vatRate ?? defaultVatRate,
+      vatIncluded: price.vatIncluded ?? defaultVatIncluded,
+    });
+    // Müşterinin ödeyeceği tutar (checkout ile aynı — KDV dahil veya hariç plan kuralına göre)
+    prices[period] = totals.totalMinor / 100;
     priceIds[period] = price.id;
   }
 
@@ -135,6 +149,9 @@ async function serializeBillingPlan(plan: {
     features: plan.features,
     prices: prices as Record<MembershipPeriod, number>,
     priceIds: priceIds as Record<MembershipPeriod, string>,
+    pricesAreCheckoutTotals: true as const,
+    vatRate: defaultVatRate,
+    vatIncluded: defaultVatIncluded,
   };
 }
 

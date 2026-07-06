@@ -79,6 +79,26 @@ export function AdminPlansListShell({ list, query }: Props) {
 
   return (
     <div className="space-y-3">
+      <div className="rounded-xl border border-blue-100 bg-blue-50/70 px-3 py-2.5 text-[11px] leading-relaxed text-slate-700">
+        <p className="font-black text-[#0f1f4d]">Plan yönetimi nasıl çalışır?</p>
+        <ul className="mt-1.5 list-disc space-y-1 pl-4">
+          <li>
+            <strong>Düzenle</strong> planı silmez; yeni fiyat sürümü yayınlar. Mevcut aboneler
+            kilitli fiyatla devam edebilir.
+          </li>
+          <li>
+            <strong>Arşivle</strong> yeni satışı kapatır; geçmiş abonelik ve ödemeler korunur.
+          </li>
+          <li>
+            <strong>Sil</strong> yalnız hiç kullanılmamış taslak planlarda mümkündür; aksi halde
+            arşivleyin.
+          </li>
+          <li>
+            <strong>Kopyala</strong> yeni taslak plan oluşturur; kaynak plana dokunmaz.
+          </li>
+        </ul>
+      </div>
+
       <div className={`${appPanelClass} p-3`}>
         <div className="flex flex-wrap items-end gap-2">
           <label className="min-w-[180px] flex-1 text-[12px] text-slate-600">

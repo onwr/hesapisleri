@@ -74,6 +74,9 @@ type BillingData = {
     name: string;
     prices: Record<MembershipPeriod, number>;
     currency: string;
+    pricesAreCheckoutTotals?: boolean;
+    vatRate?: number;
+    vatIncluded?: boolean;
   };
   isOnArchivedPlan?: boolean;
   isSharedEntitlement?: boolean;
@@ -668,7 +671,7 @@ export function MembershipBillingPanel({
         <div className="border-b border-slate-100 px-4 py-3">
           <p className="text-[13px] font-black text-[#0f1f4d]">Paket Seçin</p>
           <p className="text-[11px] text-slate-500">
-            {data.subscription.plan.name} ·{" "}
+            {data.subscription.plan.name} · ödenecek tutarlar KDV dahil ·{" "}
             {isSipayCheckout
               ? "Sipay 3D Secure"
               : `PayTR ${paytrForm?.mode === "iframe" ? "iFrame" : "3D Secure"}`}
@@ -706,7 +709,9 @@ export function MembershipBillingPanel({
                 <p className="mt-1 text-[18px] font-extrabold tracking-[-0.03em] text-[#0f1f4d]">
                   {formatMoney(price)}
                 </p>
-                <p className="text-[10px] text-slate-500">{option.months} ay</p>
+                <p className="text-[10px] text-slate-500">
+                  {option.months} ay · KDV dahil
+                </p>
               </button>
             );
           })}

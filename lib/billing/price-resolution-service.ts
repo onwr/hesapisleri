@@ -121,7 +121,19 @@ export async function resolveSubscriptionPrice(input: {
 
   const [plan, subscription, planPrice, companyOverride] = await Promise.all([
     db.membershipPlan.findUnique({ where: { id: input.planId } }),
-    db.companySubscription.findUnique({ where: { companyId: input.companyId } }),
+    db.companySubscription.findUnique({
+      where: { companyId: input.companyId },
+      include: {
+        lockedPlanPrice: {
+          select: {
+            id: true,
+            billingInterval: true,
+            vatRate: true,
+            vatIncluded: true,
+          },
+        },
+      },
+    }),
     getActivePlanPrice({
       planId: input.planId,
       billingInterval: input.billingInterval,
@@ -158,6 +170,7 @@ export async function resolveSubscriptionPrice(input: {
   const useLockedPrice =
     subscription?.lockedPriceMinor != null &&
     subscription.lockedPlanPriceId != null &&
+    subscription.lockedPlanPrice?.billingInterval === input.billingInterval &&
     (subscription.priceLockType === "GRANDFATHERED" ||
       subscription.priceLockType === "NEW_SUBSCRIBERS_ONLY" ||
       (subscription.nextPriceEffectiveAt != null && now < subscription.nextPriceEffectiveAt));

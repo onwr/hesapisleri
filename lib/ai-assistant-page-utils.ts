@@ -68,7 +68,10 @@ export type AiChatMessage = {
 
 export type AiAssistantContext = {
   userFirstName: string;
+  /** Nakit gelir (Dashboard/Raporlarla aynı) */
   totalSales: number;
+  /** Tahakkuk satış toplamı (aktif satışlar) */
+  accrualSalesTotal?: number;
   totalExpenses: number;
   profit: number;
   cashIncome: number;
@@ -96,6 +99,7 @@ export type AiAssistantContext = {
   topExpenseCategory: string | null;
   topExpenseAmount: number;
   periodLabel: string;
+  metricVersion?: string;
 };
 
 export const AI_TOPIC_LABELS: Record<AiTopicKey, string> = {
@@ -210,7 +214,7 @@ export function generateAiAnswer(question: string, context: AiAssistantContext) 
 
   if (q.includes("kâr") || q.includes("kar") || q.includes("zarar")) {
     return context.profit >= 0
-      ? `Seçili dönemde nakit akışınız ${formatAiMoney(context.profit)}. Kasa girişleri ${formatAiMoney(context.cashIncome)} (${formatAiMoney(context.saleCollectionIncome)} tahsilat, ${formatAiMoney(context.manualIncome)} manuel), toplam gider ${formatAiMoney(context.totalExpenses)}.`
+      ? `Seçili dönemde operasyonel nakit sonucunuz ${formatAiMoney(context.profit)}. Nakit gelir ${formatAiMoney(context.cashIncome)} (${formatAiMoney(context.saleCollectionIncome)} tahsilat, ${formatAiMoney(context.manualIncome)} manuel), nakit gider ${formatAiMoney(context.totalExpenses)}.`
       : `Seçili dönemde nakit akışınız ${formatAiMoney(context.profit)}. Giderler nakit girişlerini ${formatAiMoney(Math.abs(context.profit))} aşıyor. Gider kategorilerini ve tahsilatları gözden geçirmenizi öneririm.`;
   }
 
@@ -246,7 +250,7 @@ export function generateAiAnswer(question: string, context: AiAssistantContext) 
     return `Kasa ve banka toplam bakiyeniz ${formatAiMoney(context.accountBalance)}. Bu dönemde nakit girişi ${formatAiMoney(context.cashIncome)} (${formatAiMoney(context.saleCollectionIncome)} tahsilat, ${formatAiMoney(context.manualIncome)} manuel), nakit çıkışı ${formatAiMoney(context.totalExpenses)}. Transferler gelir/gider toplamına dahil edilmez. ${context.unpaidInvoiceTotal > 0 ? `${formatAiMoney(context.unpaidInvoiceTotal)} tahsilat bekliyor.` : "Bekleyen tahsilat görünmüyor."}`;
   }
 
-  return `Seçili dönem özeti: nakit girişi ${formatAiMoney(context.cashIncome)}, gider ${formatAiMoney(context.totalExpenses)}, nakit akışı ${formatAiMoney(context.profit)}. Satış cirosu ${formatAiMoney(context.totalSales)}. Risk skorunuz ${context.riskScore}/100 (${context.riskLevel}).`;
+  return `Seçili dönem özeti: nakit girişi ${formatAiMoney(context.cashIncome)}, nakit gider ${formatAiMoney(context.totalExpenses)}, operasyonel nakit sonucu ${formatAiMoney(context.profit)}. Kayıt oluşturma tarihine göre satış ${formatAiMoney(context.accrualSalesTotal ?? context.totalSales)}. Risk skorunuz ${context.riskScore}/100 (${context.riskLevel}).`;
 }
 
 export function buildInitialAssistantMessage(context: AiAssistantContext) {

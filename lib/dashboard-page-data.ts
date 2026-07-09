@@ -2,22 +2,24 @@ import { db } from "@/lib/prisma";
 import {
   buildDashboardAiInsights,
   buildDailySalesChart,
-  endOfLastMonth,
-  endOfMonth,
-  endOfYesterday,
-  getMonthLabel,
   percentChange,
-  startOfDay,
-  startOfLastMonth,
-  startOfMonth,
-  startOfYesterday,
   sumSalesTotal,
 } from "@/lib/dashboard-metrics";
 import { activeSaleStatusFilter } from "@/lib/sale-query-utils";
+import { sumActiveAccountBalances } from "@/lib/finance-aggregation-utils";
+import { buildCanonicalFinancialSummary } from "@/lib/finance/financial-summary-service";
 import {
-  combineFinanceBreakdown,
-  sumActiveAccountBalances,
-} from "@/lib/finance-aggregation-utils";
+  ACCRUAL_PROFIT_LABEL,
+  ACCRUAL_SALES_BY_CREATED_AT_LABEL,
+  CASH_RESULT_LABEL,
+  CASH_RESULT_TOOLTIP,
+  COMPANY_FINANCE_TIMEZONE,
+  prismaHalfOpenCreatedAt,
+  resolveMonthFinancialPeriod,
+  resolvePreviousMonthFinancialPeriod,
+  startOfNextZonedDay,
+  startOfZonedDay,
+} from "@/lib/finance/financial-period";
 import {
   getCompanyAccountTransactions,
   getCompanyExpensesForFinance,
@@ -52,6 +54,16 @@ export type DashboardPageData = {
     income: number;
     expense: number;
     profit: number;
+    accrualProfit: number | null;
+    financeMirrorOutTotal: number;
+    cashNet: number;
+    revenueLabel: string;
+    expenseLabel: string;
+    profitLabel: string;
+    profitTooltip: string;
+    accrualProfitLabel: string;
+    salesBasisLabel: string;
+    basisNote: string;
   };
   accounts: Array<{
     id: string;
@@ -82,13 +94,20 @@ export async function getDashboardPageDataUncached(
   input: DashboardPageDataInput
 ): Promise<DashboardPageData> {
   const now = resolveDashboardReferenceDate(input.periodKey);
-  const todayStart = startOfDay(now);
-  const yesterdayStart = startOfYesterday(now);
-  const yesterdayEnd = endOfYesterday(now);
-  const monthStart = startOfMonth(now);
-  const monthEnd = endOfMonth(now);
-  const lastMonthStart = startOfLastMonth(now);
-  const lastMonthEnd = endOfLastMonth(now);
+  const tz = COMPANY_FINANCE_TIMEZONE;
+  const todayStart = startOfZonedDay(now, tz);
+  const todayExclusive = startOfNextZonedDay(now, tz);
+  const yesterdayStart = startOfZonedDay(
+    new Date(todayStart.getTime() - 1),
+    tz
+  );
+  const yesterdayExclusive = todayStart;
+
+  const monthPeriod = resolveMonthFinancialPeriod({
+    referenceDate: now,
+    timezone: tz,
+  });
+  const lastMonthPeriod = resolvePreviousMonthFinancialPeriod(now, tz);
 
   const saleWhereBase = {
     companyId: input.companyId,
@@ -109,37 +128,28 @@ export async function getDashboardPageDataUncached(
     db.sale.findMany({
       where: {
         ...saleWhereBase,
-        createdAt: { gte: todayStart },
+        createdAt: { gte: todayStart, lt: todayExclusive },
       },
       select: { total: true, createdAt: true },
     }),
     db.sale.findMany({
       where: {
         ...saleWhereBase,
-        createdAt: {
-          gte: yesterdayStart,
-          lte: yesterdayEnd,
-        },
+        createdAt: { gte: yesterdayStart, lt: yesterdayExclusive },
       },
       select: { total: true, createdAt: true },
     }),
     db.sale.findMany({
       where: {
         ...saleWhereBase,
-        createdAt: {
-          gte: monthStart,
-          lte: monthEnd,
-        },
+        createdAt: prismaHalfOpenCreatedAt(monthPeriod),
       },
       select: { total: true, createdAt: true },
     }),
     db.sale.findMany({
       where: {
         ...saleWhereBase,
-        createdAt: {
-          gte: lastMonthStart,
-          lte: lastMonthEnd,
-        },
+        createdAt: prismaHalfOpenCreatedAt(lastMonthPeriod),
       },
       select: { total: true, createdAt: true },
     }),
@@ -174,10 +184,15 @@ export async function getDashboardPageDataUncached(
         companyId: input.companyId,
         status: { not: "CANCELLED" },
         paymentStatus: { not: "PAID" },
-        saleId: null,
         dueDate: { gte: now },
+        saleId: null,
       },
-      include: {
+      select: {
+        id: true,
+        invoiceNo: true,
+        total: true,
+        paidAmount: true,
+        dueDate: true,
         customer: { select: { name: true } },
       },
       orderBy: { dueDate: "asc" },
@@ -191,22 +206,24 @@ export async function getDashboardPageDataUncached(
   const monthSales = sumSalesTotal(monthSalesRows);
   const lastMonthSales = sumSalesTotal(lastMonthSalesRows);
 
-  const monthFinance = combineFinanceBreakdown(
+  const monthSummary = buildCanonicalFinancialSummary(
     accountTransactions,
     allExpensesRows,
-    monthStart,
-    monthEnd
+    monthPeriod.from,
+    monthPeriod.toExclusive,
+    { toMode: "exclusive", accrualSalesTotal: monthSales }
   );
-  const lastMonthFinance = combineFinanceBreakdown(
+  const lastMonthSummary = buildCanonicalFinancialSummary(
     accountTransactions,
     allExpensesRows,
-    lastMonthStart,
-    lastMonthEnd
+    lastMonthPeriod.from,
+    lastMonthPeriod.toExclusive,
+    { toMode: "exclusive", accrualSalesTotal: lastMonthSales }
   );
 
-  const monthExpenses = monthFinance.totalExpense;
-  const monthCashIncome = monthFinance.totalIncome;
-  const profit = monthFinance.netCashFlow;
+  const monthExpenses = monthSummary.expenses.cashTotal;
+  const monthCashIncome = monthSummary.revenue.total;
+  const profit = monthSummary.profit.operational;
 
   const pendingCollection = unpaidInvoices.reduce(
     (sum, invoice) =>
@@ -225,7 +242,11 @@ export async function getDashboardPageDataUncached(
     );
 
   const totalAccountBalance = sumActiveAccountBalances(accounts);
-  const salesChartData = buildDailySalesChart(monthSalesRows, monthStart);
+  const salesChartData = buildDailySalesChart(
+    monthSalesRows,
+    monthPeriod.from,
+    monthPeriod.toExclusive
+  );
 
   const statLinks = resolveDashboardStatLinks({
     todaySales: buildSalesQuery({
@@ -233,24 +254,26 @@ export async function getDashboardPageDataUncached(
       to: formatDateInputValue(now),
     }),
     monthSales: buildSalesQuery({
-      from: formatDateInputValue(monthStart),
-      to: formatDateInputValue(monthEnd),
+      from: formatDateInputValue(monthPeriod.from),
+      to: formatDateInputValue(monthPeriod.toInclusive),
     }),
     pendingCollection: buildInvoicesQuery({
       tab: dueCollection > 0 ? "overdue" : "pending",
-      from: monthStart,
-      to: monthEnd,
+      from: monthPeriod.from,
+      to: monthPeriod.toInclusive,
     }),
+    // Nakit gider → ödenmiş gider filtresi (aynı metrik kapsamı)
     monthExpenses: buildExpensesQuery({
-      from: monthStart,
-      to: monthEnd,
+      tab: "paid",
+      from: monthPeriod.from,
+      to: monthPeriod.toInclusive,
     }),
     cashBank: "/cash-bank",
   });
 
   return {
     periodKey: input.periodKey,
-    monthLabel: getMonthLabel(now),
+    monthLabel: monthPeriod.label,
     todaySales,
     yesterdaySales,
     todaySalesChange: percentChange(todaySales, yesterdaySales),
@@ -267,6 +290,17 @@ export async function getDashboardPageDataUncached(
       income: monthCashIncome,
       expense: monthExpenses,
       profit,
+      accrualProfit: monthSummary.profit.accrual,
+      financeMirrorOutTotal: monthSummary.adjustments.financeMirrorOutTotal,
+      cashNet: monthSummary.profit.cashNet,
+      revenueLabel: "Nakit Gelir",
+      expenseLabel: "Nakit Gider",
+      profitLabel: CASH_RESULT_LABEL,
+      profitTooltip: CASH_RESULT_TOOLTIP,
+      accrualProfitLabel: ACCRUAL_PROFIT_LABEL,
+      salesBasisLabel: ACCRUAL_SALES_BY_CREATED_AT_LABEL,
+      basisNote:
+        "Seçili dönemde kasa/banka tahsilatları ve ödenen giderler esas alınır. Transfer ve ters kayıtlar dahil değildir.",
     },
     accounts: accounts.map((account) => ({
       id: account.id,
@@ -309,7 +343,7 @@ export async function getDashboardPageDataUncached(
       monthSales,
       lastMonthSales,
       monthExpenses,
-      lastMonthFinance.totalExpense,
+      lastMonthSummary.expenses.cashTotal,
       pendingCollection
     ),
   };

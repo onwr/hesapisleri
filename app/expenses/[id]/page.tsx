@@ -4,7 +4,6 @@ import { notFound, redirect } from "next/navigation";
 import {
   ArrowLeft,
   CalendarDays,
-  Edit3,
   Landmark,
   ReceiptText,
   Sparkles,
@@ -64,13 +63,12 @@ const { id } = await params;
   });
   if (!expense) notFound();
 
+  const statusBadge = getExpenseStatusBadge(expense.status);
+  const paymentBadge = getExpenseDisplayPaymentBadge(expense);
+  const lifecycleActions = expense.lifecycleActions;
   const canPay =
     expense.status !== "CANCELLED" && expense.paymentStatus === "UNPAID";
   const accounts = canPay ? await getExpenseFormAccounts(company.id) : [];
-
-  const statusBadge = getExpenseStatusBadge(expense.status);
-  const paymentBadge = getExpenseDisplayPaymentBadge(expense);
-  const canCancel = expense.status !== "CANCELLED";
 
   return (
     <AppShell>
@@ -126,22 +124,12 @@ const { id } = await params;
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5">
-              {canCancel ? (
-                <Link
-                  href={`/expenses/${expense.id}/edit`}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-black text-[#24345f] hover:bg-slate-50"
-                >
-                  <Edit3 size={13} />
-                  Düzenle
-                </Link>
-              ) : null}
-
               <ExpenseDetailActions
                 expenseId={expense.id}
                 expenseTitle={expense.title}
                 amount={expense.amount}
-                canCancel={canCancel}
-                canPay={canPay}
+                lifecycleActions={lifecycleActions}
+                requiresCancelReason={expense.requiresCancelReason}
                 accounts={accounts}
               />
             </div>

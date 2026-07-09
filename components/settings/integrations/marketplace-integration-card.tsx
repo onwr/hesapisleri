@@ -34,6 +34,7 @@ type MarketplaceIntegrationCardProps = {
   integration: IntegrationSummary | null;
   warehouses: Array<{ id: string; name: string }>;
   onRefetch: () => Promise<void>;
+  encryptionConfigured?: boolean;
 };
 
 type LoadingAction = "test" | "sync" | "importMappings" | "disconnect" | null;
@@ -43,6 +44,7 @@ export function MarketplaceIntegrationCard({
   integration,
   warehouses,
   onRefetch,
+  encryptionConfigured = true,
 }: MarketplaceIntegrationCardProps) {
   const config = CHANNEL_UI_CONFIG[channel];
   const status = getStatusBadge(integration?.status);
@@ -274,10 +276,26 @@ export function MarketplaceIntegrationCard({
           </p>
         ) : null}
 
+        {!encryptionConfigured ? (
+          <p className="mt-4 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+            Kurulum gerekli: entegrasyon şifreleme anahtarı tanımlı değil. Kart
+            görünür; credential kaydı sunucu yapılandırması tamamlanınca
+            etkinleşir.
+          </p>
+        ) : null}
+
         <div className="mt-5 grid gap-2 sm:grid-cols-2">
           <button
             type="button"
-            onClick={() => setConfigOpen(true)}
+            onClick={() => {
+              if (!encryptionConfigured) {
+                setError(
+                  "Entegrasyon şifreleme anahtarı yapılandırılmamış. Yöneticiniz INTEGRATION_ENCRYPTION_KEY tanımlamalıdır."
+                );
+                return;
+              }
+              setConfigOpen(true);
+            }}
             className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-xs font-black text-white"
           >
             <Settings2 size={14} />

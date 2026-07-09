@@ -15,6 +15,7 @@ import {
   type OrderStatCard,
   type OrderTabKey,
   type OrderTableRow,
+  type OrderArchiveFilter,
 } from "@/lib/orders-page-utils";
 
 export type {
@@ -42,6 +43,8 @@ export {
   parsePage,
   parseSearchQuery,
   parseSourceChannelFilter,
+  parseOrderArchiveFilter,
+  ORDER_ARCHIVE_FILTER_LABELS,
 } from "@/lib/orders-page-utils";
 
 const PAGE_SIZE = 10;
@@ -98,6 +101,7 @@ export type OrdersListFilters = {
   to: Date;
   q?: string | null;
   channel?: OrderSourceChannel | null;
+  archive?: OrderArchiveFilter;
 };
 
 function buildPeriodWhere(
@@ -123,6 +127,12 @@ function buildListWhere(
     filters.from,
     filters.to
   );
+
+  if (filters.archive === "active") {
+    where.archivedAt = null;
+  } else if (filters.archive === "archived") {
+    where.archivedAt = { not: null };
+  }
 
   const statuses = orderStatusesForTab(filters.tab);
   if (statuses) {

@@ -19,7 +19,10 @@ import {
 import { getInvoiceRemainingAmount } from "@/lib/invoice-payment-utils";
 import { activeSaleStatusFilter, isActiveSaleStatus } from "@/lib/sale-query-utils";
 import {
-  combineFinanceBreakdown,
+  buildCanonicalFinancialSummary,
+} from "@/lib/finance/financial-summary-service";
+import { FINANCIAL_METRIC_VERSION } from "@/lib/finance/financial-summary-service";
+import {
   mapAccountTransactions,
   sumActiveAccountBalances,
 } from "@/lib/finance-aggregation-utils";
@@ -138,6 +141,7 @@ export async function getAiAssistantPageData(
           note: true,
           amount: true,
           type: true,
+          expenseId: true,
         },
       }),
     ]);
@@ -154,16 +158,22 @@ export async function getAiAssistantPageData(
     isInDateRange(invoice.createdAt, options.from, options.to)
   );
 
-  const totalSales = sales.reduce((sum, sale) => sum + Number(sale.total), 0);
-  const financeBreakdown = combineFinanceBreakdown(
+  const accrualSalesTotal = sales.reduce(
+    (sum, sale) => sum + Number(sale.total),
+    0
+  );
+  const financeSummary = buildCanonicalFinancialSummary(
     accountTransactions,
     expensesRaw,
     options.from,
     options.to
   );
-  const totalExpenses = financeBreakdown.totalExpense;
-  const cashIncome = financeBreakdown.totalIncome;
-  const profit = financeBreakdown.netCashFlow;
+  const financeBreakdown = financeSummary.breakdown;
+  /** Nakit gelir — Dashboard/Raporlarla aynı */
+  const totalSales = financeSummary.revenue.total;
+  const totalExpenses = financeSummary.expenses.cashTotal;
+  const cashIncome = financeSummary.revenue.total;
+  const profit = financeSummary.profit.operational;
 
   const accountBalance = sumActiveAccountBalances(accountsRaw);
 
@@ -254,6 +264,7 @@ export async function getAiAssistantPageData(
   const context: AiAssistantContext = {
     userFirstName,
     totalSales,
+    accrualSalesTotal,
     totalExpenses,
     profit,
     cashIncome,
@@ -281,29 +292,37 @@ export async function getAiAssistantPageData(
     topExpenseCategory: highestExpenseCategory?.category ?? null,
     topExpenseAmount: highestExpenseCategory?.amount ?? 0,
     periodLabel: `${formatDateDisplay(options.from)} - ${formatDateDisplay(options.to)}`,
+    metricVersion: FINANCIAL_METRIC_VERSION,
   };
 
   const metricCards: AiMetricCard[] = [
     {
-      title: "Toplam Satış",
-      value: formatAiMoney(totalSales),
-      description: `${sales.length} satış kaydı`,
+      title: "Nakit Gelir",
+      value: formatAiMoney(cashIncome),
+      description: `${formatAiMoney(financeBreakdown.saleCollectionIncome)} tahsilat · ${formatAiMoney(financeBreakdown.manualIncome)} manuel`,
       iconKey: "trendingUp",
       color: "emerald",
     },
     {
-      title: "Toplam Gider",
+      title: "Nakit Gider",
       value: formatAiMoney(totalExpenses),
-      description: `${expenses.length} gider kaydı`,
+      description: "Ödenen gider + manuel çıkış",
       iconKey: "receipt",
       color: "rose",
     },
     {
-      title: "Net Durum",
+      title: "Operasyonel Nakit Sonucu",
       value: formatAiMoney(profit),
-      description: profit >= 0 ? "Kârda" : "Zararda",
+      description: profit >= 0 ? "Nakit giriş − nakit çıkış" : "Nakit çıkış ağırlıklı",
       iconKey: "banknote",
       color: profit >= 0 ? "emerald" : "rose",
+    },
+    {
+      title: "Kayıt Oluşturma Tarihine Göre Satış",
+      value: formatAiMoney(accrualSalesTotal),
+      description: `${sales.length} aktif satış · createdAt`,
+      iconKey: "file",
+      color: "blue",
     },
     {
       title: "Bekleyen Tahsilat",
@@ -311,13 +330,6 @@ export async function getAiAssistantPageData(
       description: `${unpaidInvoices.length} fatura`,
       iconKey: "file",
       color: "orange",
-    },
-    {
-      title: "Nakit Girişi",
-      value: formatAiMoney(cashIncome),
-      description: `${formatAiMoney(financeBreakdown.saleCollectionIncome)} tahsilat · ${formatAiMoney(financeBreakdown.manualIncome)} manuel`,
-      iconKey: "banknote",
-      color: "blue",
     },
     {
       title: "AI Risk Skoru",
@@ -482,8 +494,8 @@ export async function getAiAssistantPageData(
     initialMessages,
     financeSummary:
       profit >= 0
-        ? `Bu dönemde satışlarınız giderlerinizi karşılıyor. Net durumunuz ${formatAiMoney(profit)}. Bekleyen tahsilatlar düzenli takip edilirse nakit akışı daha sağlıklı ilerler.`
-        : `Bu dönemde giderleriniz satışlarınızın üzerinde. Net durumunuz ${formatAiMoney(profit)}. Gider kategorilerini ve bekleyen tahsilatları incelemeniz önerilir.`,
+        ? `Bu dönemde nakit geliriniz nakit giderinizi karşılıyor. Operasyonel nakit sonucu ${formatAiMoney(profit)}. Bekleyen tahsilatlar düzenli takip edilirse nakit akışı daha sağlıklı ilerler.`
+        : `Bu dönemde nakit gideriniz nakit gelirinizin üzerinde. Operasyonel nakit sonucu ${formatAiMoney(profit)}. Gider kategorilerini ve bekleyen tahsilatları incelemeniz önerilir.`,
     financeHeadline:
       profit >= 0
         ? "Genel tablo olumlu görünüyor."

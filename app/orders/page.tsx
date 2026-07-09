@@ -38,6 +38,7 @@ import {
   parsePage,
   parseSearchQuery,
   parseSourceChannelFilter,
+  parseOrderArchiveFilter,
   type OrderActionCard,
 } from "@/lib/orders-page-utils";
 
@@ -49,6 +50,7 @@ type OrdersPageProps = {
     to?: string;
     q?: string;
     channel?: string;
+    archive?: string;
   }>;
 };
 
@@ -89,6 +91,7 @@ const now = new Date();
   const currentPage = parsePage(params.page);
   const searchQuery = parseSearchQuery(params.q);
   const sourceChannel = parseSourceChannelFilter(params.channel);
+  const archiveFilter = parseOrderArchiveFilter(params.archive);
   const defaultFrom = startOfMonth(now);
   const defaultTo = endOfMonth(now);
   const { from, to } = normalizeDateRange(
@@ -116,6 +119,7 @@ const now = new Date();
     to,
     q: searchQuery,
     channel: sourceChannel,
+    archive: archiveFilter,
   });
 
   const hasFilters =
@@ -123,7 +127,8 @@ const now = new Date();
     activeTab !== "all" ||
     parseDateParam(params.from) !== null ||
     parseDateParam(params.to) !== null ||
-    Boolean(sourceChannel);
+    Boolean(sourceChannel) ||
+    archiveFilter !== "active";
 
   return (
     <AppShell>
@@ -189,6 +194,7 @@ const now = new Date();
               to={to}
               searchQuery={searchQuery}
               channel={sourceChannel}
+              archive={archiveFilter}
             />
 
             <div className="overflow-x-auto">
@@ -280,7 +286,9 @@ const now = new Date();
                           orderId={order.id}
                           orderNo={order.orderNo}
                           orderStatus={order.orderStatus}
+                          sourceChannel={order.channel}
                           detailHref={order.detailHref}
+                          isArchived={order.isArchived}
                         />
                       </td>
                     </tr>
@@ -330,6 +338,7 @@ const now = new Date();
               to={to}
               searchQuery={searchQuery}
               channel={sourceChannel}
+              archive={archiveFilter}
               totalPages={totalPages}
               currentPage={page}
               totalRecords={totalRecords}

@@ -95,10 +95,11 @@ describe("AI Faz 1.1 production readiness", () => {
   });
 
   it("cache anahtarı prompt version içerir", () => {
-    assert.equal(AI_PROMPT_VERSION, "1.1.0");
+    assert.equal(AI_PROMPT_VERSION, "1.2.0");
     const cache = read("lib/ai/ai-cache-key.ts");
     assert.match(cache, /companyId/);
     assert.match(cache, /AI_PROMPT_VERSION/);
+    assert.match(cache, /FINANCIAL_METRIC_VERSION/);
     assert.match(cache, /getCompanyDataRevisionHash/);
   });
 

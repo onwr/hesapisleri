@@ -10,6 +10,7 @@ import {
 } from "@/lib/marketplace/marketplace-integration-service";
 import { getEDocumentIntegrationSummary } from "@/lib/e-document/e-document-integration-service";
 import { db } from "@/lib/prisma";
+import { isIntegrationEncryptionConfigured } from "@/lib/marketplace/marketplace-crypto";
 
 export default async function SettingsIntegrationsPage() {
   const session = await getAppSession();
@@ -43,10 +44,20 @@ export default async function SettingsIntegrationsPage() {
   const autoSyncEnabled = [trendyol, hepsiburada].some(
     (item) => item?.syncEnabled
   );
+  const encryptionConfigured = isIntegrationEncryptionConfigured();
 
   return (
     <AppShell>
       <div className="space-y-5">
+        {!encryptionConfigured ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+            Pazaryeri bağlantı bilgilerini kaydetmek için sunucuda{" "}
+            <code className="font-mono text-xs">INTEGRATION_ENCRYPTION_KEY</code>{" "}
+            (32 byte) tanımlanmalıdır. Sayfayı görüntüleyebilirsiniz; kayıt ve
+            test bağlantısı bu anahtar olmadan çalışmaz.
+          </div>
+        ) : null}
+
         <IntegrationsHero
           connectedCount={connectedCount}
           errorCount={errorCount}
@@ -60,6 +71,7 @@ export default async function SettingsIntegrationsPage() {
           initialEDocument={eDocument}
           initialRuns={runs}
           warehouses={warehouses}
+          encryptionConfigured={encryptionConfigured}
         />
       </div>
     </AppShell>

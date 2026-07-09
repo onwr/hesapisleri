@@ -451,9 +451,10 @@ export async function moveStockBetweenWarehouses(
 export async function cancelWarehouseTransfer(
   companyId: string,
   userId: string,
-  transferId: string
+  transferId: string,
+  reason?: string
 ) {
-  return cancelWarehouseTransferAtomic(companyId, userId, transferId);
+  return cancelWarehouseTransferAtomic(companyId, userId, transferId, reason);
 }
 
 export type WarehouseListItem = Prisma.WarehouseGetPayload<{

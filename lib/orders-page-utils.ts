@@ -46,6 +46,8 @@ export type OrderTableRow = {
   deliveredAt: Date | null;
   createdAt: Date;
   detailHref: string;
+  archivedAt: Date | null;
+  isArchived: boolean;
 };
 
 export type OrderStatCard = {
@@ -126,6 +128,7 @@ export function mapSaleToOrderRow(sale: {
   shippedAt: Date | null;
   deliveredAt: Date | null;
   createdAt: Date;
+  archivedAt?: Date | null;
   customer: { name: string; phone: string | null } | null;
   items: Array<unknown>;
 }): OrderTableRow {
@@ -151,6 +154,8 @@ export function mapSaleToOrderRow(sale: {
     deliveredAt: sale.deliveredAt,
     createdAt: sale.createdAt,
     detailHref: `/orders/${sale.id}`,
+    archivedAt: sale.archivedAt ?? null,
+    isArchived: Boolean(sale.archivedAt),
   };
 }
 
@@ -315,6 +320,21 @@ export function buildIntegrationActivities(
   }).filter((item) => item.description !== "Henüz sipariş yok");
 }
 
+export type OrderArchiveFilter = "active" | "archived" | "all";
+
+export const ORDER_ARCHIVE_FILTER_LABELS: Record<OrderArchiveFilter, string> = {
+  active: "Aktif",
+  archived: "Arşivlenmiş",
+  all: "Tümü",
+};
+
+export function parseOrderArchiveFilter(
+  value?: string | null
+): OrderArchiveFilter {
+  if (value === "archived" || value === "all") return value;
+  return "active";
+}
+
 export function buildOrdersQuery(params: {
   tab?: OrderTabKey;
   page?: number;
@@ -322,6 +342,7 @@ export function buildOrdersQuery(params: {
   to?: Date | string;
   q?: string | null;
   channel?: OrderSourceChannel | null;
+  archive?: OrderArchiveFilter;
 }) {
   const search = new URLSearchParams();
 
@@ -355,6 +376,10 @@ export function buildOrdersQuery(params: {
 
   if (params.channel) {
     search.set("channel", params.channel);
+  }
+
+  if (params.archive && params.archive !== "active") {
+    search.set("archive", params.archive);
   }
 
   const query = search.toString();

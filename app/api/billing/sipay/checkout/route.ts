@@ -57,8 +57,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, data: result });
   } catch (error) {
     if (error instanceof MembershipServiceError) {
+      console.error("[sipay-checkout] error", {
+        message: error.message,
+        status: error.status,
+      });
       return NextResponse.json({ success: false, message: error.message }, { status: error.status });
     }
+    console.error("[sipay-checkout] error", {
+      message: error instanceof Error ? error.message : "unknown",
+      status: 500,
+    });
     return NextResponse.json(
       { success: false, message: error instanceof Error ? error.message : "Sipay ödeme başlatılamadı." },
       { status: 500 },

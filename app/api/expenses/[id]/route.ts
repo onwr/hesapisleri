@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  deleteExpenseRecord,
   getExpenseDetail,
   updateExpenseRecord,
   updateExpenseSchema,
@@ -82,6 +83,41 @@ export async function PATCH(req: Request, { params }: Props) {
 
     return NextResponse.json(
       { success: false, message: "Gider güncellenirken bir hata oluştu." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(_req: Request, { params }: Props) {
+  try {
+    const auth = await requireApiModuleAccess("expenses");
+    if ("error" in auth) return auth.error;
+
+    const { userId, companyId } = auth;
+    const { id } = await params;
+
+    const result = await deleteExpenseRecord({
+      companyId,
+      userId,
+      expenseId: id,
+    });
+
+    if (!result.ok) {
+      return NextResponse.json(
+        { success: false, message: result.message },
+        { status: result.status }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "Gider silindi.",
+    });
+  } catch (error) {
+    console.error("DELETE_EXPENSE_ERROR", error);
+
+    return NextResponse.json(
+      { success: false, message: "Gider silinirken bir hata oluştu." },
       { status: 500 }
     );
   }

@@ -20,6 +20,12 @@ import {
   type NormalizedTransferItem,
   type NormalizedWarehouseTransferInput,
 } from "@/lib/warehouse-transfer-utils";
+import {
+  assertLifecycleAction,
+  mapWarehouseTransferToLifecycle,
+  writeLifecycleActivityLog,
+} from "@/lib/transaction-lifecycle-enforcement";
+import { runWarehouseTransferCancelTestHook } from "@/lib/test-transaction-hooks";
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -411,7 +417,8 @@ export async function executeWarehouseTransfer(
 export async function cancelWarehouseTransferAtomic(
   companyId: string,
   userId: string,
-  transferId: string
+  transferId: string,
+  reason?: string
 ): Promise<ServiceResult<{ transferId: string }>> {
   try {
     const result = await runTransactionWithRetry(async (tx) => {
@@ -436,13 +443,53 @@ export async function cancelWarehouseTransferAtomic(
       if (transfer.status === "CANCELLED") {
         return {
           ok: false as const,
-          status: 400,
+          status: 409,
           message: "Bu transfer zaten iptal edilmiş.",
+        };
+      }
+
+      const lifecycle = mapWarehouseTransferToLifecycle(transfer.status);
+      try {
+        assertLifecycleAction({
+          module: "stock_transfers",
+          state: lifecycle,
+          action: "cancel",
+          message: "Bu transfer iptal edilemez.",
+        });
+      } catch (error) {
+        return {
+          ok: false as const,
+          status: 400,
+          message:
+            error instanceof Error
+              ? error.message
+              : "Bu transfer iptal edilemez.",
         };
       }
 
       const items = getTransferItemsForCancel(transfer);
       const cancelNote = `${transfer.transferNo} transferi iptal edildi`;
+
+      for (const item of items) {
+        const destinationStock = await tx.warehouseStock.findUnique({
+          where: {
+            warehouseId_productId: {
+              warehouseId: transfer.toWarehouseId,
+              productId: item.productId,
+            },
+          },
+          select: { quantity: true },
+        });
+
+        if ((destinationStock?.quantity ?? 0) < item.quantity) {
+          return {
+            ok: false as const,
+            status: 400,
+            message:
+              "Transfer iptal edilemez: hedef depoda geri alınacak stok yetersiz.",
+          };
+        }
+      }
 
       for (const item of items) {
         await applyWarehouseStockDelta(tx, {
@@ -451,6 +498,9 @@ export async function cancelWarehouseTransferAtomic(
           productId: item.productId,
           delta: -item.quantity,
         });
+
+        // Test-only hook (no-op in production): inject failure after first stock write.
+        runWarehouseTransferCancelTestHook();
 
         await applyWarehouseStockDelta(tx, {
           companyId,
@@ -494,14 +544,15 @@ export async function cancelWarehouseTransferAtomic(
         await syncProductStockFromWarehouses(companyId, productId, tx);
       }
 
-      await tx.activityLog.create({
-        data: {
-          companyId,
-          userId,
-          action: "UPDATE",
-          module: "stocks",
-          message: `${transfer.transferNo}: ${transfer.product.name} transferi iptal edildi.`,
-        },
+      await writeLifecycleActivityLog(tx, {
+        companyId,
+        userId,
+        module: "stocks",
+        entityType: "WAREHOUSE_TRANSFER",
+        entityId: transfer.id,
+        action: "CANCEL",
+        message: `${transfer.transferNo}: ${transfer.product.name} transferi iptal edildi.`,
+        reason,
       });
 
       return {

@@ -9,6 +9,7 @@ type StatCardProps = {
   comparisonLabel?: string;
   changePercent?: number;
   highlight?: string;
+  tooltip?: string;
   icon: ReactNode;
   color?: "green" | "blue" | "orange" | "purple" | "red";
   href?: string;
@@ -45,6 +46,7 @@ export function StatCard({
   comparisonLabel,
   changePercent,
   highlight,
+  tooltip,
   icon,
   color = "blue",
   href,
@@ -62,6 +64,7 @@ export function StatCard({
           ? "transition hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(15,23,42,0.1)]"
           : "",
       ].join(" ")}
+      title={tooltip}
     >
       <span
         className={`absolute inset-x-0 top-0 h-1 ${accentBarMap[color]}`}

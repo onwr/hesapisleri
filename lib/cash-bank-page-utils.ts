@@ -39,6 +39,18 @@ export type TransactionRow = {
   accountName: string;
   accountType: string;
   bankName: string | null;
+  accountId: string;
+  direction: "in" | "out";
+  expenseId?: string | null;
+  invoiceId?: string | null;
+  supplierId?: string | null;
+  transferGroupId?: string | null;
+  isLinked: boolean;
+  isTransfer: boolean;
+  isMirror: boolean;
+  transferCancelled: boolean;
+  lifecycleActions: import("@/lib/transaction-lifecycle-policy").LifecycleActionMatrix;
+  linkedHref?: string;
 };
 
 export type BalanceBreakdownItem = {

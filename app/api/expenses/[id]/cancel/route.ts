@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { cancelExpenseRecord } from "@/lib/expense-service";
 import { requireApiModuleAccess } from "@/lib/module-access";
 import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
@@ -7,18 +8,32 @@ type Props = {
   params: Promise<{ id: string }>;
 };
 
-export async function POST(_req: Request, { params }: Props) {
+const cancelSchema = z.object({
+  reason: z.string().optional(),
+});
+
+export async function POST(req: Request, { params }: Props) {
   try {
     const auth = await requireApiModuleAccess("expenses");
     if ("error" in auth) return auth.error;
 
     const { userId, companyId } = auth;
     const { id } = await params;
+    const body = await req.json().catch(() => ({}));
+    const parsed = cancelSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, message: "Geçersiz istek." },
+        { status: 400 }
+      );
+    }
 
     const result = await cancelExpenseRecord({
       companyId,
       userId,
       expenseId: id,
+      reason: parsed.data.reason,
     });
 
     if (!result.ok) {

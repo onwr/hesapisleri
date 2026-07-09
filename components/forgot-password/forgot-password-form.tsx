@@ -13,7 +13,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export function ForgotPasswordForm() {
+export function ForgotPasswordForm({
+  mailConfigured = true,
+}: {
+  mailConfigured?: boolean;
+}) {
   const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -80,6 +84,13 @@ export function ForgotPasswordForm() {
       </div>
 
       <form onSubmit={handleSubmit} noValidate className="space-y-5">
+        {!mailConfigured ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold leading-6 text-amber-900">
+            E-posta servisi şu anda yapılandırılmamış. Şifre sıfırlama bağlantısı
+            gönderilemez. Lütfen sistem yöneticinizle iletişime geçin.
+          </div>
+        ) : null}
+
         <div className="space-y-2">
           <Label htmlFor="email" className="text-sm font-bold text-[#24345f]">
             E-posta
@@ -101,7 +112,11 @@ export function ForgotPasswordForm() {
 
         <AuthAlert message={error} />
 
-        <Button type="submit" disabled={isSubmitting} className={authPrimaryButtonClassName}>
+        <Button
+          type="submit"
+          disabled={isSubmitting || !mailConfigured}
+          className={authPrimaryButtonClassName}
+        >
           {isSubmitting ? (
             <>
               <Loader2 className="size-4 animate-spin" />

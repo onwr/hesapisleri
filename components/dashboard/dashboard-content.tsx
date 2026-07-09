@@ -37,6 +37,7 @@ import {
 } from "@/components/dashboard/dashboard-motion";
 import { AiPageTriggerButton } from "@/components/ai-assistant/ai-page-trigger-button";
 import { formatMoney } from "@/lib/dashboard-metrics";
+import { ACCRUAL_SALES_BY_CREATED_AT_LABEL } from "@/lib/finance/financial-period";
 import type { ExchangeRateDisplay } from "@/lib/exchange-rate-utils";
 import type { OnboardingChecklistItem } from "@/lib/onboarding/onboarding-progress";
 
@@ -78,6 +79,16 @@ export type DashboardContentProps = {
     income: number;
     expense: number;
     profit: number;
+    accrualProfit?: number | null;
+    financeMirrorOutTotal?: number;
+    cashNet?: number;
+    revenueLabel?: string;
+    expenseLabel?: string;
+    profitLabel?: string;
+    profitTooltip?: string;
+    accrualProfitLabel?: string;
+    salesBasisLabel?: string;
+    basisNote?: string;
   };
   recentActivities: Array<{
     id: string;
@@ -307,13 +318,15 @@ export function DashboardContent({
         </motion.div>
         <motion.div variants={dashboardFadeUp}>
           <StatCard
-            title="Bu Ay Toplam Satış"
+            title={ACCRUAL_SALES_BY_CREATED_AT_LABEL}
             value={formatMoney(monthSales)}
             comparisonLabel="Geçen aya göre"
             changePercent={monthSalesChange}
             icon={<ShoppingCart size={20} />}
             color="blue"
             href={links.monthSales}
+            subtitle="createdAt · aktif satışlar"
+            tooltip="Aktif satışların kayıt oluşturma (createdAt) tarihine göre tahakkuk toplamı. Nakit gelir ile aynı şey değildir."
           />
         </motion.div>
         <motion.div variants={dashboardFadeUp}>
@@ -333,9 +346,10 @@ export function DashboardContent({
         </motion.div>
         <motion.div variants={dashboardFadeUp}>
           <StatCard
-            title="Toplam Gider"
+            title="Nakit Gider"
             value={formatMoney(monthExpenses)}
-            subtitle="Bu ay"
+            subtitle="Bu ay ödenen giderler"
+            tooltip="Ödenen gider + manuel kasa çıkışı. Link ödenmiş gider listesini açar."
             icon={<ReceiptText size={20} />}
             color="red"
             href={links.monthExpenses}

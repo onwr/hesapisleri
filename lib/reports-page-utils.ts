@@ -4,7 +4,14 @@ import {
   normalizeDateRange,
   parseDateParam,
 } from "@/lib/sales-page-utils";
-import { endOfMonth, percentChange, startOfDay, startOfMonth } from "@/lib/dashboard-metrics";
+import { percentChange, startOfDay } from "@/lib/dashboard-metrics";
+import {
+  CASH_RESULT_LABEL,
+  COMPANY_FINANCE_TIMEZONE,
+  isInHalfOpenRange,
+  iterateZonedMonthBuckets,
+  toExclusiveBound,
+} from "@/lib/finance/financial-period";
 import { formatDateTimeDisplay, toIsoString } from "@/lib/format-utils";
 
 export type ReportTabKey = "all" | "financial" | "sales" | "stock" | "customer";
@@ -341,33 +348,24 @@ export function getPreviousPeriod(from: Date, to: Date) {
 }
 
 export function getMonthBuckets(from: Date, to: Date, maxMonths = 6) {
-  const buckets: Array<{
-    key: string;
-    label: string;
-    start: Date;
-    end: Date;
-  }> = [];
-
-  let cursor = startOfMonth(to);
-  const rangeStart = startOfMonth(from);
-
-  while (cursor >= rangeStart && buckets.length < maxMonths) {
-    buckets.unshift({
-      key: getMonthKey(cursor),
-      label: getShortMonth(cursor),
-      start: startOfMonth(cursor),
-      end: endOfMonth(cursor),
-    });
-
-    cursor = new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1);
-  }
-
-  return buckets;
+  const toExclusive = toExclusiveBound(to, "inclusive");
+  return iterateZonedMonthBuckets(
+    from,
+    toExclusive,
+    COMPANY_FINANCE_TIMEZONE,
+    maxMonths
+  ).map((bucket) => ({
+    key: bucket.key,
+    label: bucket.label,
+    start: bucket.from,
+    end: new Date(bucket.toExclusive.getTime() - 1),
+    toExclusive: bucket.toExclusive,
+  }));
 }
 
 export function isInRange(date: Date, from: Date, to: Date) {
-  const value = date.getTime();
-  return value >= startOfDay(from).getTime() && value <= endOfDay(to).getTime();
+  const toExclusive = toExclusiveBound(to, "inclusive");
+  return isInHalfOpenRange(date, from, toExclusive);
 }
 
 export function buildMonthlyFinanceData(
@@ -378,16 +376,22 @@ export function buildMonthlyFinanceData(
 ): MonthlyFinancePoint[] {
   return getMonthBuckets(from, to).map((bucket) => {
     const bucketFrom =
-      bucket.start.getTime() < startOfDay(from).getTime() ? from : bucket.start;
-    const bucketTo =
-      bucket.end.getTime() > endOfDay(to).getTime() ? to : bucket.end;
+      bucket.start.getTime() < from.getTime() ? from : bucket.start;
+    const bucketToExclusive =
+      bucket.toExclusive.getTime() > toExclusiveBound(to).getTime()
+        ? toExclusiveBound(to)
+        : bucket.toExclusive;
 
     const income = sales
-      .filter((sale) => isInRange(sale.createdAt, bucketFrom, bucketTo))
+      .filter((sale) =>
+        isInHalfOpenRange(sale.createdAt, bucketFrom, bucketToExclusive)
+      )
       .reduce((sum, sale) => sum + Number(sale.total), 0);
 
     const expense = expenses
-      .filter((item) => isInRange(item.date, bucketFrom, bucketTo))
+      .filter((item) =>
+        isInHalfOpenRange(item.date, bucketFrom, bucketToExclusive)
+      )
       .reduce((sum, item) => sum + Number(item.amount), 0);
 
     return {
@@ -424,7 +428,7 @@ export function buildReportKpiCards(
 
   return [
     {
-      title: "Toplam Gelir",
+      title: "Nakit Gelir",
       value: sanitizeReportNumber(currentIncome),
       previousValue: sanitizeReportNumber(previousIncome),
       changePercent: sanitizeReportNumber(
@@ -436,7 +440,7 @@ export function buildReportKpiCards(
       miniLineData: buildMiniLineData(monthlyFinanceData, "income"),
     },
     {
-      title: "Toplam Gider",
+      title: "Nakit Gider",
       value: sanitizeReportNumber(currentExpense),
       previousValue: sanitizeReportNumber(previousExpense),
       changePercent: sanitizeReportNumber(
@@ -448,7 +452,7 @@ export function buildReportKpiCards(
       miniLineData: buildMiniLineData(monthlyFinanceData, "expense"),
     },
     {
-      title: "Net Kâr",
+      title: CASH_RESULT_LABEL,
       value: sanitizeReportNumber(currentNet),
       previousValue: sanitizeReportNumber(previousNet),
       changePercent: sanitizeReportNumber(percentChange(currentNet, previousNet)),

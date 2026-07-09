@@ -1,8 +1,3 @@
-import {
-  endOfMonth,
-  startOfDay,
-  startOfMonth,
-} from "@/lib/dashboard-metrics";
 import { getFinanceMirrorKind } from "@/lib/finance-reversal-utils";
 import {
   getTransactionDirection,
@@ -10,12 +5,12 @@ import {
   roundCashMoney,
   type AccountTransactionLike,
 } from "@/lib/cash-bank-account-utils";
-
-function endOfDay(date: Date) {
-  const value = new Date(date);
-  value.setHours(23, 59, 59, 999);
-  return value;
-}
+import {
+  COMPANY_FINANCE_TIMEZONE,
+  isInHalfOpenRange,
+  iterateZonedMonthBuckets,
+  toExclusiveBound,
+} from "@/lib/finance/financial-period";
 
 export type ExpenseForAggregation = {
   amount: unknown;
@@ -68,10 +63,13 @@ export function isActiveExpenseRecord(expense: ExpenseForAggregation) {
   return expense.status !== "CANCELLED";
 }
 
+/**
+ * Sum expenses in half-open range [from, toExclusive).
+ */
 export function sumExpensesInRange(
   expenses: ExpenseForAggregation[],
   from: Date,
-  to: Date,
+  toExclusive: Date,
   predicate: (expense: ExpenseForAggregation) => boolean
 ) {
   return roundCashMoney(
@@ -80,8 +78,7 @@ export function sumExpensesInRange(
         (expense) =>
           isActiveExpenseRecord(expense) &&
           predicate(expense) &&
-          expense.date.getTime() >= startOfDay(from).getTime() &&
-          expense.date.getTime() <= endOfDay(to).getTime()
+          isInHalfOpenRange(expense.date, from, toExclusive)
       )
       .reduce((sum, expense) => sum + Number(expense.amount), 0)
   );
@@ -90,12 +87,12 @@ export function sumExpensesInRange(
 export function sumRecordedUnpaidExpenses(
   expenses: ExpenseForAggregation[],
   from: Date,
-  to: Date
+  toExclusive: Date
 ) {
   return sumExpensesInRange(
     expenses,
     from,
-    to,
+    toExclusive,
     (expense) => expense.paymentStatus !== "PAID"
   );
 }
@@ -103,12 +100,12 @@ export function sumRecordedUnpaidExpenses(
 export function sumPaidExpenseCashOut(
   expenses: ExpenseForAggregation[],
   from: Date,
-  to: Date
+  toExclusive: Date
 ) {
   return sumExpensesInRange(
     expenses,
     from,
-    to,
+    toExclusive,
     (expense) => expense.paymentStatus === "PAID"
   );
 }
@@ -116,9 +113,9 @@ export function sumPaidExpenseCashOut(
 export function sumAccruedExpenses(
   expenses: ExpenseForAggregation[],
   from: Date,
-  to: Date
+  toExclusive: Date
 ) {
-  return sumExpensesInRange(expenses, from, to, () => true);
+  return sumExpensesInRange(expenses, from, toExclusive, () => true);
 }
 
 export function shouldExcludeFromIncomeExpenseTotals(
@@ -134,7 +131,7 @@ export function shouldExcludeFromIncomeExpenseTotals(
 export function aggregateAccountTransactions(
   transactions: AccountTransactionLike[],
   from?: Date,
-  to?: Date
+  toExclusive?: Date
 ): Omit<
   FinanceAggregationBreakdown,
   "recordedExpenseTotal" | "paidExpenseTotal" | "totalAccruedExpense"
@@ -148,12 +145,8 @@ export function aggregateAccountTransactions(
   let transferOutTotal = 0;
 
   for (const transaction of transactions) {
-    if (from && to) {
-      const value = transaction.date.getTime();
-      if (
-        value < startOfDay(from).getTime() ||
-        value > endOfDay(to).getTime()
-      ) {
+    if (from && toExclusive) {
+      if (!isInHalfOpenRange(transaction.date, from, toExclusive)) {
         continue;
       }
     }
@@ -237,20 +230,32 @@ export function aggregateAccountTransactions(
   };
 }
 
+/**
+ * Combine cash P&L for period.
+ * `to` defaults to inclusive (legacy endOfDay/endOfMonth) and is converted to
+ * half-open via toExclusiveBound. Pass toMode: "exclusive" when `to` is already exclusive.
+ */
 export function combineFinanceBreakdown(
   accountTransactions: AccountTransactionLike[],
   expenses: ExpenseForAggregation[],
   from: Date,
-  to: Date
+  to: Date,
+  options?: { toMode?: "inclusive" | "exclusive" }
 ): FinanceAggregationBreakdown {
+  const toExclusive =
+    options?.toMode === "exclusive" ? to : toExclusiveBound(to, "inclusive");
   const accountPart = aggregateAccountTransactions(
     accountTransactions,
     from,
-    to
+    toExclusive
   );
-  const recordedExpenseTotal = sumRecordedUnpaidExpenses(expenses, from, to);
-  const paidExpenseTotal = sumPaidExpenseCashOut(expenses, from, to);
-  const totalAccruedExpense = sumAccruedExpenses(expenses, from, to);
+  const recordedExpenseTotal = sumRecordedUnpaidExpenses(
+    expenses,
+    from,
+    toExclusive
+  );
+  const paidExpenseTotal = sumPaidExpenseCashOut(expenses, from, toExclusive);
+  const totalAccruedExpense = sumAccruedExpenses(expenses, from, toExclusive);
   const totalExpense = roundCashMoney(
     paidExpenseTotal + accountPart.manualCashExpense
   );
@@ -268,58 +273,46 @@ export function combineFinanceBreakdown(
   };
 }
 
-function getMonthKey(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function getShortMonth(date: Date) {
-  return new Intl.DateTimeFormat("tr-TR", {
-    month: "short",
-  }).format(date);
-}
-
 export function buildMonthlyCashFlowData(
   transactions: AccountTransactionLike[],
   expenses: ExpenseForAggregation[],
   from: Date,
   to: Date,
-  maxMonths = 6
+  maxMonths = 6,
+  options?: { toMode?: "inclusive" | "exclusive"; timeZone?: string }
 ): MonthlyCashFlowPoint[] {
-  const buckets: Array<{ key: string; label: string; start: Date; end: Date }> =
-    [];
+  const timeZone = options?.timeZone ?? COMPANY_FINANCE_TIMEZONE;
+  const toExclusive =
+    options?.toMode === "exclusive" ? to : toExclusiveBound(to, "inclusive");
 
-  let cursor = startOfMonth(to);
-  const rangeStart = startOfMonth(from);
-
-  while (cursor >= rangeStart && buckets.length < maxMonths) {
-    buckets.unshift({
-      key: getMonthKey(cursor),
-      label: getShortMonth(cursor),
-      start: startOfMonth(cursor),
-      end: endOfMonth(cursor),
-    });
-
-    cursor = new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1);
-  }
+  const buckets = iterateZonedMonthBuckets(
+    from,
+    toExclusive,
+    timeZone,
+    maxMonths
+  );
 
   return buckets.map((bucket) => {
     const bucketFrom =
-      bucket.start.getTime() < startOfDay(from).getTime() ? from : bucket.start;
-    const bucketTo =
-      bucket.end.getTime() > endOfDay(to).getTime() ? to : bucket.end;
+      bucket.from.getTime() < from.getTime() ? from : bucket.from;
+    const bucketToExclusive =
+      bucket.toExclusive.getTime() > toExclusive.getTime()
+        ? toExclusive
+        : bucket.toExclusive;
 
     const breakdown = combineFinanceBreakdown(
       transactions,
       expenses,
       bucketFrom,
-      bucketTo
+      bucketToExclusive,
+      { toMode: "exclusive" }
     );
 
     return {
       month: bucket.label,
       income: breakdown.totalIncome,
       expense: breakdown.totalExpense,
-      net: breakdown.netCashFlow,
+      net: roundCashMoney(breakdown.totalIncome - breakdown.totalExpense),
       saleCollectionIncome: breakdown.saleCollectionIncome,
       manualIncome: breakdown.manualIncome,
     };

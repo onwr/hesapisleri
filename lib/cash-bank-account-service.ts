@@ -6,6 +6,14 @@ import { buildTransferActivityMessage } from "@/lib/activity-log-utils";
 import { invalidateDashboardCache } from "@/lib/dashboard-cache-invalidation";
 import { getActiveAccountOptions } from "@/lib/account-read-service";
 import {
+  buildFinanceMirrorNote,
+  isFinanceMirrorTransaction,
+} from "@/lib/finance-reversal-utils";
+import {
+  assertCancelReasonProvided,
+  writeLifecycleActivityLog,
+} from "@/lib/transaction-lifecycle-enforcement";
+import {
   isPrismaUniqueConstraintError,
   runTransactionWithRetry,
 } from "@/lib/prisma-transaction-utils";
@@ -19,6 +27,7 @@ import {
   roundCashMoney,
   validateTransferAccounts,
 } from "@/lib/cash-bank-account-utils";
+import { resolveCashBankTransactionMutationContext } from "@/lib/cash-bank-transaction-row-utils";
 import {
   getCompanyAllowNegativeCashBalance,
   hasInsufficientCashBalance,
@@ -78,8 +87,18 @@ export type AccountTransactionDetailRow = {
   direction: "in" | "out";
   directionLabel: string;
   sourceLabel: string;
+  sourceKey: string;
   reference: string | null;
   balanceAfter: number;
+  expenseId?: string | null;
+  invoiceId?: string | null;
+  supplierId?: string | null;
+  transferGroupId?: string | null;
+  isLinked: boolean;
+  isMirror: boolean;
+  isTransfer: boolean;
+  linkedHref?: string;
+  lifecycleActions: import("@/lib/transaction-lifecycle-policy").LifecycleActionMatrix;
 };
 
 export type SerializedAccount = {
@@ -103,12 +122,17 @@ function mapTransactionRow(
     note: string | null;
     amount: unknown;
     type: string;
+    expenseId?: string | null;
+    invoiceId?: string | null;
+    supplierId?: string | null;
+    transferGroupId?: string | null;
   },
   balanceAfter: number
 ): AccountTransactionDetailRow {
   const amount = Number(transaction.amount);
   const direction = getTransactionDirection(transaction);
   const source = inferTransactionSource(transaction);
+  const mutation = resolveCashBankTransactionMutationContext(transaction);
 
   return {
     id: transaction.id,
@@ -121,8 +145,18 @@ function mapTransactionRow(
     direction,
     directionLabel: direction === "in" ? "Giriş" : "Çıkış",
     sourceLabel: source.label,
+    sourceKey: source.key,
     reference: extractTransactionReference(transaction.title, transaction.note),
     balanceAfter,
+    expenseId: transaction.expenseId,
+    invoiceId: transaction.invoiceId,
+    supplierId: transaction.supplierId,
+    transferGroupId: transaction.transferGroupId,
+    isLinked: mutation.isLinked,
+    isMirror: mutation.isMirror,
+    isTransfer: mutation.isTransfer,
+    linkedHref: mutation.linkedHref,
+    lifecycleActions: mutation.lifecycleActions,
   };
 }
 
@@ -156,6 +190,10 @@ export async function getAccountDetailData(companyId: string, accountId: string)
     note: transaction.note,
     amount: Number(transaction.amount),
     type: transaction.type,
+    expenseId: transaction.expenseId,
+    invoiceId: transaction.invoiceId,
+    supplierId: transaction.supplierId,
+    transferGroupId: transaction.transferGroupId,
   }));
 
   const withBalances = attachRunningBalances(rawTransactions, currentBalance);
@@ -596,4 +634,282 @@ export async function assertAccountBelongsToCompany(
 ) {
   const account = await assertAccountOwnership(companyId, accountId);
   return Boolean(account);
+}
+
+function hashCancelTransferPayload(transferGroupId: string, reason: string) {
+  return createHash("sha256")
+    .update(JSON.stringify({ transferGroupId, reason }))
+    .digest("hex");
+}
+
+export async function cancelAccountTransfer(input: {
+  companyId: string;
+  userId: string;
+  transferGroupId: string;
+  reason: string;
+  idempotencyKey?: string;
+}): Promise<
+  | {
+      ok: true;
+      data: {
+        transferGroupId: string;
+        reversalGroupId: string;
+        outReversalId: string;
+        inReversalId: string;
+      };
+      replayed?: boolean;
+    }
+  | { ok: false; status: number; message: string }
+> {
+  const reason = input.reason?.trim();
+  if (!reason) {
+    return { ok: false, status: 400, message: "İptal nedeni zorunludur." };
+  }
+
+  const idempotencyKey =
+    input.idempotencyKey ?? `cancel-transfer:${input.transferGroupId}`;
+
+  try {
+    const result = await runTransactionWithRetry(async (tx) => {
+      const legs = await tx.accountTransaction.findMany({
+        where: {
+          transferGroupId: input.transferGroupId,
+          account: { companyId: input.companyId },
+        },
+        include: { account: true },
+        orderBy: { createdAt: "asc" },
+      });
+
+      if (legs.length !== 2) {
+        return {
+          ok: false as const,
+          status: 404,
+          message: "Transfer kaydı bulunamadı.",
+        };
+      }
+
+      if (legs.some((leg) => isFinanceMirrorTransaction(leg))) {
+        return {
+          ok: false as const,
+          status: 409,
+          message: "Bu transfer zaten iptal edilmiş.",
+        };
+      }
+
+      const payloadHash = hashCancelTransferPayload(
+        input.transferGroupId,
+        reason
+      );
+
+      const existing = await tx.accountTransferIdempotency.findUnique({
+        where: {
+          companyId_idempotencyKey: {
+            companyId: input.companyId,
+            idempotencyKey,
+          },
+        },
+      });
+
+      if (existing?.status === "COMPLETED" && existing.result) {
+        return {
+          ok: true as const,
+          replayed: true,
+          data: existing.result as {
+            transferGroupId: string;
+            reversalGroupId: string;
+            outReversalId: string;
+            inReversalId: string;
+          },
+        };
+      }
+
+      const mirrorExists = await tx.accountTransaction.findFirst({
+        where: {
+          note: { contains: input.transferGroupId },
+          account: { companyId: input.companyId },
+        },
+      });
+
+      if (mirrorExists) {
+        const mirrors = await tx.accountTransaction.findMany({
+          where: {
+            transferGroupId: mirrorExists.transferGroupId ?? undefined,
+            account: { companyId: input.companyId },
+          },
+        });
+
+        if (mirrors.length === 2) {
+          return {
+            ok: true as const,
+            replayed: true,
+            data: {
+              transferGroupId: input.transferGroupId,
+              reversalGroupId: mirrorExists.transferGroupId!,
+              outReversalId: mirrors[0]!.id,
+              inReversalId: mirrors[1]!.id,
+            },
+          };
+        }
+      }
+
+      assertCancelReasonProvided({ state: "COMPLETED", reason });
+
+      const outLeg = legs.find((leg) => leg.type === "TRANSFER" && leg.title.includes("Çıkış"))
+        ?? legs[0]!;
+      const inLeg = legs.find((leg) => leg.id !== outLeg.id)!;
+
+      if (outLeg.account.currency !== inLeg.account.currency) {
+        return {
+          ok: false as const,
+          status: 400,
+          message: "Transfer hesaplarının para birimleri eşleşmiyor.",
+        };
+      }
+
+      const amount = roundCashMoney(Number(outLeg.amount));
+      const reversalGroupId = randomUUID();
+
+      const locked = await lockCompanyAccountsForUpdate(
+        tx,
+        input.companyId,
+        outLeg.accountId,
+        inLeg.accountId
+      );
+
+      if (!locked) {
+        return {
+          ok: false as const,
+          status: 404,
+          message: "Hesap bulunamadı.",
+        };
+      }
+
+      const [fromAccount, toAccount] = await Promise.all([
+        tx.account.findFirst({ where: { id: outLeg.accountId } }),
+        tx.account.findFirst({ where: { id: inLeg.accountId } }),
+      ]);
+
+      if (!fromAccount || !toAccount) {
+        return {
+          ok: false as const,
+          status: 404,
+          message: "Hesap bulunamadı.",
+        };
+      }
+
+      const outReversal = await tx.accountTransaction.create({
+        data: {
+          accountId: outLeg.accountId,
+          type: "INCOME",
+          title: `Transfer İptali - ${toAccount.name}`,
+          amount,
+          date: new Date(),
+          transferGroupId: reversalGroupId,
+          note: buildFinanceMirrorNote(
+            "REVERSAL",
+            `Transfer iptal edildi. Kaynak grup: ${input.transferGroupId}. Neden: ${reason}`
+          ),
+        },
+      });
+
+      const inReversal = await tx.accountTransaction.create({
+        data: {
+          accountId: inLeg.accountId,
+          type: "EXPENSE",
+          title: `Transfer İptali - ${fromAccount.name}`,
+          amount,
+          date: new Date(),
+          transferGroupId: reversalGroupId,
+          note: buildFinanceMirrorNote(
+            "REVERSAL",
+            `Transfer iptal edildi. Kaynak grup: ${input.transferGroupId}. Neden: ${reason}`
+          ),
+        },
+      });
+
+      await Promise.all([
+        tx.account.update({
+          where: { id: outLeg.accountId },
+          data: {
+            balance: roundCashMoney(Number(fromAccount.balance) + amount),
+          },
+        }),
+        tx.account.update({
+          where: { id: inLeg.accountId },
+          data: {
+            balance: roundCashMoney(Number(toAccount.balance) - amount),
+          },
+        }),
+      ]);
+
+      await writeLifecycleActivityLog(tx, {
+        companyId: input.companyId,
+        userId: input.userId,
+        module: "cash-bank",
+        entityType: "ACCOUNT_TRANSFER",
+        entityId: input.transferGroupId,
+        action: "CANCEL",
+        message: `${fromAccount.name} → ${toAccount.name} transferi iptal edildi.`,
+        reason,
+        relatedTransactionIds: [
+          outLeg.id,
+          inLeg.id,
+          outReversal.id,
+          inReversal.id,
+        ],
+      });
+
+      const resultData = {
+        transferGroupId: input.transferGroupId,
+        reversalGroupId,
+        outReversalId: outReversal.id,
+        inReversalId: inReversal.id,
+      };
+
+      await tx.accountTransferIdempotency.upsert({
+        where: {
+          companyId_idempotencyKey: {
+            companyId: input.companyId,
+            idempotencyKey,
+          },
+        },
+        create: {
+          companyId: input.companyId,
+          idempotencyKey,
+          payloadHash,
+          status: "COMPLETED",
+          transferGroupId: reversalGroupId,
+          result: resultData,
+          completedAt: new Date(),
+        },
+        update: {
+          status: "COMPLETED",
+          transferGroupId: reversalGroupId,
+          result: resultData,
+          completedAt: new Date(),
+        },
+      });
+
+      return {
+        ok: true as const,
+        data: resultData,
+      };
+    });
+
+    if (result.ok && !result.replayed) {
+      invalidateDashboardCache(input.companyId, "account-transfer");
+    }
+
+    return result;
+  } catch (error) {
+    if (isPrismaUniqueConstraintError(error, "idempotencyKey")) {
+      return {
+        ok: false,
+        status: 409,
+        message: "Transfer iptali işleniyor, lütfen kısa süre sonra tekrar deneyin.",
+      };
+    }
+
+    throw error;
+  }
 }

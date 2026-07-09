@@ -1,12 +1,12 @@
 import { db } from "@/lib/prisma";
+import { percentChange, startOfDay } from "@/lib/dashboard-metrics";
 import {
-  endOfLastMonth,
-  endOfMonth,
-  percentChange,
-  startOfDay,
-  startOfLastMonth,
-  startOfMonth,
-} from "@/lib/dashboard-metrics";
+  COMPANY_FINANCE_TIMEZONE,
+  isInHalfOpenRange,
+  resolveMonthFinancialPeriod,
+  resolvePreviousMonthFinancialPeriod,
+  zonedWallTimeToUtc,
+} from "@/lib/finance/financial-period";
 import { normalizeExpenseCategoryName } from "@/lib/expense-category-utils";
 import {
   EXPENSE_CHART_COLORS,
@@ -66,6 +66,13 @@ function endOfDay(date: Date) {
   return d;
 }
 
+function filterByDateRange(expenses: ExpenseRecord[], from: Date, to: Date) {
+  const toExclusive = new Date(endOfDay(to).getTime() + 1);
+  return expenses.filter((expense) =>
+    isInHalfOpenRange(expense.date, from, toExclusive)
+  );
+}
+
 function sumAmount(rows: ExpenseRecord[]) {
   return rows.reduce((sum, row) => sum + Number(row.amount), 0);
 }
@@ -106,12 +113,6 @@ function filterByCategory(rows: ExpenseRecord[], category: string | null) {
   return rows.filter(
     (row) => normalizeExpenseCategoryName(row.category) === category
   );
-}
-
-function filterByDateRange(rows: ExpenseRecord[], from: Date, to: Date) {
-  const end = endOfDay(to);
-
-  return rows.filter((row) => row.date >= from && row.date <= end);
 }
 
 function toTableRow(expense: ExpenseRecord): ExpenseTableRow {
@@ -196,13 +197,23 @@ export async function getExpensesPageData(
   }
 ) {
   const now = new Date();
-  const monthStart = startOfMonth(now);
-  const monthEnd = endOfMonth(now);
-  const lastMonthStart = startOfLastMonth(now);
-  const lastMonthEnd = endOfLastMonth(now);
-  const yearStart = startOfDay(new Date(now.getFullYear(), 0, 1));
-  const lastYearStart = startOfDay(new Date(now.getFullYear() - 1, 0, 1));
-  const lastYearEnd = endOfDay(new Date(now.getFullYear() - 1, 11, 31));
+  const monthPeriod = resolveMonthFinancialPeriod({
+    referenceDate: now,
+    timezone: COMPANY_FINANCE_TIMEZONE,
+  });
+  const lastMonthPeriod = resolvePreviousMonthFinancialPeriod(
+    now,
+    COMPANY_FINANCE_TIMEZONE
+  );
+  const yearStart = zonedWallTimeToUtc(
+    { year: now.getFullYear(), month: 1, day: 1 },
+    COMPANY_FINANCE_TIMEZONE
+  );
+  const lastYearStart = zonedWallTimeToUtc(
+    { year: now.getFullYear() - 1, month: 1, day: 1 },
+    COMPANY_FINANCE_TIMEZONE
+  );
+  const lastYearExclusive = yearStart;
 
   const expenses = await db.expense.findMany({
     where: { companyId },
@@ -211,17 +222,27 @@ export async function getExpensesPageData(
 
   const activeExpenses = expenses.filter(isActiveExpense);
 
-  const monthExpenses = activeExpenses.filter(
-    (expense) => expense.date >= monthStart && expense.date <= monthEnd
+  const monthExpenses = activeExpenses.filter((expense) =>
+    isInHalfOpenRange(
+      expense.date,
+      monthPeriod.from,
+      monthPeriod.toExclusive
+    )
   );
-  const lastMonthExpenses = activeExpenses.filter(
-    (expense) => expense.date >= lastMonthStart && expense.date <= lastMonthEnd
+  const lastMonthExpenses = activeExpenses.filter((expense) =>
+    isInHalfOpenRange(
+      expense.date,
+      lastMonthPeriod.from,
+      lastMonthPeriod.toExclusive
+    )
   );
   const thisYearExpenses = activeExpenses.filter(
-    (expense) => expense.date >= yearStart && expense.date <= now
+    (expense) =>
+      expense.date.getTime() >= yearStart.getTime() &&
+      expense.date.getTime() < now.getTime() + 1
   );
-  const lastYearExpenses = activeExpenses.filter(
-    (expense) => expense.date >= lastYearStart && expense.date <= lastYearEnd
+  const lastYearExpenses = activeExpenses.filter((expense) =>
+    isInHalfOpenRange(expense.date, lastYearStart, lastYearExclusive)
   );
   const unpaidExpenses = activeExpenses.filter(
     (expense) => expense.paymentStatus === "UNPAID"
@@ -247,9 +268,9 @@ export async function getExpensesPageData(
 
   const statCards: ExpenseStatCard[] = [
     {
-      title: "Bu Ay Toplam Gider",
+      title: "Bu Ay Tahakkuk Gider",
       value: formatExpenseMoney(monthTotal),
-      subtitle: `Geçen Ay: ${formatExpenseMoney(lastMonthTotal)}`,
+      subtitle: `Geçen Ay: ${formatExpenseMoney(lastMonthTotal)} · ödeme durumundan bağımsız`,
       change: monthChange.change,
       positive: monthChange.positive,
       iconKey: "receipt",

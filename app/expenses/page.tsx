@@ -22,7 +22,7 @@ import {
   ExpensesTableToolbar,
 } from "@/components/expenses/expenses-table-controls";
 import { ExpensesSidebarWidgets } from "@/components/expenses/expenses-sidebar-widgets";
-import { endOfMonth, startOfMonth } from "@/lib/dashboard-metrics";
+import { resolveMonthFinancialPeriod } from "@/lib/finance/financial-period";
 import { getExpenseDisplayPaymentBadge } from "@/lib/expense-utils";
 import { getActiveExpenseCategoryNames } from "@/lib/expense-category-service";
 import {
@@ -115,13 +115,14 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
   const session = await guardPageModule("expenses");
   const company = session.company;
   const params = await searchParams;
-const now = new Date();
+  const now = new Date();
   const activeTab = parseExpenseTab(params.tab);
   const currentPage = parsePage(params.page);
   const searchQuery = parseSearchQuery(params.q);
   const categoryFilter = parseExpenseCategoryFilter(params.category);
-  const defaultFrom = startOfMonth(now);
-  const defaultTo = endOfMonth(now);
+  const month = resolveMonthFinancialPeriod({ referenceDate: now });
+  const defaultFrom = month.from;
+  const defaultTo = month.toInclusive;
   const { from, to } = normalizeDateRange(
     parseDateParam(params.from) ?? defaultFrom,
     parseDateParam(params.to) ?? defaultTo

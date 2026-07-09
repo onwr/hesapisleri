@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireApiModuleAccess } from "@/lib/module-access";
-import { endOfMonth, startOfMonth } from "@/lib/dashboard-metrics";
+import { resolveMonthFinancialPeriod } from "@/lib/finance/financial-period";
 import { getReportsPageData } from "@/lib/reports-page-data";
 import {
   formatReportMoney,
@@ -28,9 +28,10 @@ export async function GET(request: Request) {
   const now = new Date();
   const activeTab = parseReportTab(searchParams.get("tab"));
   const activeReport = parseReportView(searchParams.get("report"));
+  const month = resolveMonthFinancialPeriod({ referenceDate: now });
   const { from, to } = normalizeDateRange(
-    parseDateParam(searchParams.get("from")) ?? startOfMonth(now),
-    parseDateParam(searchParams.get("to")) ?? endOfMonth(now)
+    parseDateParam(searchParams.get("from")) ?? month.from,
+    parseDateParam(searchParams.get("to")) ?? month.toInclusive
   );
 
   const data = await getReportsPageData(companyId, {
@@ -41,17 +42,18 @@ export async function GET(request: Request) {
 
   const lines = [
     ["Metrik", "Değer"].map(escapeCsv).join(","),
-    ["Toplam Gelir", formatReportMoney(data.totalIncome)].map(escapeCsv).join(","),
+    ["Nakit Gelir", formatReportMoney(data.totalIncome)].map(escapeCsv).join(","),
     ["Satış Tahsilatı", formatReportMoney(data.financeBreakdown.saleCollectionIncome)].map(escapeCsv).join(","),
     ["Manuel Gelir", formatReportMoney(data.financeBreakdown.manualIncome)].map(escapeCsv).join(","),
-    ["Toplam Gider", formatReportMoney(data.totalExpenses)].map(escapeCsv).join(","),
-    ["Kayıtlı Gider", formatReportMoney(data.financeBreakdown.recordedExpenseTotal)].map(escapeCsv).join(","),
+    ["Nakit Gider", formatReportMoney(data.totalExpenses)].map(escapeCsv).join(","),
+    ["Kayıtlı Gider (ödenmemiş)", formatReportMoney(data.financeBreakdown.recordedExpenseTotal)].map(escapeCsv).join(","),
     ["Kasa/Banka Çıkış", formatReportMoney(data.financeBreakdown.manualCashExpense)].map(escapeCsv).join(","),
-    ["Satış İptali", formatReportMoney(data.financeBreakdown.saleCancelExpense)].map(escapeCsv).join(","),
+    ["Ters Kayıt / İptal Çıkışı", formatReportMoney(data.financeBreakdown.saleCancelExpense)].map(escapeCsv).join(","),
     ["Transfer Giriş", formatReportMoney(data.financeBreakdown.transferInTotal)].map(escapeCsv).join(","),
     ["Transfer Çıkış", formatReportMoney(data.financeBreakdown.transferOutTotal)].map(escapeCsv).join(","),
-    ["Net Nakit Akışı", formatReportMoney(data.netProfit)].map(escapeCsv).join(","),
-    ["Satış Cirosu", formatReportMoney(data.totalSales)].map(escapeCsv).join(","),
+    ["Operasyonel Nakit Sonucu", formatReportMoney(data.netProfit)].map(escapeCsv).join(","),
+    ["Nakit Etkisi (ters kayıtlı)", formatReportMoney(data.cashNetProfit)].map(escapeCsv).join(","),
+    ["Tahakkuk Satış (kayıt oluşturma)", formatReportMoney(data.totalSales)].map(escapeCsv).join(","),
     ...data.summaryItems.map((item) =>
       [item.label, formatReportMoney(item.value)].map(escapeCsv).join(",")
     ),

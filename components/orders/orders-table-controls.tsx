@@ -8,7 +8,10 @@ import type { OrderSourceChannel } from "@prisma/client";
 import {
   buildOrdersQuery,
   formatDateInputValue,
+  ORDER_ARCHIVE_FILTER_LABELS,
   ORDER_TAB_LABELS,
+  parseOrderArchiveFilter,
+  type OrderArchiveFilter,
   type OrderTabKey,
 } from "@/lib/orders-page-utils";
 
@@ -18,6 +21,7 @@ type OrdersTableControlsProps = {
   to: Date;
   searchQuery: string | null;
   channel: OrderSourceChannel | null;
+  archive?: OrderArchiveFilter;
   totalPages: number;
   currentPage: number;
   totalRecords: number;
@@ -31,9 +35,10 @@ export function OrdersTableToolbar({
   to,
   searchQuery,
   channel,
+  archive = "active",
 }: Pick<
   OrdersTableControlsProps,
-  "activeTab" | "from" | "to" | "searchQuery" | "channel"
+  "activeTab" | "from" | "to" | "searchQuery" | "channel" | "archive"
 >) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -43,6 +48,7 @@ export function OrdersTableToolbar({
   const [channelValue, setChannelValue] = useState<OrderSourceChannel | "">(
     channel ?? ""
   );
+  const [archiveValue, setArchiveValue] = useState<OrderArchiveFilter>(archive);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -50,8 +56,9 @@ export function OrdersTableToolbar({
     setToDate(formatDateInputValue(to));
     setQueryValue(searchQuery ?? "");
     setChannelValue(channel ?? "");
+    setArchiveValue(archive);
     setError(null);
-  }, [from, to, searchQuery, channel]);
+  }, [from, to, searchQuery, channel, archive]);
 
   function handleFilterSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -80,6 +87,7 @@ export function OrdersTableToolbar({
           to: nextTo,
           q: queryValue.trim() || null,
           channel: channelValue === "" ? null : channelValue,
+          archive: archiveValue,
         })
       );
     });
@@ -101,6 +109,7 @@ export function OrdersTableToolbar({
                 to,
                 q: searchQuery,
                 channel,
+                archive,
               })}
               className={[
                 "flex min-h-[40px] items-center justify-center px-2 py-2.5 text-center text-[10px] font-extrabold leading-tight transition xl:text-[11px]",
@@ -164,6 +173,23 @@ export function OrdersTableToolbar({
           <option value="HEPSIBURADA">Hepsiburada</option>
         </select>
 
+        <select
+          value={archiveValue}
+          onChange={(event) =>
+            setArchiveValue(parseOrderArchiveFilter(event.target.value))
+          }
+          className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[12px] font-bold text-[#0f1f4d]"
+          aria-label="Arşiv filtresi"
+        >
+          {(Object.keys(ORDER_ARCHIVE_FILTER_LABELS) as OrderArchiveFilter[]).map(
+            (key) => (
+              <option key={key} value={key}>
+                {ORDER_ARCHIVE_FILTER_LABELS[key]}
+              </option>
+            )
+          )}
+        </select>
+
         <button
           type="submit"
           disabled={isPending}
@@ -187,6 +213,7 @@ export function OrdersTablePagination({
   to,
   searchQuery,
   channel,
+  archive = "active",
   totalPages,
   currentPage,
   totalRecords,
@@ -215,6 +242,7 @@ export function OrdersTablePagination({
               to,
               q: searchQuery,
               channel,
+              archive,
             })}
             className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-bold leading-none text-[#24345f] transition hover:bg-slate-50"
           >
@@ -236,6 +264,7 @@ export function OrdersTablePagination({
               to,
               q: searchQuery,
               channel,
+              archive,
             })}
             className={[
               "flex h-9 w-9 items-center justify-center rounded-lg text-[12px] font-black",
@@ -257,6 +286,7 @@ export function OrdersTablePagination({
               to,
               q: searchQuery,
               channel,
+              archive,
             })}
             className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-bold leading-none text-[#24345f] transition hover:bg-slate-50"
           >

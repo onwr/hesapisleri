@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Archive, Loader2, RotateCcw } from "lucide-react";
+import { TransactionCancelDialog } from "@/components/transactions/transaction-cancel-dialog";
 import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 
 type AccountArchiveActionsProps = {
@@ -28,6 +29,7 @@ export function AccountArchiveActions({
     },
   });
   const [message, setMessage] = useState("");
+  const [archiveOpen, setArchiveOpen] = useState(false);
 
   if (!canManage) return null;
 
@@ -37,32 +39,45 @@ export function AccountArchiveActions({
     if (isSubmitting) return;
 
     if (!isArchived) {
-      const warning =
-        balance !== 0
-          ? `${accountName} hesabının bakiyesi ${balance.toFixed(2)} TRY. Arşivleme geçmiş hareketleri korur; yeni işlem seçimlerinde görünmez.`
-          : `${accountName} hesabı arşivlenecek. Yeni işlem seçimlerinde görünmez.`;
-
-      const confirmed = window.confirm(
-        isDefault
-          ? "Varsayılan hesap arşivlenemez."
-          : `${warning}\n\nDevam etmek istiyor musunuz?`
-      );
-
-      if (!confirmed || isDefault) return;
+      if (isDefault) {
+        setMessage("Varsayılan hesap arşivlenemez. Önce başka bir hesabı varsayılan yapın.");
+        return;
+      }
+      setArchiveOpen(true);
+      return;
     }
 
     setMessage("");
 
     const result = await mutate(`/api/cash-bank/accounts/${accountId}`, {
-      method: isArchived ? "PATCH" : "DELETE",
-      headers: isArchived ? { "Content-Type": "application/json" } : undefined,
-      body: isArchived ? JSON.stringify({ status: "ACTIVE" }) : undefined,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "ACTIVE" }),
     });
 
     if (!result.ok && result.error !== "duplicate_submit") {
       setMessage(result.error || "Hesap durumu güncellenemedi.");
     }
   }
+
+  async function confirmArchive() {
+    setMessage("");
+
+    const result = await mutate(`/api/cash-bank/accounts/${accountId}`, {
+      method: "DELETE",
+    });
+
+    if (!result.ok && result.error !== "duplicate_submit") {
+      return { ok: false, message: result.error || "Hesap arşivlenemedi." };
+    }
+
+    return { ok: true };
+  }
+
+  const archiveWarning =
+    balance !== 0
+      ? `${accountName} hesabının bakiyesi ${balance.toFixed(2)} TRY. Arşivleme geçmiş hareketleri korur.`
+      : `${accountName} hesabı arşivlenecek ve yeni işlem seçimlerinde görünmez.`;
 
   return (
     <div className="flex flex-col items-end gap-2">
@@ -85,6 +100,17 @@ export function AccountArchiveActions({
       {message ? (
         <p className="max-w-xs text-right text-[11px] font-semibold text-slate-600">{message}</p>
       ) : null}
+
+      <TransactionCancelDialog
+        open={archiveOpen}
+        onOpenChange={setArchiveOpen}
+        title="Hesabı Arşivle"
+        description={archiveWarning}
+        recordLabel={accountName}
+        requiresReason={false}
+        confirmLabel="Arşivle"
+        onConfirm={confirmArchive}
+      />
     </div>
   );
 }

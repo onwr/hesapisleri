@@ -19,6 +19,7 @@ import {
   type CollectPaymentTarget,
 } from "@/components/collections/collect-payment-dialog";
 import { SaleCancelDialog } from "@/components/sales/sale-cancel-dialog";
+import { TransactionCancelDialog } from "@/components/transactions/transaction-cancel-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,6 +42,7 @@ export function SalesRowActions({ row }: SalesRowActionsProps) {
     null
   );
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [quoteCancelOpen, setQuoteCancelOpen] = useState(false);
 
   function handleDownload() {
     if (row.pdfUrl) {
@@ -85,27 +87,19 @@ export function SalesRowActions({ row }: SalesRowActionsProps) {
   }
 
   function handleCancel() {
-    if (row.isQuote) {
-      void handleQuoteOrInvoiceCancel();
+    if (row.isQuote || row.sourceType === "invoice") {
+      setMessage(null);
+      setQuoteCancelOpen(true);
       return;
     }
 
     if (row.sourceType === "sale") {
       setMessage(null);
       setCancelDialogOpen(true);
-      return;
     }
-
-    void handleQuoteOrInvoiceCancel();
   }
 
-  async function handleQuoteOrInvoiceCancel() {
-    const confirmed = window.confirm(
-      `${row.documentNo} numaralı kaydı iptal etmek istediğinize emin misiniz?`
-    );
-
-    if (!confirmed) return;
-
+  async function handleQuoteOrInvoiceCancelConfirm() {
     setMessage(null);
 
     const endpoint = row.isQuote
@@ -120,8 +114,7 @@ export function SalesRowActions({ row }: SalesRowActionsProps) {
       : JSON.stringify({ action: "cancel" });
 
     if (!endpoint) {
-      setMessage("Bu kayıt türü iptal edilemez.");
-      return;
+      return { ok: false, message: "Bu kayıt türü iptal edilemez." };
     }
 
     const result = await mutate(endpoint, {
@@ -134,14 +127,12 @@ export function SalesRowActions({ row }: SalesRowActionsProps) {
       body,
     });
 
-    if (!result.ok) {
-      if (result.error !== "duplicate_submit") {
-        setMessage(result.error);
-      }
-      return;
+    if (!result.ok && result.error !== "duplicate_submit") {
+      return { ok: false, message: result.error ?? "İptal işlemi başarısız." };
     }
 
     notifyTenantCacheSync();
+    return { ok: true };
   }
 
   const canDownload = Boolean(row.pdfUrl || row.downloadHref);
@@ -195,6 +186,17 @@ export function SalesRowActions({ row }: SalesRowActionsProps) {
             {message}
           </p>
         ) : null}
+
+        <TransactionCancelDialog
+          open={quoteCancelOpen}
+          onOpenChange={setQuoteCancelOpen}
+          title={row.isQuote ? "Teklifi İptal Et" : "Kaydı İptal Et"}
+          description="Bu işlem geri alınamaz."
+          recordLabel={row.documentNo}
+          requiresReason={false}
+          confirmLabel="İptal Et"
+          onConfirm={handleQuoteOrInvoiceCancelConfirm}
+        />
       </div>
     );
   }
@@ -333,6 +335,17 @@ export function SalesRowActions({ row }: SalesRowActionsProps) {
           }}
         />
       ) : null}
+
+      <TransactionCancelDialog
+        open={quoteCancelOpen}
+        onOpenChange={setQuoteCancelOpen}
+        title={row.isQuote ? "Teklifi İptal Et" : "Kaydı İptal Et"}
+        description="Bu işlem geri alınamaz."
+        recordLabel={row.documentNo}
+        requiresReason={false}
+        confirmLabel="İptal Et"
+        onConfirm={handleQuoteOrInvoiceCancelConfirm}
+      />
     </>
   );
 }

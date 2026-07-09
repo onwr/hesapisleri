@@ -60,6 +60,10 @@ type RawInvoice = {
   pdfUrl: string | null;
   saleId: string | null;
   customer: { name: string } | null;
+  documentSubmission?: {
+    status: string;
+    documentType: string;
+  } | null;
 };
 
 function mapInvoiceRow(invoice: RawInvoice, now = new Date()): InvoiceTableRow {
@@ -96,6 +100,7 @@ function mapInvoiceRow(invoice: RawInvoice, now = new Date()): InvoiceTableRow {
     }),
     downloadHref: invoice.pdfUrl ?? `/api/invoices/${invoice.id}/pdf`,
     isOverdue: overdue,
+    documentSubmission: invoice.documentSubmission ?? null,
   };
 }
 
@@ -177,7 +182,13 @@ export async function getInvoicesPageData(
 
   const invoicesRaw = await db.invoice.findMany({
     where: { companyId },
-    include: { customer: true, sale: true },
+    include: {
+      customer: true,
+      sale: true,
+      documentSubmission: {
+        select: { status: true, documentType: true },
+      },
+    },
     orderBy: { createdAt: "desc" },
   });
 

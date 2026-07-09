@@ -188,6 +188,8 @@ export const TENANT_MUTATION_INVALIDATION: Record<
     "dashboard",
   ],
   "order-cancel": ["orders", "order-detail", "dashboard"],
+  "order-archive": ["orders", "order-detail", "dashboard"],
+  "order-restore": ["orders", "order-detail", "dashboard"],
   "order-bulk-status": ["orders", "order-detail", "dashboard"],
   "order-bulk-shipping": ["orders", "order-detail", "dashboard"],
   "order-import": [

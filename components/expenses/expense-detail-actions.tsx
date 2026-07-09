@@ -2,9 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Loader2, Trash2, Wallet } from "lucide-react";
+import { Loader2, Wallet } from "lucide-react";
 import { ExpensePayModal } from "@/components/expenses/expense-pay-modal";
+import { TransactionCancelDialog } from "@/components/transactions/transaction-cancel-dialog";
+import { TransactionRecordActions } from "@/components/transactions/transaction-record-actions";
+import type { LifecycleActionMatrix } from "@/lib/transaction-lifecycle-policy";
 import { useTenantMutation } from "@/hooks/use-tenant-mutation";
+import { formatExpenseMoney } from "@/lib/expenses-page-utils";
 
 type AccountOption = {
   id: string;
@@ -17,8 +21,8 @@ type ExpenseDetailActionsProps = {
   expenseId: string;
   expenseTitle: string;
   amount: number;
-  canCancel: boolean;
-  canPay: boolean;
+  lifecycleActions: LifecycleActionMatrix;
+  requiresCancelReason?: boolean;
   accounts: AccountOption[];
 };
 
@@ -26,8 +30,8 @@ export function ExpenseDetailActions({
   expenseId,
   expenseTitle,
   amount,
-  canCancel,
-  canPay,
+  lifecycleActions,
+  requiresCancelReason = false,
   accounts,
 }: ExpenseDetailActionsProps) {
   const router = useRouter();
@@ -36,32 +40,53 @@ export function ExpenseDetailActions({
     onSuccess: () => router.push("/expenses"),
   });
   const [payOpen, setPayOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [error, setError] = useState("");
 
-  async function handleCancel() {
-    if (!canCancel) return;
-    if (!window.confirm("Bu gideri iptal etmek istediğinize emin misiniz?")) {
-      return;
-    }
+  const canPay = lifecycleActions.edit && accounts.length > 0;
 
+  async function handleCancelConfirm(input: { reason: string }) {
     setError("");
 
     const result = await mutate(`/api/expenses/${expenseId}/cancel`, {
       method: "POST",
+      body: JSON.stringify({ reason: input.reason }),
     });
 
     if (!result.ok && result.error !== "duplicate_submit") {
-      setError(result.error || "Gider iptal edilemedi.");
+      return { ok: false, message: result.error || "Gider iptal edilemedi." };
     }
+
+    return { ok: true };
   }
 
-  if (!canCancel && !canPay) {
+  async function handleDelete() {
+    setError("");
+
+    const result = await mutate(`/api/expenses/${expenseId}`, {
+      method: "DELETE",
+    });
+
+    if (!result.ok && result.error !== "duplicate_submit") {
+      setError(result.error || "Gider silinemedi.");
+      return;
+    }
+
+    router.push("/expenses");
+  }
+
+  if (
+    !lifecycleActions.cancel &&
+    !lifecycleActions.delete &&
+    !canPay &&
+    !lifecycleActions.edit
+  ) {
     return null;
   }
 
   return (
     <>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {canPay ? (
           <button
             type="button"
@@ -73,21 +98,15 @@ export function ExpenseDetailActions({
           </button>
         ) : null}
 
-        {canCancel ? (
-          <button
-            type="button"
-            onClick={handleCancel}
-            disabled={isSubmitting}
-            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 text-[11px] font-black text-rose-700 disabled:opacity-60"
-          >
-            {isSubmitting ? (
-              <Loader2 className="animate-spin" size={15} />
-            ) : (
-              <Trash2 size={15} />
-            )}
-            Gideri İptal Et
-          </button>
-        ) : null}
+        <TransactionRecordActions
+          actions={lifecycleActions}
+          viewHref={`/expenses/${expenseId}`}
+          editHref={lifecycleActions.edit ? `/expenses/${expenseId}/edit` : undefined}
+          onCancel={
+            lifecycleActions.cancel ? () => setCancelOpen(true) : undefined
+          }
+          onDelete={lifecycleActions.delete ? () => void handleDelete() : undefined}
+        />
       </div>
 
       {error ? (
@@ -105,6 +124,30 @@ export function ExpenseDetailActions({
           amount={amount}
           accounts={accounts}
         />
+      ) : null}
+
+      <TransactionCancelDialog
+        open={cancelOpen}
+        onOpenChange={setCancelOpen}
+        title="Gideri İptal Et"
+        description="Bu gider iptal edilecek. Ödenmiş giderlerde kasa/banka bakiyesi geri alınır."
+        recordLabel={expenseTitle}
+        recordSummary={formatExpenseMoney(amount)}
+        requiresReason={requiresCancelReason}
+        impactWarning={
+          requiresCancelReason
+            ? "Ödenmiş gider iptalinde bağlı kasa/banka hareketi ters kayıt ile iptal edilir."
+            : undefined
+        }
+        confirmLabel="Gideri İptal Et"
+        onConfirm={handleCancelConfirm}
+        onSuccess={() => router.push("/expenses")}
+      />
+
+      {isSubmitting ? (
+        <span className="sr-only">
+          <Loader2 className="animate-spin" />
+        </span>
       ) : null}
     </>
   );

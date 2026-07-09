@@ -1,13 +1,16 @@
 import { db } from "@/lib/prisma";
 import {
-  endOfLastMonth,
-  endOfMonth,
   formatMoney,
   percentChange,
   startOfDay,
-  startOfLastMonth,
-  startOfMonth,
 } from "@/lib/dashboard-metrics";
+import {
+  ACCRUAL_SALES_BY_CREATED_AT_LABEL,
+  COMPANY_FINANCE_TIMEZONE,
+  prismaHalfOpenCreatedAt,
+  resolveMonthFinancialPeriod,
+  resolvePreviousMonthFinancialPeriod,
+} from "@/lib/finance/financial-period";
 import { getTimeMs } from "@/lib/format-utils";
 import { getCollectedAmount, getSaleRemainingAmount } from "@/lib/sale-payment-utils";
 import { getInvoiceRemainingAmount } from "@/lib/invoice-payment-utils";
@@ -287,10 +290,14 @@ export async function getSalesPageData(
   }
 ) {
   const now = new Date();
-  const monthStart = startOfMonth(now);
-  const monthEnd = endOfMonth(now);
-  const lastMonthStart = startOfLastMonth(now);
-  const lastMonthEnd = endOfLastMonth(now);
+  const monthPeriod = resolveMonthFinancialPeriod({
+    referenceDate: now,
+    timezone: COMPANY_FINANCE_TIMEZONE,
+  });
+  const lastMonthPeriod = resolvePreviousMonthFinancialPeriod(
+    now,
+    COMPANY_FINANCE_TIMEZONE
+  );
 
   const [
     monthSales,
@@ -302,28 +309,28 @@ export async function getSalesPageData(
     db.sale.findMany({
       where: {
         companyId,
-        createdAt: { gte: monthStart, lte: monthEnd },
+        createdAt: prismaHalfOpenCreatedAt(monthPeriod),
         ...activeSaleStatusFilter(),
       },
     }),
     db.sale.findMany({
       where: {
         companyId,
-        createdAt: { gte: lastMonthStart, lte: lastMonthEnd },
+        createdAt: prismaHalfOpenCreatedAt(lastMonthPeriod),
         ...activeSaleStatusFilter(),
       },
     }),
     db.invoice.findMany({
       where: {
         companyId,
-        createdAt: { gte: monthStart, lte: monthEnd },
+        createdAt: prismaHalfOpenCreatedAt(monthPeriod),
         ...activeInvoiceStatusFilter(),
       },
     }),
     db.invoice.findMany({
       where: {
         companyId,
-        createdAt: { gte: lastMonthStart, lte: lastMonthEnd },
+        createdAt: prismaHalfOpenCreatedAt(lastMonthPeriod),
         ...activeInvoiceStatusFilter(),
       },
     }),
@@ -393,9 +400,9 @@ export async function getSalesPageData(
 
   const statCards: SalesStatCard[] = [
     {
-      title: "Bu Ay Toplam Satış",
+      title: ACCRUAL_SALES_BY_CREATED_AT_LABEL,
       value: formatMoney(monthSalesTotal),
-      subtitle: `Geçen Ay: ${formatMoney(lastMonthSalesTotal)}`,
+      subtitle: `Geçen Ay: ${formatMoney(lastMonthSalesTotal)} · createdAt`,
       change: salesChange.change,
       positive: salesChange.positive,
       iconKey: "trending",

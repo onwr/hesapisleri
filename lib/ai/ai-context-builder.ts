@@ -1,4 +1,4 @@
-import { endOfMonth, startOfMonth } from "@/lib/dashboard-metrics";
+import { resolveMonthFinancialPeriod } from "@/lib/finance/financial-period";
 import { loadAssistantContext } from "@/lib/assistant-service";
 import { buildSafeContextSummary } from "@/lib/assistant-service";
 import type { AiPermissionContext } from "@/lib/ai/ai-permission-service";
@@ -22,6 +22,7 @@ export async function buildAiRuntimeContext(input: {
   topic?: string;
 }): Promise<AiRuntimeContext> {
   const now = new Date();
+  const month = resolveMonthFinancialPeriod({ referenceDate: now });
   return {
     companyId: input.companyId,
     userId: input.userId,
@@ -29,8 +30,8 @@ export async function buildAiRuntimeContext(input: {
     effectiveRole: input.effectiveRole,
     isOwner: input.isOwner,
     readOnlyMode: input.readOnlyMode,
-    from: input.from || startOfMonth(now),
-    to: input.to || endOfMonth(now),
+    from: input.from || month.from,
+    to: input.to || month.toInclusive,
     topic: input.topic,
   };
 }

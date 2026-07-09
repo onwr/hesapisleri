@@ -35,6 +35,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useTenantMutation } from "@/hooks/use-tenant-mutation";
+import { TransactionCancelDialog } from "@/components/transactions/transaction-cancel-dialog";
 import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 
 type CashBankActionCardsProps = {
@@ -149,6 +150,7 @@ export function CashBankAccountRowActions({
   const { mutate, isSubmitting } = useTenantMutation({ refresh: false });
   const [transferOpen, setTransferOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
 
   async function handleSetDefault() {
@@ -170,35 +172,43 @@ export function CashBankAccountRowActions({
         window.alert("Varsayılan hesap arşivlenemez. Önce başka bir hesabı varsayılan yapın.");
         return;
       }
-
-      const name = accountName || account?.name || "Hesap";
-      const warning =
-        balance !== 0
-          ? `${name} hesabının bakiyesi ${balance.toFixed(2)} TRY. Arşivleme geçmiş hareketleri korur.`
-          : `${name} hesabı arşivlenecek ve yeni işlem seçimlerinde görünmez.`;
-
-      const confirmed = window.confirm(`${warning}\n\nDevam etmek istiyor musunuz?`);
-      if (!confirmed) return;
+      setArchiveOpen(true);
+      return;
     }
 
     setLoadingAction("status");
 
     const result = await mutate(`/api/cash-bank/accounts/${accountId}`, {
-      method: nextStatus === "PASSIVE" ? "DELETE" : "PATCH",
-      headers:
-        nextStatus === "ACTIVE"
-          ? { "Content-Type": "application/json" }
-          : undefined,
-      body:
-        nextStatus === "ACTIVE"
-          ? JSON.stringify({ status: "ACTIVE" })
-          : undefined,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "ACTIVE" }),
     });
     if (!result.ok && result.error !== "duplicate_submit") {
       alert(result.error || "Hesap durumu güncellenemedi.");
     }
     setLoadingAction(null);
   }
+
+  async function confirmArchive() {
+    setLoadingAction("status");
+
+    const result = await mutate(`/api/cash-bank/accounts/${accountId}`, {
+      method: "DELETE",
+    });
+    if (!result.ok && result.error !== "duplicate_submit") {
+      setLoadingAction(null);
+      return { ok: false, message: result.error || "Hesap arşivlenemedi." };
+    }
+
+    setLoadingAction(null);
+    return { ok: true };
+  }
+
+  const name = accountName || account?.name || "Hesap";
+  const archiveWarning =
+    balance !== 0
+      ? `${name} hesabının bakiyesi ${balance.toFixed(2)} TRY. Arşivleme geçmiş hareketleri korur.`
+      : `${name} hesabı arşivlenecek ve yeni işlem seçimlerinde görünmez.`;
 
   const busy = isSubmitting || loadingAction !== null;
   const isActive = status === "ACTIVE";
@@ -354,6 +364,17 @@ export function CashBankAccountRowActions({
           onSuccess={() => notifyTenantCacheSync()}
         />
       ) : null}
+
+      <TransactionCancelDialog
+        open={archiveOpen}
+        onOpenChange={setArchiveOpen}
+        title="Hesabı Arşivle"
+        description={archiveWarning}
+        recordLabel={name}
+        requiresReason={false}
+        confirmLabel="Arşivle"
+        onConfirm={confirmArchive}
+      />
     </>
   );
 }

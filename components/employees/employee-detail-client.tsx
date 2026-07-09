@@ -16,6 +16,10 @@ import { StatCard } from "@/components/cards/stat-card";
 import { FinanceAccountSelect } from "@/components/cash-bank/finance-account-select";
 import { EmployeeLedgerTab } from "@/components/employees/employee-ledger-tab";
 import { EmployeePaymentMarkPaidModal } from "@/components/employees/employee-payment-mark-paid-modal";
+import { EmployeePaymentEditModal } from "@/components/employees/employee-payment-edit-modal";
+import { EmployeePaymentCancelModal } from "@/components/employees/employee-payment-cancel-modal";
+import { EmployeePaymentRowActions } from "@/components/employees/employee-payment-row-actions";
+import { TransactionCancelDialog } from "@/components/transactions/transaction-cancel-dialog";
 import { EmployeePayrollSummaryTab } from "@/components/employees/employee-payroll-summary-tab";
 import { EmployeePerformancePanel } from "@/components/employees/employee-performance-panel";
 import { EmployeePosTab } from "@/components/employees/employee-pos-tab";
@@ -37,6 +41,8 @@ import {
   employeePaymentDisbursesCash,
   getEmployeePaymentTypeBehavior,
 } from "@/lib/employee-payment-type-mapping";
+import { requiresCancelReason, mapEmployeePaymentStatusToLifecycle } from "@/lib/transaction-lifecycle-policy";
+import type { EmployeePaymentStatus } from "@prisma/client";
 import {
   EMPLOYEE_PAYMENT_ACCOUNT_EMPTY_MESSAGE,
 } from "@/lib/finance-account-utils";
@@ -146,6 +152,16 @@ export function EmployeeDetailClient({
   const [markPaidAccountId, setMarkPaidAccountId] = useState("");
   const [markPaidNotes, setMarkPaidNotes] = useState("");
   const [markPaidFormError, setMarkPaidFormError] = useState("");
+  const [editPaymentId, setEditPaymentId] = useState<string | null>(null);
+  const [editPaymentAmount, setEditPaymentAmount] = useState("");
+  const [editPaymentDueDate, setEditPaymentDueDate] = useState("");
+  const [editPaymentDescription, setEditPaymentDescription] = useState("");
+  const [editPaymentAccountId, setEditPaymentAccountId] = useState("");
+  const [editPaymentFormError, setEditPaymentFormError] = useState("");
+  const [cancelPaymentId, setCancelPaymentId] = useState<string | null>(null);
+  const [deletePaymentId, setDeletePaymentId] = useState<string | null>(null);
+  const [cancelPaymentReason, setCancelPaymentReason] = useState("");
+  const [cancelPaymentFormError, setCancelPaymentFormError] = useState("");
   const { accounts: financeAccounts, loading: accountsLoading } =
     useFinanceAccounts();
 
@@ -462,6 +478,132 @@ export function EmployeeDetailClient({
     setMarkPaidFormError("");
   }
 
+  function openEditPaymentModal(paymentId: string) {
+    const payment = (employee.payments ?? []).find((entry) => entry.id === paymentId);
+    if (!payment) return;
+
+    setEditPaymentId(paymentId);
+    setEditPaymentAmount(String(payment.amount));
+    setEditPaymentDueDate(
+      payment.dueDate ? payment.dueDate.slice(0, 10) : ""
+    );
+    setEditPaymentDescription(payment.description ?? "");
+    setEditPaymentAccountId(payment.relatedAccountId ?? "");
+    setEditPaymentFormError("");
+    setError("");
+    setSuccess("");
+  }
+
+  function closeEditPaymentModal() {
+    setEditPaymentId(null);
+    setEditPaymentFormError("");
+  }
+
+  async function submitEditPayment() {
+    if (!editPaymentId) return;
+
+    setSaving(true);
+    setEditPaymentFormError("");
+    try {
+      const res = await fetch(
+        `/api/employees/${employee.id}/payments/${editPaymentId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount: Number(editPaymentAmount),
+            dueDate: editPaymentDueDate || null,
+            description: editPaymentDescription || null,
+            relatedAccountId: editPaymentAccountId || null,
+          }),
+        }
+      );
+      const json = await res.json();
+      if (!json.success) {
+        setEditPaymentFormError(json.message ?? "İşlem başarısız.");
+        return;
+      }
+      setSuccess("Ödeme kaydı güncellendi.");
+      closeEditPaymentModal();
+      await reload();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function openCancelPaymentModal(paymentId: string) {
+    setCancelPaymentId(paymentId);
+    setCancelPaymentReason("");
+    setCancelPaymentFormError("");
+    setError("");
+    setSuccess("");
+  }
+
+  function closeCancelPaymentModal() {
+    setCancelPaymentId(null);
+    setCancelPaymentFormError("");
+  }
+
+  async function submitCancelPayment() {
+    if (!cancelPaymentId) return;
+
+    setSaving(true);
+    setCancelPaymentFormError("");
+    try {
+      const res = await fetch(
+        `/api/employees/${employee.id}/payments/${cancelPaymentId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "cancel",
+            reason: cancelPaymentReason || undefined,
+          }),
+        }
+      );
+      const json = await res.json();
+      if (!json.success) {
+        setCancelPaymentFormError(json.message ?? "İşlem başarısız.");
+        return;
+      }
+      setSuccess("Ödeme kaydı iptal edildi.");
+      closeCancelPaymentModal();
+      await reload();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function deletePendingPayment(paymentId: string) {
+    setDeletePaymentId(paymentId);
+  }
+
+  async function confirmDeletePendingPayment() {
+    if (!deletePaymentId) {
+      return { ok: false, message: "Ödeme kaydı bulunamadı." };
+    }
+
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch(
+        `/api/employees/${employee.id}/payments/${deletePaymentId}`,
+        { method: "DELETE" }
+      );
+      const json = await res.json();
+      if (!json.success) {
+        setError(json.message ?? "Silme işlemi başarısız.");
+        return { ok: false, message: json.message ?? "Silme işlemi başarısız." };
+      }
+      setSuccess("Ödeme kaydı silindi.");
+      setDeletePaymentId(null);
+      await reload();
+      return { ok: true };
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function submitMarkPaymentPaid() {
     if (!markPaidPaymentId) return;
 
@@ -550,6 +692,29 @@ export function EmployeeDetailClient({
   const markPaidPayment = (employee.payments ?? []).find(
     (payment) => payment.id === markPaidPaymentId
   );
+  const editPayment = (employee.payments ?? []).find(
+    (payment) => payment.id === editPaymentId
+  );
+  const cancelPayment = (employee.payments ?? []).find(
+    (payment) => payment.id === cancelPaymentId
+  );
+  const deletePayment = (employee.payments ?? []).find(
+    (payment) => payment.id === deletePaymentId
+  );
+  const editPaymentTypeBehavior = editPayment
+    ? getEmployeePaymentTypeBehavior(
+        editPayment.type as Parameters<typeof getEmployeePaymentTypeBehavior>[0]
+      )
+    : null;
+  const showEditPaymentAccountField =
+    Boolean(editPayment) &&
+    employeePaymentDisbursesCash(
+      editPayment!.type as Parameters<typeof employeePaymentDisbursesCash>[0]
+    );
+  const editPaymentAccountRequired =
+    showEditPaymentAccountField &&
+    Boolean(editPaymentTypeBehavior) &&
+    !editPaymentTypeBehavior!.allowPendingWithoutAccount;
 
   return (
     <div className="space-y-4">
@@ -1036,23 +1201,38 @@ export function EmployeeDetailClient({
                           </div>
                         </td>
                         <td className="py-3">
-                          {canProcessPayments &&
-                          shouldShowMarkPaidButton(
-                            p.status as Parameters<
-                              typeof shouldShowMarkPaidButton
-                            >[0]
-                          ) ? (
-                            <button
-                              type="button"
-                              disabled={saving}
-                              onClick={() => openMarkPaidModal(p.id)}
-                              className="text-xs font-black text-emerald-600 hover:underline disabled:opacity-50"
-                            >
-                              Ödendi işaretle
-                            </button>
-                          ) : (
-                            "—"
-                          )}
+                          <div className="flex flex-wrap items-center gap-2">
+                            {canProcessPayments &&
+                            shouldShowMarkPaidButton(
+                              p.status as Parameters<
+                                typeof shouldShowMarkPaidButton
+                              >[0]
+                            ) ? (
+                              <button
+                                type="button"
+                                disabled={saving}
+                                onClick={() => openMarkPaidModal(p.id)}
+                                className="text-xs font-black text-emerald-600 hover:underline disabled:opacity-50"
+                              >
+                                Ödendi işaretle
+                              </button>
+                            ) : null}
+                            {canProcessPayments ? (
+                              <EmployeePaymentRowActions
+                                paymentId={p.id}
+                                paymentLabel={getPaymentTypeLabel(
+                                  p.type as Parameters<
+                                    typeof getPaymentTypeLabel
+                                  >[0]
+                                )}
+                                status={p.status as EmployeePaymentStatus}
+                                disabled={saving}
+                                onEdit={() => openEditPaymentModal(p.id)}
+                                onCancel={() => openCancelPaymentModal(p.id)}
+                                onDelete={() => deletePendingPayment(p.id)}
+                              />
+                            ) : null}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1232,6 +1412,75 @@ export function EmployeeDetailClient({
         onNotesChange={setMarkPaidNotes}
         onClose={closeMarkPaidModal}
         onSubmit={submitMarkPaymentPaid}
+      />
+
+      <EmployeePaymentEditModal
+        open={Boolean(editPaymentId)}
+        saving={saving}
+        paymentLabel={
+          editPayment
+            ? getPaymentTypeLabel(
+                editPayment.type as Parameters<typeof getPaymentTypeLabel>[0]
+              )
+            : ""
+        }
+        paymentAmount={editPaymentAmount}
+        dueDate={editPaymentDueDate}
+        description={editPaymentDescription}
+        relatedAccountId={editPaymentAccountId}
+        accounts={financeAccounts}
+        accountsLoading={accountsLoading}
+        showAccountField={showEditPaymentAccountField}
+        accountRequired={editPaymentAccountRequired}
+        formError={editPaymentFormError}
+        onAmountChange={setEditPaymentAmount}
+        onDueDateChange={setEditPaymentDueDate}
+        onDescriptionChange={setEditPaymentDescription}
+        onRelatedAccountIdChange={setEditPaymentAccountId}
+        onClose={closeEditPaymentModal}
+        onSubmit={submitEditPayment}
+      />
+
+      <EmployeePaymentCancelModal
+        open={Boolean(cancelPaymentId)}
+        saving={saving}
+        paymentLabel={
+          cancelPayment
+            ? getPaymentTypeLabel(
+                cancelPayment.type as Parameters<typeof getPaymentTypeLabel>[0]
+              )
+            : ""
+        }
+        paymentAmount={cancelPayment?.amount ?? 0}
+        requiresReason={
+          cancelPayment
+            ? requiresCancelReason(
+                mapEmployeePaymentStatusToLifecycle(cancelPayment.status)
+              )
+            : false
+        }
+        reason={cancelPaymentReason}
+        formError={cancelPaymentFormError}
+        onReasonChange={setCancelPaymentReason}
+        onClose={closeCancelPaymentModal}
+        onSubmit={submitCancelPayment}
+      />
+
+      <TransactionCancelDialog
+        open={Boolean(deletePaymentId)}
+        onOpenChange={(open) => {
+          if (!open) setDeletePaymentId(null);
+        }}
+        title="Ödeme Kaydını Sil"
+        description="Bekleyen ödeme kaydı kalıcı olarak silinecek."
+        recordLabel={
+          deletePayment
+            ? `${getPaymentTypeLabel(deletePayment.type as Parameters<typeof getPaymentTypeLabel>[0])} · ${formatMoney(deletePayment.amount)}`
+            : "Ödeme"
+        }
+        requiresReason={false}
+        confirmLabel="Sil"
+        onConfirm={confirmDeletePendingPayment}
       />
 
       <CreateUserFromEmployeeModal

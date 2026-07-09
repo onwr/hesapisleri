@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { AccountArchiveActions } from "@/components/cash-bank/account-archive-actions";
 import { AccountDetailActions } from "@/components/cash-bank/account-detail-actions";
+import { CashBankTransactionRowActions } from "@/components/cash-bank/cash-bank-transaction-row-actions";
 import { AppShell } from "@/components/layout/app-shell";
 import { guardPageModule } from "@/lib/module-access";
 
@@ -229,6 +230,7 @@ export default async function CashBankAccountDetailPage({ params,
                   <th className="px-3 py-3">Referans</th>
                   <th className="px-3 py-3 text-right">Bakiye</th>
                   <th className="px-3 py-3 text-center">Detay</th>
+                  <th className="px-3 py-3 text-center">İşlem</th>
                 </tr>
               </thead>
 
@@ -305,6 +307,21 @@ export default async function CashBankAccountDetailPage({ params,
                           <Eye size={13} />
                         </Link>
                       </td>
+                      <td className="px-3 py-3 text-center">
+                        <CashBankTransactionRowActions
+                          accountId={account.id}
+                          transactionId={transaction.id}
+                          title={transaction.title}
+                          amount={transaction.amount}
+                          direction={transaction.direction}
+                          lifecycleActions={transaction.lifecycleActions}
+                          isLinked={transaction.isLinked}
+                          isTransfer={transaction.isTransfer}
+                          transferGroupId={transaction.transferGroupId}
+                          linkedHref={transaction.linkedHref}
+                          recordLabel={transaction.title}
+                        />
+                      </td>
                     </tr>
                   );
                 })}
@@ -312,7 +329,7 @@ export default async function CashBankAccountDetailPage({ params,
                 {transactions.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={10}
                       className="px-4 py-16 text-center text-[13px] font-medium text-slate-500"
                     >
                       Bu hesapta henüz hareket yok. Yeni hareket ekleyerek

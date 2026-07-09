@@ -1,4 +1,9 @@
 import { formatMoney } from "@/lib/format-utils";
+import {
+  COMPANY_FINANCE_TIMEZONE,
+  isInHalfOpenRange,
+  iterateZonedDayBuckets,
+} from "@/lib/finance/financial-period";
 
 export { formatMoney };
 
@@ -65,8 +70,31 @@ export function sumExpensesAmount(
 
 export function buildDailySalesChart(
   sales: Array<{ total: unknown; createdAt: Date }>,
-  monthStart: Date
+  monthStart: Date,
+  monthToExclusive?: Date
 ) {
+  if (monthToExclusive) {
+    const buckets = iterateZonedDayBuckets(
+      monthStart,
+      monthToExclusive,
+      COMPANY_FINANCE_TIMEZONE
+    );
+
+    return buckets.map((bucket) => {
+      const amount = sales
+        .filter((sale) =>
+          isInHalfOpenRange(sale.createdAt, bucket.from, bucket.toExclusive)
+        )
+        .reduce((sum, sale) => sum + Number(sale.total), 0);
+
+      return {
+        day: String(bucket.day),
+        amount,
+        label: bucket.label,
+      };
+    });
+  }
+
   const daysInMonth = endOfMonth(monthStart).getDate();
   const dailyMap = new Map<number, number>();
 

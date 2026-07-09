@@ -638,6 +638,7 @@ model User {
   sentInvites                        CompanyInvite[]          @relation("SentInvites")
   sales                              Sale[]                   @relation("SaleCreatedBy")
   cancelledSales                     Sale[]                   @relation("SaleCancelledBy")
+  archivedSales                      Sale[]                   @relation("SaleArchivedBy")
   expenses                           Expense[]
   notifications                      Notification[]
   activityLogs                       ActivityLog[]
@@ -1363,6 +1364,10 @@ model Sale {
   cancelReason      String?
   cancelNote        String?
 
+  archivedAt       DateTime?
+  archivedByUserId String?
+  archivedByUser   User?     @relation("SaleArchivedBy", fields: [archivedByUserId], references: [id])
+
   items    SaleItem[]
   payments SalePayment[]
   invoice  Invoice?
@@ -1378,6 +1383,7 @@ model Sale {
   @@index([companyId, sourceChannel])
   @@index([companyId, createdAt])
   @@index([companyId, saleDate])
+  @@index([companyId, archivedAt])
 }
 
 model SaleItem {

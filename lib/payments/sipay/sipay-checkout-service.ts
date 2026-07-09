@@ -23,6 +23,7 @@ import {
 import { enqueueBillingOutboxEvent } from "@/lib/billing/billing-outbox-service";
 import { applyPendingChangeAfterSuccessfulPayment } from "@/lib/billing/subscription-pending-change-service";
 import { syncLegacyMembershipSettings } from "@/lib/billing/subscription-legacy-sync";
+import { createPartnerPaymentConversion } from "@/lib/partner-conversion-service";
 import { getSipayEnv, getSipayBaseUrl } from "./sipay-env";
 import { createSipayProvider } from "./sipay-provider";
 import { generateSipayInvoiceId, generatePayloadHash } from "./sipay-invoice-id";
@@ -567,6 +568,27 @@ export async function finalizeSipayPayment(
 
   if (membershipPaymentId === "__duplicate__") {
     return { duplicate: true };
+  }
+
+  if (membershipPaymentId) {
+    const payment = await db.membershipPayment.findUnique({
+      where: { id: membershipPaymentId },
+      select: {
+        id: true,
+        companyId: true,
+        amount: true,
+        status: true,
+        testMode: true,
+      },
+    });
+
+    if (payment?.status === "PAID" && !payment.testMode) {
+      await createPartnerPaymentConversion({
+        companyId: payment.companyId,
+        paymentAmount: Number(payment.amount),
+        membershipPaymentId: payment.id,
+      });
+    }
   }
 
   return { duplicate: false, membershipPaymentId };

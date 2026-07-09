@@ -18,11 +18,13 @@ async function runTotalSales(
 ): Promise<FinanceAssistantResult> {
   const period = periodOverride ?? resolvePeriod(input.period, input.startDate, input.endDate);
 
+  // Tahakkuk satış: Sale.createdAt + aktif status (Dashboard / Satışlar ile aynı).
+  // saleDate ayrı metrik: ACCRUAL_SALES_BY_SALE_DATE — burada kullanılmaz.
   const sales = await db.sale.findMany({
     where: {
       companyId,
       ...activeSaleStatusFilter(),
-      saleDate: { gte: period.startDate, lte: period.endDate },
+      createdAt: { gte: period.startDate, lte: period.endDate },
     },
     select: { total: true },
   });
@@ -31,10 +33,10 @@ async function runTotalSales(
 
   return {
     command: "TOTAL_SALES",
-    title: `Toplam Satış — ${period.label}`,
-    message: `${period.label} döneminde toplam ${formatMoney(total)} satış yapıldı.`,
+    title: `Kayıt Oluşturma Tarihine Göre Satış — ${period.label}`,
+    message: `${period.label} döneminde (kayıt oluşturma tarihine göre) toplam ${formatMoney(total)} tahakkuk satış.`,
     metrics: [
-      { label: "Satış Tutarı", value: total, formattedValue: formatMoney(total) },
+      { label: "Kayıt Oluşturma Tarihine Göre Satış", value: total, formattedValue: formatMoney(total) },
       { label: "Satış Adedi", value: sales.length, formattedValue: `${sales.length} satış` },
     ],
     items: [],
@@ -110,10 +112,10 @@ async function runTotalExpense(
 
   return {
     command: "TOTAL_EXPENSE",
-    title: `Toplam Gider — ${period.label}`,
-    message: `${period.label} döneminde ${formatMoney(total)} gider kaydedildi.`,
+    title: `Tahakkuk Gider — ${period.label}`,
+    message: `${period.label} döneminde ${formatMoney(total)} tahakkuk gider (ödeme durumundan bağımsız). Dashboard nakit gideri ayrıdır.`,
     metrics: [
-      { label: "Toplam Gider", value: total, formattedValue: formatMoney(total) },
+      { label: "Tahakkuk Gider", value: total, formattedValue: formatMoney(total) },
       { label: "Gider Adedi", value: expenses.length, formattedValue: `${expenses.length} gider` },
     ],
     items: [],
@@ -126,38 +128,26 @@ async function runNetResult(
   input: FinanceQueryInput
 ): Promise<FinanceAssistantResult> {
   const period = resolvePeriod(input.period, input.startDate, input.endDate);
-
-  const [sales, expenses] = await Promise.all([
-    db.sale.findMany({
-      where: {
-        companyId,
-        ...activeSaleStatusFilter(),
-        saleDate: { gte: period.startDate, lte: period.endDate },
-      },
-      select: { total: true },
-    }),
-    db.expense.findMany({
-      where: {
-        companyId,
-        status: { not: "CANCELLED" },
-        date: { gte: period.startDate, lte: period.endDate },
-      },
-      select: { amount: true },
-    }),
-  ]);
-
-  const revenue = sales.reduce((s, r) => s + Number(r.total), 0);
-  const expenseTotal = expenses.reduce((s, r) => s + Number(r.amount), 0);
-  const net = revenue - expenseTotal;
+  const { getCanonicalFinancialSummary } = await import(
+    "@/lib/finance/financial-summary-service"
+  );
+  const summary = await getCanonicalFinancialSummary(
+    companyId,
+    period.startDate,
+    period.endDate
+  );
+  const revenue = summary.revenue.total;
+  const expenseTotal = summary.expenses.cashTotal;
+  const net = summary.profit.operational;
 
   return {
     command: "NET_RESULT",
-    title: `Net Sonuç — ${period.label}`,
-    message: `${period.label} döneminde net sonuç ${net >= 0 ? "+" : ""}${formatMoney(net)}.`,
+    title: `Operasyonel Nakit Sonucu — ${period.label}`,
+    message: `${period.label} döneminde operasyonel nakit sonucu ${net >= 0 ? "+" : ""}${formatMoney(net)}. Dashboard/Raporlarla aynı hesap.`,
     metrics: [
-      { label: "Satış Geliri", value: revenue, formattedValue: formatMoney(revenue) },
-      { label: "Toplam Gider", value: expenseTotal, formattedValue: formatMoney(expenseTotal) },
-      { label: "Net Sonuç", value: net, formattedValue: formatMoney(net) },
+      { label: "Nakit Gelir", value: revenue, formattedValue: formatMoney(revenue) },
+      { label: "Nakit Gider", value: expenseTotal, formattedValue: formatMoney(expenseTotal) },
+      { label: "Operasyonel Nakit Sonucu", value: net, formattedValue: formatMoney(net) },
     ],
     items: [],
     period: buildPeriodResult(period),
@@ -176,7 +166,7 @@ async function runSalesComparison(
       where: {
         companyId,
         ...activeSaleStatusFilter(),
-        saleDate: { gte: thisPeriod.startDate, lte: thisPeriod.endDate },
+        createdAt: { gte: thisPeriod.startDate, lte: thisPeriod.endDate },
       },
       select: { total: true },
     }),
@@ -184,7 +174,7 @@ async function runSalesComparison(
       where: {
         companyId,
         ...activeSaleStatusFilter(),
-        saleDate: { gte: lastPeriod.startDate, lte: lastPeriod.endDate },
+        createdAt: { gte: lastPeriod.startDate, lte: lastPeriod.endDate },
       },
       select: { total: true },
     }),
@@ -228,7 +218,7 @@ async function runTopSellingProducts(
       sale: {
         companyId,
         ...activeSaleStatusFilter(),
-        saleDate: { gte: period.startDate, lte: period.endDate },
+        createdAt: { gte: period.startDate, lte: period.endDate },
       },
     },
     _sum: { quantity: true },
@@ -281,7 +271,7 @@ async function runTopRevenueProducts(
       sale: {
         companyId,
         ...activeSaleStatusFilter(),
-        saleDate: { gte: period.startDate, lte: period.endDate },
+        createdAt: { gte: period.startDate, lte: period.endDate },
       },
     },
     _sum: { total: true },
@@ -575,7 +565,7 @@ async function runProductSales(
         sale: {
           companyId,
           ...activeSaleStatusFilter(),
-          saleDate: { gte: period.startDate, lte: period.endDate },
+          createdAt: { gte: period.startDate, lte: period.endDate },
         },
       },
       select: { quantity: true, total: true, unitPrice: true },
@@ -610,7 +600,7 @@ async function runProductSales(
       sale: {
         companyId,
         ...activeSaleStatusFilter(),
-        saleDate: { gte: period.startDate, lte: period.endDate },
+        createdAt: { gte: period.startDate, lte: period.endDate },
       },
     },
     _sum: { total: true, quantity: true },

@@ -11,6 +11,7 @@ import {
   validateInvoiceCollectEligibility,
   type CollectInvoiceInput,
 } from "@/lib/invoice-payment-utils";
+import { resolveInvoiceDetailActions } from "@/lib/invoice-lifecycle-utils";
 import { parseExpenseDate } from "@/lib/expense-utils";
 import {
   derivePaymentStatus,
@@ -38,6 +39,7 @@ export type SerializedInvoiceCollection = {
   date: Date;
   note: string | null;
   accountName: string;
+  isReversal?: boolean;
 };
 
 export type SerializedInvoiceDetail = {
@@ -62,6 +64,12 @@ export type SerializedInvoiceDetail = {
   collections: SerializedInvoiceCollection[];
   canCollect: boolean;
   canCancel: boolean;
+  canDelete: boolean;
+  canEdit: boolean;
+  requiresCancelReason: boolean;
+  lifecycleActions: import("@/lib/transaction-lifecycle-policy").LifecycleActionMatrix;
+  providerCancelSupported: boolean;
+  requiresProviderCancel: boolean;
 };
 
 import { getCollectionAccountOptions } from "@/lib/account-read-service";
@@ -76,6 +84,7 @@ export async function getInvoiceDetailForPage(companyId: string, invoiceId: stri
     include: {
       customer: true,
       sale: true,
+      documentSubmission: true,
       transactions: {
         orderBy: [{ date: "desc" }, { createdAt: "desc" }],
         include: {
@@ -93,7 +102,14 @@ export async function getInvoiceDetailForPage(companyId: string, invoiceId: stri
   const paidAmount = Number(invoice.paidAmount);
   const remainingAmount = getInvoiceRemainingAmount(total, paidAmount);
   const collectEligibility = validateInvoiceCollectEligibility(invoice);
-  const cancelEligibility = validateInvoiceCancelEligibility(invoice);
+  const actionContext = resolveInvoiceDetailActions({
+    status: invoice.status,
+    paymentStatus: invoice.paymentStatus,
+    type: invoice.type,
+    paidAmount,
+    total,
+    documentSubmission: invoice.documentSubmission,
+  });
 
   return {
     id: invoice.id,
@@ -123,9 +139,18 @@ export async function getInvoiceDetailForPage(companyId: string, invoiceId: stri
       date: transaction.date,
       note: transaction.note,
       accountName: transaction.account.name,
+      isReversal:
+        (transaction.note ?? "").includes("[REVERSAL]") ||
+        transaction.title.toLocaleLowerCase("tr-TR").includes("iptal"),
     })),
     canCollect: collectEligibility.ok,
-    canCancel: cancelEligibility.ok && invoice.status !== "APPROVED",
+    canCancel: actionContext.canCancel,
+    canDelete: actionContext.canDelete,
+    canEdit: actionContext.canEdit,
+    requiresCancelReason: actionContext.requiresCancelReason,
+    lifecycleActions: actionContext.lifecycleActions,
+    providerCancelSupported: actionContext.providerCancelSupported,
+    requiresProviderCancel: actionContext.requiresProviderCancel,
   } satisfies SerializedInvoiceDetail;
 }
 

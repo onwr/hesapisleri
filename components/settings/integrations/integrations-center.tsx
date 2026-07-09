@@ -30,6 +30,7 @@ type IntegrationsCenterProps = {
   initialEDocument: EDocumentIntegrationSummary;
   initialRuns: SyncRunRow[];
   warehouses: Array<{ id: string; name: string }>;
+  encryptionConfigured?: boolean;
 };
 
 export function IntegrationsCenter({
@@ -38,6 +39,7 @@ export function IntegrationsCenter({
   initialEDocument,
   initialRuns,
   warehouses,
+  encryptionConfigured = true,
 }: IntegrationsCenterProps) {
   const [trendyol, setTrendyol] = useState(initialTrendyol);
   const [hepsiburada, setHepsiburada] = useState(initialHepsiburada);
@@ -78,12 +80,14 @@ export function IntegrationsCenter({
             integration={trendyol}
             warehouses={warehouses}
             onRefetch={refetch}
+            encryptionConfigured={encryptionConfigured}
           />
           <MarketplaceIntegrationCard
             channel="HEPSIBURADA"
             integration={hepsiburada}
             warehouses={warehouses}
             onRefetch={refetch}
+            encryptionConfigured={encryptionConfigured}
           />
           <EDocumentIntegrationCard integration={eDocument} onRefetch={refetch} />
         </div>

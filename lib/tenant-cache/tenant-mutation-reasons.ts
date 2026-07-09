@@ -45,6 +45,8 @@ export const TENANT_MUTATION_REASONS = [
   "order-status-update",
   "order-approve",
   "order-cancel",
+  "order-archive",
+  "order-restore",
   "order-bulk-status",
   "order-bulk-shipping",
   "order-import",

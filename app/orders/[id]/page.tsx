@@ -225,6 +225,8 @@ export default async function OrderDetailPage({ params }: Props) {
                   orderId={sale.id}
                   orderNo={orderRow.orderNo}
                   orderStatus={sale.orderStatus}
+                  sourceChannel={sale.sourceChannel}
+                  isArchived={orderRow.isArchived}
                 />
               </div>
             </section>

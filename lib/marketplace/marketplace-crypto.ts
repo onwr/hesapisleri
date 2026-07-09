@@ -58,3 +58,12 @@ export function assertIntegrationEncryptionConfigured() {
     throw new Error("Entegrasyon şifreleme anahtarı yapılandırılmamış.");
   }
 }
+
+export function isIntegrationEncryptionConfigured() {
+  try {
+    getIntegrationKey();
+    return true;
+  } catch {
+    return false;
+  }
+}

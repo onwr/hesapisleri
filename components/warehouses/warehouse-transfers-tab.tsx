@@ -7,6 +7,7 @@ import {
   getTransferStatusClass,
   getTransferStatusLabel,
 } from "@/lib/warehouse-utils";
+import { WarehouseTransferRowActions } from "@/components/warehouses/warehouse-transfer-row-actions";
 
 export type WarehouseTransferRow = {
   id: string;
@@ -42,6 +43,7 @@ export function WarehouseTransfersTab({ transfers }: { transfers: WarehouseTrans
               <th className="px-3 py-2.5">Durum</th>
               <th className="px-3 py-2.5">Tarih</th>
               <th className="px-3 py-2.5">Oluşturan</th>
+              <th className="px-3 py-2.5 text-center">İşlem</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -70,6 +72,17 @@ export function WarehouseTransfersTab({ transfers }: { transfers: WarehouseTrans
                 </td>
                 <td className="px-3 py-2.5 text-slate-500">
                   {transfer.createdBy?.name || "—"}
+                </td>
+                <td className="px-3 py-2.5 text-center">
+                  <WarehouseTransferRowActions
+                    transferId={transfer.id}
+                    transferNo={transfer.transferNo}
+                    status={transfer.status}
+                    quantity={transfer.quantity}
+                    productName={transfer.product.name}
+                    fromWarehouseName={transfer.fromWarehouse.name}
+                    toWarehouseName={transfer.toWarehouse.name}
+                  />
                 </td>
               </tr>
             ))}

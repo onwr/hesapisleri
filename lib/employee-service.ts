@@ -67,16 +67,10 @@ import { getCompanyAllowNegativeCashBalance } from "@/lib/cash-balance-policy";
 import {
   getEmployeePaymentTypeBehavior,
 } from "@/lib/employee-payment-type-mapping";
+import { EmployeeServiceError } from "@/lib/employee-service-error";
+import { getEmployeeLeaveRowActions } from "@/lib/transaction-lifecycle-row-actions";
 
-export class EmployeeServiceError extends Error {
-  status: number;
-
-  constructor(message: string, status = 400) {
-    super(message);
-    this.name = "EmployeeServiceError";
-    this.status = status;
-  }
-}
+export { EmployeeServiceError } from "@/lib/employee-service-error";
 
 type DbClient = Prisma.TransactionClient | typeof db;
 
@@ -1987,6 +1981,10 @@ export async function cancelEmployeeLeave(input: {
   }
 
   if (leave.status !== "PENDING" && leave.status !== "APPROVED") {
+    throw new EmployeeServiceError("Bu izin talebi iptal edilemez.", 409);
+  }
+
+  if (!getEmployeeLeaveRowActions(leave.status).cancel) {
     throw new EmployeeServiceError("Bu izin talebi iptal edilemez.", 409);
   }
 

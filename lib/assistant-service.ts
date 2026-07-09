@@ -6,7 +6,7 @@ import {
   parseDateParam,
   type AiAssistantContext,
 } from "@/lib/ai-assistant-page-utils";
-import { endOfMonth, startOfMonth } from "@/lib/dashboard-metrics";
+import { resolveMonthFinancialPeriod } from "@/lib/finance/financial-period";
 
 export const ASSISTANT_MESSAGE_MAX_LENGTH = 2000;
 
@@ -171,8 +171,9 @@ export async function generateAssistantReply(
 
 export function resolveAssistantDateRange(from?: string, to?: string) {
   const now = new Date();
-  const defaultFrom = startOfMonth(now);
-  const defaultTo = endOfMonth(now);
+  const month = resolveMonthFinancialPeriod({ referenceDate: now });
+  const defaultFrom = month.from;
+  const defaultTo = month.toInclusive;
   const parsedFrom = from ? parseDateParam(from) : defaultFrom;
   const parsedTo = to ? parseDateParam(to) : defaultTo;
   return normalizeDateRange(parsedFrom || defaultFrom, parsedTo || defaultTo);

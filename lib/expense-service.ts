@@ -1,7 +1,19 @@
 import { db } from "@/lib/prisma";
 import { invalidateDashboardCache } from "@/lib/dashboard-cache-invalidation";
 import { roundCashMoney } from "@/lib/cash-bank-account-utils";
+import {
+  buildFinanceMirrorNote,
+  isFinanceMirrorTransaction,
+} from "@/lib/finance-reversal-utils";
 import { syncSupplierBalance } from "@/lib/supplier-balance-service";
+import {
+  assertCancelReasonProvided,
+  assertLifecycleAction,
+  mapExpenseToLifecycle,
+  writeLifecycleActivityLog,
+} from "@/lib/transaction-lifecycle-enforcement";
+import { runExpenseCancelTestHook } from "@/lib/test-transaction-hooks";
+import { getExpenseRowActions } from "@/lib/transaction-lifecycle-row-actions";
 import { getSupplierDisplayName } from "@/lib/supplier-utils";
 import {
   ensureExpenseCategoryExists,
@@ -59,6 +71,8 @@ export type SerializedExpenseDetail = {
     date: Date;
     note: string | null;
   } | null;
+  lifecycleActions?: import("@/lib/transaction-lifecycle-policy").LifecycleActionMatrix;
+  requiresCancelReason?: boolean;
 };
 
 import { getActiveAccountOptions } from "@/lib/account-read-service";
@@ -84,7 +98,17 @@ export async function getExpenseDetail(companyId: string, expenseId: string) {
     return null;
   }
 
-  return serializeExpenseDetail(expense);
+  const detail = serializeExpenseDetail(expense);
+  const lifecycleActions = getExpenseRowActions({
+    status: expense.status,
+    paymentStatus: expense.paymentStatus,
+  });
+
+  return {
+    ...detail,
+    lifecycleActions,
+    requiresCancelReason: expense.paymentStatus === "PAID",
+  };
 }
 
 function serializeExpenseDetail(expense: {
@@ -337,6 +361,27 @@ export async function updateExpenseRecord(input: {
       };
     }
 
+    const lifecycle = mapExpenseToLifecycle({
+      status: expense.status,
+      paymentStatus: expense.paymentStatus,
+    });
+
+    try {
+      assertLifecycleAction({
+        module: "expenses",
+        state: lifecycle,
+        action: "edit",
+        message: "Bu gider düzenlenemez.",
+      });
+    } catch (error) {
+      return {
+        ok: false as const,
+        status: 400,
+        message:
+          error instanceof Error ? error.message : "Bu gider düzenlenemez.",
+      };
+    }
+
     const amountValidation = validateExpenseAmountUpdate(expense, input.data.amount);
     if (!amountValidation.ok) {
       return {
@@ -385,14 +430,14 @@ export async function updateExpenseRecord(input: {
       });
     }
 
-    await tx.activityLog.create({
-      data: {
-        companyId: input.companyId,
-        userId: input.userId,
-        action: "UPDATE",
-        module: "expenses",
-        message: `${updated.title} gideri güncellendi.`,
-      },
+    await writeLifecycleActivityLog(tx, {
+      companyId: input.companyId,
+      userId: input.userId,
+      module: "expenses",
+      entityType: "EXPENSE",
+      entityId: updated.id,
+      action: "UPDATE",
+      message: `${updated.title} gideri güncellendi.`,
     });
 
     return {
@@ -409,6 +454,86 @@ export async function updateExpenseRecord(input: {
     for (const supplierId of supplierIds) {
       await syncSupplierBalance(input.companyId, supplierId);
     }
+    invalidateDashboardCache(input.companyId, "expense-update");
+  }
+
+  return result;
+}
+
+export async function deleteExpenseRecord(input: {
+  companyId: string;
+  userId: string;
+  expenseId: string;
+}) {
+  const result = await db.$transaction(async (tx) => {
+    const expense = await tx.expense.findFirst({
+      where: {
+        id: input.expenseId,
+        companyId: input.companyId,
+      },
+    });
+
+    if (!expense) {
+      return {
+        ok: false as const,
+        status: 404,
+        message: "Gider bulunamadı.",
+      };
+    }
+
+    const lifecycle = mapExpenseToLifecycle({
+      status: expense.status,
+      paymentStatus: expense.paymentStatus,
+    });
+
+    try {
+      assertLifecycleAction({
+        module: "expenses",
+        state: lifecycle,
+        action: "delete",
+        message: "Bu gider silinemez.",
+      });
+    } catch (error) {
+      return {
+        ok: false as const,
+        status: 400,
+        message:
+          error instanceof Error ? error.message : "Bu gider silinemez.",
+      };
+    }
+
+    if (expense.paymentStatus === "PAID") {
+      return {
+        ok: false as const,
+        status: 400,
+        message: "Ödenmiş gider silinemez. İptal veya ters kayıt kullanın.",
+      };
+    }
+
+    await tx.expense.delete({ where: { id: expense.id } });
+
+    await writeLifecycleActivityLog(tx, {
+      companyId: input.companyId,
+      userId: input.userId,
+      module: "expenses",
+      entityType: "EXPENSE",
+      entityId: expense.id,
+      action: "DELETE",
+      message: `${expense.title} gideri silindi.`,
+    });
+
+    return {
+      ok: true as const,
+      data: { expenseId: expense.id },
+      supplierId: expense.supplierId,
+    };
+  });
+
+  if (result.ok) {
+    invalidateDashboardCache(input.companyId, "expense-delete");
+    if (result.supplierId) {
+      await syncSupplierBalance(input.companyId, result.supplierId);
+    }
   }
 
   return result;
@@ -418,7 +543,10 @@ export async function cancelExpenseRecord(input: {
   companyId: string;
   userId: string;
   expenseId: string;
+  reason?: string;
 }) {
+  const reason = input.reason?.trim();
+
   const result = await db.$transaction(async (tx) => {
     const expense = await tx.expense.findFirst({
       where: {
@@ -442,23 +570,95 @@ export async function cancelExpenseRecord(input: {
     if (isCancelledExpense(expense.status)) {
       return {
         ok: false as const,
-        status: 400,
+        status: 409,
         message: "Gider zaten iptal edilmiş.",
       };
     }
 
+    const lifecycle = mapExpenseToLifecycle({
+      status: expense.status,
+      paymentStatus: expense.paymentStatus,
+    });
+
+    try {
+      assertLifecycleAction({
+        module: "expenses",
+        state: lifecycle,
+        action: "cancel",
+        message: "Bu gider iptal edilemez.",
+      });
+      assertCancelReasonProvided({ state: lifecycle, reason });
+    } catch (error) {
+      return {
+        ok: false as const,
+        status: 400,
+        message:
+          error instanceof Error ? error.message : "Bu gider iptal edilemez.",
+      };
+    }
+
+    const relatedTransactionIds: string[] = [];
+
     if (expense.paymentStatus === "PAID" && expense.accountId && expense.account) {
       const amount = roundCashMoney(Number(expense.amount));
-      const newBalance = roundCashMoney(Number(expense.account.balance) + amount);
+      const sourceTx = expense.accountTransaction;
 
-      await tx.account.update({
-        where: { id: expense.account.id },
-        data: { balance: newBalance },
-      });
+      if (sourceTx && isFinanceMirrorTransaction(sourceTx)) {
+        return {
+          ok: false as const,
+          status: 409,
+          message: "Bu gider zaten iptal edilmiş.",
+        };
+      }
 
-      if (expense.accountTransaction) {
-        await tx.accountTransaction.delete({
-          where: { id: expense.accountTransaction.id },
+      if (sourceTx) {
+        // Mirror bağ: note içindeki kaynak transaction id.
+        // expenseId @unique — ters kayıt orijinal bire bir FK'yi tekrar kullanamaz.
+        const mirrorExists = await tx.accountTransaction.findFirst({
+          where: {
+            accountId: expense.accountId,
+            type: "INCOME",
+            note: { contains: sourceTx.id },
+          },
+        });
+
+        if (mirrorExists) {
+          return {
+            ok: true as const,
+            data: await tx.expense.findFirstOrThrow({
+              where: { id: expense.id },
+            }),
+            supplierId: expense.supplierId,
+            replayed: true,
+          };
+        }
+
+        relatedTransactionIds.push(sourceTx.id);
+
+        const reversal = await tx.accountTransaction.create({
+          data: {
+            accountId: expense.accountId,
+            type: "INCOME",
+            title: `Gider İptali - ${expense.title}`,
+            amount,
+            date: new Date(),
+            note: buildFinanceMirrorNote(
+              "REVERSAL",
+              `${expense.title} gideri iptal edildi. Kaynak: ${sourceTx.id}. Neden: ${reason ?? "Belirtilmedi"}`
+            ),
+          },
+        });
+
+        relatedTransactionIds.push(reversal.id);
+
+        // Test-only hook (no-op in production): inject failure after first finance write.
+        runExpenseCancelTestHook();
+
+        await tx.account.update({
+          where: { id: expense.account.id },
+          data: {
+            balance: roundCashMoney(Number(expense.account.balance) + amount),
+          },
         });
       }
     }
@@ -472,14 +672,17 @@ export async function cancelExpenseRecord(input: {
       },
     });
 
-    await tx.activityLog.create({
-      data: {
-        companyId: input.companyId,
-        userId: input.userId,
-        action: "UPDATE",
-        module: "expenses",
-        message: `${expense.title} gideri iptal edildi.`,
-      },
+    await writeLifecycleActivityLog(tx, {
+      companyId: input.companyId,
+      userId: input.userId,
+      module: "expenses",
+      entityType: "EXPENSE",
+      entityId: expense.id,
+      action: "CANCEL",
+      message: `${expense.title} gideri iptal edildi.`,
+      reason,
+      relatedTransactionIds:
+        relatedTransactionIds.length > 0 ? relatedTransactionIds : undefined,
     });
 
     return {
@@ -489,7 +692,7 @@ export async function cancelExpenseRecord(input: {
     };
   });
 
-  if (result.ok) {
+  if (result.ok && !("replayed" in result && result.replayed)) {
     invalidateDashboardCache(input.companyId, "expense-cancel");
     if (result.supplierId) {
       await syncSupplierBalance(input.companyId, result.supplierId);

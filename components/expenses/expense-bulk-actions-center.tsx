@@ -28,6 +28,7 @@ import {
   buildBulkExpenseListQuery,
 } from "@/lib/expense-bulk-actions-utils";
 import { getExpenseDisplayPaymentBadge, isCancelledExpense } from "@/lib/expense-utils";
+import { TransactionCancelDialog } from "@/components/transactions/transaction-cancel-dialog";
 import {
   formatExpenseDate,
   formatExpenseMoney,
@@ -118,6 +119,7 @@ export function ExpenseBulkActionsCenter({
   const [feedback, setFeedback] = useState<FeedbackState>(null);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [payModalOpen, setPayModalOpen] = useState(false);
+  const [bulkCancelOpen, setBulkCancelOpen] = useState(false);
   const [categoryValue, setCategoryValue] = useState("");
   const [customCategory, setCustomCategory] = useState("");
   const [payAccountId, setPayAccountId] = useState("");
@@ -315,14 +317,10 @@ export function ExpenseBulkActionsCenter({
       return;
     }
 
-    const confirmed = window.confirm(
-      `${selectedExpenses.length} gideri iptal etmek istediğinize emin misiniz?`
-    );
+    setBulkCancelOpen(true);
+  }
 
-    if (!confirmed) {
-      return;
-    }
-
+  async function confirmBulkCancel() {
     const result = await mutate("/api/expenses/bulk/cancel", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -338,12 +336,13 @@ export function ExpenseBulkActionsCenter({
           tone: "error",
         });
       }
-      return;
+      return { ok: false, message: result.error || "Toplu iptal başarısız." };
     }
 
     await refreshAfterAction(
       result.message || `${selectedExpenses.length} gider iptal edildi.`
     );
+    return { ok: true };
   }
 
   function openCategoryModal() {
@@ -1109,6 +1108,17 @@ export function ExpenseBulkActionsCenter({
           </div>
         </div>
       ) : null}
+
+      <TransactionCancelDialog
+        open={bulkCancelOpen}
+        onOpenChange={setBulkCancelOpen}
+        title="Toplu Gider İptali"
+        description={`${selectedExpenses.length} gider iptal edilecek.`}
+        recordLabel={`${selectedExpenses.length} gider`}
+        requiresReason={false}
+        confirmLabel="Giderleri İptal Et"
+        onConfirm={confirmBulkCancel}
+      />
     </>
   );
 }

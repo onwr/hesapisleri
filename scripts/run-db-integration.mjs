@@ -70,10 +70,13 @@ const testFiles = [
   "lib/payments/sipay/sipay-db.test.ts",
   "lib/payments/sipay/sipay-db-concurrency.test.ts",
   "lib/cash-bank-transfer-db.test.ts",
+  "lib/lifecycle-cancellation-db.test.ts",
   "lib/billing-mutation-guard.test.ts",
   "lib/membership-shared-entitlement-db.test.ts",
   "lib/partner-referral-db.test.ts",
   "lib/invoice-service-product-db.test.ts",
+  "lib/qa-revision/faz-qa-5a-db.test.ts",
+  "lib/qa-revision/faz-qa-5a1-db.test.ts",
 ];
 
 const result = spawnSync(

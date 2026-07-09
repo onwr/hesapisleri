@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 import { Loader2, XCircle } from "lucide-react";
+import { TransactionCancelDialog } from "@/components/transactions/transaction-cancel-dialog";
 
 type QuoteCancelButtonProps = {
   saleId: string;
@@ -19,38 +20,29 @@ export function QuoteCancelButton({
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [open, setOpen] = useState(false);
 
-  function handleCancel() {
-    const confirmed = window.confirm(
-      `${saleNo} numaralı teklifi iptal etmek istediğinize emin misiniz?`
-    );
-
-    if (!confirmed) return;
-
+  async function handleCancel() {
     setMessage(null);
 
-    startTransition(async () => {
-      try {
-        const response = await fetch(`/api/sales/${saleId}/cancel-quote`, {
-          method: "POST",
-        });
-
-        const result = (await response.json()) as {
-          success?: boolean;
-          message?: string;
-        };
-
-        if (!response.ok || !result.success) {
-          setMessage(result.message ?? "İptal işlemi başarısız.");
-          return;
-        }
-
-        notifyTenantCacheSync();
-        router.push("/sales?tab=offers");
-      } catch {
-        setMessage("İptal işlemi sırasında bir hata oluştu.");
-      }
+    const response = await fetch(`/api/sales/${saleId}/cancel-quote`, {
+      method: "POST",
     });
+
+    const result = (await response.json()) as {
+      success?: boolean;
+      message?: string;
+    };
+
+    if (!response.ok || !result.success) {
+      return { ok: false, message: result.message ?? "İptal işlemi başarısız." };
+    }
+
+    notifyTenantCacheSync();
+    startTransition(() => {
+      router.push("/sales?tab=offers");
+    });
+    return { ok: true };
   }
 
   const className =
@@ -62,10 +54,11 @@ export function QuoteCancelButton({
     <div className={variant === "destructive" ? "flex flex-col gap-1" : undefined}>
       <button
         type="button"
-        onClick={() => void handleCancel()}
+        onClick={() => setOpen(true)}
         disabled={isPending}
         className={className}
         title="Teklifi İptal Et"
+        aria-label={`${saleNo} teklifini iptal et`}
       >
         {isPending ? (
           <Loader2 className="animate-spin" size={variant === "destructive" ? 18 : 15} />
@@ -78,8 +71,19 @@ export function QuoteCancelButton({
       </button>
 
       {message ? (
-        <p className="text-[10px] font-semibold text-rose-500">{message}</p>
+        <p className="text-[11px] font-semibold text-rose-500">{message}</p>
       ) : null}
+
+      <TransactionCancelDialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Teklifi İptal Et"
+        description="Teklif iptal edilecek ve listeden kaldırılacak."
+        recordLabel={saleNo}
+        requiresReason={false}
+        confirmLabel="Teklifi İptal Et"
+        onConfirm={handleCancel}
+      />
     </div>
   );
 }

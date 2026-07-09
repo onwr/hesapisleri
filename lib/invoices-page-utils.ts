@@ -1,4 +1,6 @@
 import { getInvoiceRemainingAmount } from "@/lib/invoice-payment-utils";
+import { resolveInvoiceDetailActions } from "@/lib/invoice-lifecycle-utils";
+import type { LifecycleActionMatrix } from "@/lib/transaction-lifecycle-policy";
 import {
   formatDateDisplay,
   formatDateInputValue,
@@ -34,6 +36,7 @@ export type InvoiceTableRow = {
   editHref: string;
   downloadHref: string;
   isOverdue: boolean;
+  documentSubmission?: { status: string; documentType: string } | null;
 };
 
 export type InvoiceRowActionData = {
@@ -53,9 +56,35 @@ export type InvoiceRowActionData = {
   totalAmount?: number;
   paidAmount?: number;
   remainingAmount?: number;
+  canDelete: boolean;
+  canEdit: boolean;
+  requiresCancelReason: boolean;
+  providerCancelSupported: boolean;
+  requiresProviderCancel: boolean;
+  lifecycleActions: LifecycleActionMatrix;
+  collectionsHref: string;
 };
 
-export function mapInvoiceRowActions(row: InvoiceTableRow): InvoiceRowActionData {
+export function mapInvoiceRowActions(
+  row: InvoiceTableRow & {
+    documentSubmission?: { status: string; documentType: string } | null;
+  }
+): InvoiceRowActionData {
+  const detail = resolveInvoiceDetailActions({
+    status: row.invoiceStatus,
+    paymentStatus: row.paymentStatus,
+    type: row.invoiceType,
+    paidAmount: row.paidAmount,
+    total: row.amount,
+    documentSubmission: row.documentSubmission ?? null,
+  });
+
+  const isCancelled = row.invoiceStatus === "CANCELLED";
+  const isDraft = row.invoiceStatus === "DRAFT";
+  const hasCollections =
+    row.paidAmount > 0 ||
+    (row.remainingAmount < row.amount && row.invoiceStatus !== "DRAFT");
+
   return {
     id: row.id,
     invoiceNo: row.invoiceNo,
@@ -67,10 +96,7 @@ export function mapInvoiceRowActions(row: InvoiceTableRow): InvoiceRowActionData
     paymentStatus: row.paymentStatus,
     invoiceStatus: row.invoiceStatus,
     invoiceType: row.invoiceType,
-    canCancel:
-      row.invoiceStatus !== "CANCELLED" &&
-      row.invoiceStatus !== "APPROVED" &&
-      row.paidAmount <= 0,
+    canCancel: detail.canCancel,
     canCollect:
       row.remainingAmount > 0 &&
       row.invoiceStatus !== "CANCELLED" &&
@@ -80,6 +106,19 @@ export function mapInvoiceRowActions(row: InvoiceTableRow): InvoiceRowActionData
     totalAmount: row.amount,
     paidAmount: row.paidAmount,
     remainingAmount: row.remainingAmount,
+    canDelete: detail.canDelete,
+    canEdit: detail.canEdit,
+    requiresCancelReason: detail.requiresCancelReason,
+    providerCancelSupported: detail.providerCancelSupported,
+    requiresProviderCancel: detail.requiresProviderCancel,
+    lifecycleActions: {
+      ...detail.lifecycleActions,
+      edit: detail.canEdit,
+      delete: detail.canDelete,
+      cancel: detail.canCancel || detail.providerCancelSupported,
+      view: true,
+    },
+    collectionsHref: `${row.detailHref}#collections`,
   };
 }
 

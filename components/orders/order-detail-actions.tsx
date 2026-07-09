@@ -11,14 +11,18 @@ import {
 } from "lucide-react";
 import type { OrderStatus } from "@prisma/client";
 import { getAllowedNextStatuses } from "@/lib/order-utils";
+import { resolveOrderLifecycleActions } from "@/lib/order-lifecycle-utils";
 import { Button } from "@/components/ui/button";
 import { OrderShippingModal } from "@/components/orders/order-shipping-modal";
+import { OrderRecordActions } from "@/components/orders/order-record-actions";
 import { useTenantMutation } from "@/hooks/use-tenant-mutation";
 
 type OrderDetailActionsProps = {
   orderId: string;
   orderNo: string;
   orderStatus: OrderStatus;
+  sourceChannel?: string;
+  isArchived?: boolean;
 };
 
 const ACTION_CONFIG: Partial<
@@ -68,15 +72,23 @@ export function OrderDetailActions({
   orderId,
   orderNo,
   orderStatus,
+  sourceChannel = "MANUAL",
+  isArchived = false,
 }: OrderDetailActionsProps) {
   const { mutate, isSubmitting } = useTenantMutation({ refresh: false });
   const [shippingOpen, setShippingOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState("");
 
-  const primaryAction = ACTION_CONFIG[orderStatus];
+  const lifecycle = resolveOrderLifecycleActions({
+    sourceChannel,
+    status: orderStatus,
+    isArchived,
+  });
+  const primaryAction = lifecycle.isMarketplace ? undefined : ACTION_CONFIG[orderStatus];
   const canCancel =
-    orderStatus === "WAITING" || orderStatus === "APPROVED";
+    !lifecycle.isMarketplace &&
+    (orderStatus === "WAITING" || orderStatus === "APPROVED");
   const allowedNext = getAllowedNextStatuses(orderStatus);
 
   async function updateStatus(nextStatus: OrderStatus, extra?: Record<string, unknown>) {
@@ -130,7 +142,12 @@ export function OrderDetailActions({
     void updateStatus("CANCELLED");
   }
 
-  if (allowedNext.length === 0 && !canCancel) {
+  const showLifecycleMenu =
+    lifecycle.lifecycleActions.archive ||
+    lifecycle.lifecycleActions.restore ||
+    lifecycle.isMarketplace;
+
+  if (allowedNext.length === 0 && !canCancel && !showLifecycleMenu) {
     return (
       <p className="text-[12px] font-semibold text-slate-500">
         Bu sipariş için kullanılabilir operasyon aksiyonu yok.
@@ -142,6 +159,17 @@ export function OrderDetailActions({
 
   return (
     <div className="space-y-3">
+      {showLifecycleMenu ? (
+        <OrderRecordActions
+          orderId={orderId}
+          orderNo={orderNo}
+          orderStatus={orderStatus}
+          sourceChannel={sourceChannel as import("@prisma/client").OrderSourceChannel}
+          detailHref={`/orders/${orderId}`}
+          isArchived={isArchived}
+        />
+      ) : null}
+
       <label className="block">
         <span className="text-[12px] font-bold text-[#24345f]">Operasyon Notu</span>
         <textarea

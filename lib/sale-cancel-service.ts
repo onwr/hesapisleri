@@ -5,6 +5,13 @@ import { invalidateDashboardCache } from "@/lib/dashboard-cache-invalidation";
 import { reverseCustomerDebtFromDocument } from "@/lib/customer-balance-utils";
 import { reverseSaleIncomeTransactions } from "@/lib/sale-finance-reversal-utils";
 import { buildStockReturnEntries } from "@/lib/sale-cancel-stock-utils";
+import { isServiceProductType } from "@/lib/product-type-utils";
+import {
+  assertCancelReasonProvided,
+  assertLifecycleAction,
+  mapSaleToLifecycle,
+  writeLifecycleActivityLog,
+} from "@/lib/transaction-lifecycle-enforcement";
 import { validateSaleCancelEligibility } from "@/lib/sale-mutation-policy";
 import {
   ensureProductWarehouseStock,
@@ -19,7 +26,16 @@ type TransactionClient = Omit<
 
 type SaleWithRelations = Prisma.SaleGetPayload<{
   include: {
-    items: true;
+    items: {
+      include: {
+        product: {
+          select: {
+            id: true;
+            productType: true;
+          };
+        };
+      };
+    };
     invoice: {
       include: {
         documentSubmission: true;
@@ -68,8 +84,15 @@ export async function reverseSaleEffects(
     });
 
     const defaultWarehouse = await getOrCreateDefaultWarehouse(companyId, tx);
+
+    const stockItems = sale.items.filter(
+      (item) =>
+        item.productId &&
+        (!item.product || !isServiceProductType(item.product.productType))
+    );
+
     const returnEntries = buildStockReturnEntries(
-      sale.items,
+      stockItems,
       saleMovements,
       defaultWarehouse.id
     );
@@ -144,14 +167,15 @@ export async function reverseSaleEffects(
     },
   });
 
-  await tx.activityLog.create({
-    data: {
-      companyId,
-      userId,
-      action: "UPDATE",
-      module: "sales",
-      message: `${sale.saleNo} numaralı satış iptal edildi. Neden: ${reason}`,
-    },
+  await writeLifecycleActivityLog(tx, {
+    companyId,
+    userId,
+    module: "sales",
+    entityType: "SALE",
+    entityId: sale.id,
+    action: "CANCEL",
+    message: `${sale.saleNo} numaralı satış iptal edildi.`,
+    reason,
   });
 
   await createNotification(
@@ -192,7 +216,16 @@ export async function cancelSaleById(
       companyId,
     },
     include: {
-      items: true,
+      items: {
+        include: {
+          product: {
+            select: {
+              id: true,
+              productType: true,
+            },
+          },
+        },
+      },
       invoice: {
         include: {
           documentSubmission: true,
@@ -212,6 +245,24 @@ export async function cancelSaleById(
       ok: false as const,
       status: 400,
       message: eligibility.message,
+    };
+  }
+
+  const lifecycle = mapSaleToLifecycle(sale.status);
+  try {
+    assertLifecycleAction({
+      module: "sales",
+      state: lifecycle,
+      action: "cancel",
+      message: "Bu satış iptal edilemez.",
+    });
+    assertCancelReasonProvided({ state: lifecycle, reason });
+  } catch (error) {
+    return {
+      ok: false as const,
+      status: 400,
+      message:
+        error instanceof Error ? error.message : "Bu satış iptal edilemez.",
     };
   }
 

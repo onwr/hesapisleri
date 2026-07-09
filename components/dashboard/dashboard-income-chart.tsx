@@ -7,6 +7,13 @@ type IncomeExpenseData = {
   income: number;
   expense: number;
   profit: number;
+  accrualProfit?: number | null;
+  revenueLabel?: string;
+  expenseLabel?: string;
+  profitLabel?: string;
+  profitTooltip?: string;
+  accrualProfitLabel?: string;
+  basisNote?: string;
 };
 
 type DashboardIncomeChartProps = {
@@ -33,21 +40,21 @@ export function DashboardIncomeChart({
   const chartData = [
     {
       key: "income",
-      name: "Toplam Gelir",
+      name: data.revenueLabel ?? "Nakit Gelir",
       value: data.income,
       color: COLORS.income,
       strokeDasharray: PATTERNS.income,
     },
     {
       key: "expense",
-      name: "Toplam Gider",
+      name: data.expenseLabel ?? "Nakit Gider",
       value: data.expense,
       color: COLORS.expense,
       strokeDasharray: PATTERNS.expense,
     },
     {
       key: "profit",
-      name: "Kâr",
+      name: data.profitLabel ?? "Operasyonel Nakit Sonucu",
       value: Math.max(data.profit, 0),
       color: COLORS.profit,
       strokeDasharray: PATTERNS.profit,
@@ -63,15 +70,36 @@ export function DashboardIncomeChart({
         "min-w-0 rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.04)]",
         compact ? "p-4" : "p-4",
       ].join(" ")}
-      aria-label={`Gelir gider durumu, kâr ${formatMoney(data.profit)}`}
+      aria-label={`Gelir gider durumu, ${data.profitLabel ?? "operasyonel nakit sonucu"} ${formatMoney(data.profit)}`}
     >
       <h3 className="mb-3 text-[16px] font-extrabold tracking-[-0.02em] text-[#0f1f4d]">
         Gelir - Gider Durumu
       </h3>
+      {data.profitTooltip || data.basisNote ? (
+        <p
+          className="mb-3 text-[11px] font-semibold leading-5 text-slate-500"
+          title={data.profitTooltip}
+        >
+          {data.basisNote ?? data.profitTooltip}
+        </p>
+      ) : (
+        <p className="mb-3 text-[11px] font-semibold leading-5 text-slate-500">
+          Seçili dönemde gerçekleşen nakit girişleri ile nakit çıkışları arasındaki farktır.
+        </p>
+      )}
+      {data.accrualProfit != null ? (
+        <p className="mb-3 text-[11px] font-semibold leading-5 text-slate-500">
+          {data.accrualProfitLabel ?? "Tahakkuk Kârı"}: {formatMoney(data.accrualProfit)}
+          <span className="font-medium text-slate-400">
+            {" "}
+            (tahakkuk satış − tahakkuk gider; nakit sonucundan ayrıdır)
+          </span>
+        </p>
+      ) : null}
 
       <figcaption className="sr-only" id={summaryId}>
         {hasData
-          ? `Toplam gelir ${formatMoney(data.income)}, toplam gider ${formatMoney(data.expense)}, kâr ${formatMoney(data.profit)}.`
+          ? `Nakit gelir ${formatMoney(data.income)}, nakit gider ${formatMoney(data.expense)}, ${data.profitLabel ?? "operasyonel nakit sonucu"} ${formatMoney(data.profit)}.`
           : "Bu dönem için gelir veya gider verisi yok."}
       </figcaption>
 

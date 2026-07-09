@@ -2,9 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Loader2, Trash2, Wallet } from "lucide-react";
+import { Loader2, Wallet } from "lucide-react";
 import { InvoiceCollectModal } from "@/components/invoices/invoice-collect-modal";
+import { TransactionCancelDialog } from "@/components/transactions/transaction-cancel-dialog";
+import { TransactionRecordActions } from "@/components/transactions/transaction-record-actions";
+import type { LifecycleActionMatrix } from "@/lib/transaction-lifecycle-policy";
 import { useTenantMutation } from "@/hooks/use-tenant-mutation";
+import { formatMoney } from "@/lib/invoice-form-utils";
+import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 
 type InvoiceDetailActionsProps = {
   invoiceId: string;
@@ -12,8 +17,14 @@ type InvoiceDetailActionsProps = {
   total: number;
   paidAmount: number;
   remainingAmount: number;
+  editHref: string;
   canCollect: boolean;
   canCancel: boolean;
+  canDelete: boolean;
+  canEdit: boolean;
+  requiresCancelReason: boolean;
+  lifecycleActions: LifecycleActionMatrix;
+  providerCancelSupported?: boolean;
 };
 
 export function InvoiceDetailActions({
@@ -22,43 +33,81 @@ export function InvoiceDetailActions({
   total,
   paidAmount,
   remainingAmount,
+  editHref,
   canCollect,
   canCancel,
+  canDelete,
+  canEdit,
+  requiresCancelReason,
+  lifecycleActions,
+  providerCancelSupported = false,
 }: InvoiceDetailActionsProps) {
   const router = useRouter();
-  const { mutate, isSubmitting: cancelling } = useTenantMutation({ refresh: false });
+  const { mutate, isSubmitting } = useTenantMutation({ refresh: false });
   const [collectOpen, setCollectOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
-  async function handleCancel() {
-    if (!canCancel) return;
-    if (!window.confirm("Bu faturayı iptal etmek istediğinize emin misiniz?")) {
-      return;
-    }
+  const actions: LifecycleActionMatrix = {
+    ...lifecycleActions,
+    edit: lifecycleActions.edit && canEdit,
+    delete: lifecycleActions.delete && canDelete,
+    cancel: lifecycleActions.cancel && canCancel,
+  };
 
+  async function handleCancelConfirm(input: { reason: string }) {
     setError("");
+    setSuccess("");
 
-    const result = await mutate(`/api/invoices/${invoiceId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "cancel" }),
+    const endpoint = providerCancelSupported
+      ? `/api/invoices/${invoiceId}/e-document/cancel`
+      : `/api/invoices/${invoiceId}`;
+
+    const result = await mutate(endpoint, {
+      method: "POST",
+      headers: providerCancelSupported
+        ? undefined
+        : { "Content-Type": "application/json" },
+      body: providerCancelSupported
+        ? undefined
+        : JSON.stringify({ action: "cancel", reason: input.reason }),
     });
 
-    if (!result.ok) {
-      setError(result.error ?? "Fatura iptal edilemedi.");
+    if (!result.ok && result.error !== "duplicate_submit") {
+      return { ok: false, message: result.error || "Fatura iptal edilemedi." };
+    }
+
+    notifyTenantCacheSync();
+    setSuccess(providerCancelSupported ? "E-Arşiv belgesi iptal edildi." : "Fatura iptal edildi.");
+    router.refresh();
+    return { ok: true };
+  }
+
+  async function handleDelete() {
+    setError("");
+    setSuccess("");
+
+    const result = await mutate(`/api/invoices/${invoiceId}`, {
+      method: "DELETE",
+    });
+
+    if (!result.ok && result.error !== "duplicate_submit") {
+      setError(result.error || "Fatura silinemedi.");
       return;
     }
 
+    notifyTenantCacheSync();
     router.push("/invoices");
   }
 
-  if (!canCollect && !canCancel) {
+  if (!canCollect && !actions.cancel && !actions.delete && !actions.edit) {
     return null;
   }
 
   return (
     <>
-      <div className="flex flex-wrap gap-2 print:hidden">
+      <div className="flex flex-wrap items-center gap-2 print:hidden">
         {canCollect ? (
           <button
             type="button"
@@ -70,26 +119,24 @@ export function InvoiceDetailActions({
           </button>
         ) : null}
 
-        {canCancel ? (
-          <button
-            type="button"
-            onClick={handleCancel}
-            disabled={cancelling}
-            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 text-[11px] font-black text-rose-700 disabled:opacity-60"
-          >
-            {cancelling ? (
-              <Loader2 className="animate-spin" size={15} />
-            ) : (
-              <Trash2 size={15} />
-            )}
-            Faturayı İptal Et
-          </button>
-        ) : null}
+        <TransactionRecordActions
+          actions={actions}
+          viewHref={`/invoices/${invoiceId}`}
+          editHref={canEdit ? editHref : undefined}
+          onCancel={actions.cancel ? () => setCancelOpen(true) : undefined}
+          onDelete={actions.delete ? () => void handleDelete() : undefined}
+        />
       </div>
 
       {error ? (
         <div className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-[12px] font-bold text-rose-600 print:hidden">
           {error}
+        </div>
+      ) : null}
+
+      {success ? (
+        <div className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-[12px] font-bold text-emerald-700 print:hidden">
+          {success}
         </div>
       ) : null}
 
@@ -103,6 +150,38 @@ export function InvoiceDetailActions({
           paidAmount={paidAmount}
           remainingAmount={remainingAmount}
         />
+      ) : null}
+
+      <TransactionCancelDialog
+        open={cancelOpen}
+        onOpenChange={setCancelOpen}
+        title={providerCancelSupported ? "E-Arşiv Belgesini İptal Et" : "Faturayı İptal Et"}
+        description={
+          providerCancelSupported
+            ? "Belge sağlayıcı üzerinden iptal edilecek. Yerel durum yalnızca sağlayıcı onayı sonrası güncellenir."
+            : "Bu fatura iptal edilecek. Bağlı satış ve cari kayıtlar kontrollü şekilde güncellenir."
+        }
+        recordLabel={invoiceNo}
+        recordSummary={`${formatMoney(total)} · Ödenen ${formatMoney(paidAmount)}`}
+        requiresReason={requiresCancelReason || providerCancelSupported}
+        impactWarning={
+          paidAmount > 0
+            ? "Tahsilatı olan faturalar önce tahsilat iadesi ile kapatılmalıdır."
+            : undefined
+        }
+        confirmLabel={providerCancelSupported ? "E-Arşiv İptal Et" : "Faturayı İptal Et"}
+        onConfirm={handleCancelConfirm}
+        onSuccess={() => {
+          if (!providerCancelSupported) {
+            router.push("/invoices");
+          }
+        }}
+      />
+
+      {isSubmitting ? (
+        <span className="sr-only">
+          <Loader2 className="animate-spin" />
+        </span>
       ) : null}
     </>
   );

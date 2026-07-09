@@ -4,7 +4,6 @@ import {
   Banknote,
   Building2,
   Clock3,
-  Eye,
   PieChart,
   Plus,
   RefreshCcw,
@@ -24,6 +23,7 @@ import {
   CashBankTableToolbar,
 } from "@/components/cash-bank/cash-bank-table-controls";
 import { CashBankSidebarWidgets } from "@/components/cash-bank/cash-bank-sidebar-widgets";
+import { CashBankTransactionRowActions } from "@/components/cash-bank/cash-bank-transaction-row-actions";
 import { AiPageTriggerButton } from "@/components/ai-assistant/ai-page-trigger-button";
 import { getCachedCashBankPageData } from "@/lib/tenant-cache/cached-tenant-page-data";
 import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
@@ -480,15 +480,21 @@ const canManage = canManageAccounts(effectiveRole, companyUser.isOwner);
                         </td>
 
                         <td className="px-2 py-2.5">
-                          <div className="flex justify-center">
-                            <Link
-                              href={`/cash-bank/transactions/${transaction.id}`}
-                              className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-[#24345f] transition hover:border-blue-100 hover:bg-blue-50 hover:text-blue-600"
-                              title="Detay"
-                            >
-                              <Eye size={13} />
-                            </Link>
-                          </div>
+                          <CashBankTransactionRowActions
+                            accountId={transaction.accountId}
+                            transactionId={transaction.id}
+                            title={transaction.title}
+                            amount={transaction.amount}
+                            direction={transaction.direction}
+                            lifecycleActions={transaction.lifecycleActions}
+                            isLinked={transaction.isLinked && !transaction.isTransfer}
+                            isTransfer={transaction.isTransfer}
+                            transferGroupId={transaction.transferGroupId}
+                            linkedHref={transaction.linkedHref}
+                            recordLabel={transaction.title}
+                            transferCancelled={transaction.transferCancelled}
+                            detailHref={`/cash-bank/transactions/${transaction.id}`}
+                          />
                         </td>
                       </tr>
                     ))}

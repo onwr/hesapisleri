@@ -3,55 +3,48 @@
 import Link from "next/link";
 import { useState } from "react";
 import {
-  Download,
-  Edit3,
-  Eye,
-  FileText,
-  MoreVertical,
-  Printer,
-  Send,
-  ShoppingCart,
-  Wallet,
-  XCircle,
-} from "lucide-react";
-import {
   CollectPaymentDialog,
   toCollectPaymentTarget,
   type CollectPaymentTarget,
 } from "@/components/collections/collect-payment-dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { TransactionCancelDialog } from "@/components/transactions/transaction-cancel-dialog";
+import { TransactionRecordActions } from "@/components/transactions/transaction-record-actions";
 import type { InvoiceRowActionData } from "@/lib/invoices-page-utils";
 import { useTenantMutation } from "@/hooks/use-tenant-mutation";
+import { formatInvoiceMoney } from "@/lib/invoices-page-utils";
+import { notifyTenantCacheSync } from "@/lib/tenant-cache/client-tenant-sync";
 
 type InvoicesRowActionsProps = {
   row: InvoiceRowActionData;
 };
 
+const E_INVOICE_PROVIDER_CANCEL_MESSAGE =
+  "Bu e-fatura sağlayıcı üzerinden iptal edilmelidir.";
+
 export function InvoicesRowActions({ row }: InvoicesRowActionsProps) {
   const { mutate, isSubmitting } = useTenantMutation({ refresh: false });
-  const [message, setMessage] = useState<string | null>(null);
-  const [collectTarget, setCollectTarget] = useState<CollectPaymentTarget | null>(
-    null
-  );
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [collectTarget, setCollectTarget] = useState<CollectPaymentTarget | null>(null);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
-  function handleDownload() {
-    if (row.pdfUrl) {
-      window.open(row.pdfUrl, "_blank", "noopener,noreferrer");
-      return;
-    }
+  const isCancelled = row.invoiceStatus === "CANCELLED";
+  const showCollectionsLink =
+    !isCancelled &&
+    row.invoiceStatus !== "DRAFT" &&
+    ((row.paidAmount ?? 0) > 0 ||
+      row.paymentStatus === "PARTIAL" ||
+      row.paymentStatus === "PAID");
 
-    window.open(row.downloadHref, "_blank", "noopener,noreferrer");
-  }
-
-  function handlePrint() {
-    window.open(`${row.detailHref}?print=1`, "_blank", "noopener,noreferrer");
-  }
+  const menuActions = isCancelled
+    ? { view: true, edit: false, delete: false, cancel: false, reverse: false, archive: false, restore: false }
+    : {
+        ...row.lifecycleActions,
+        edit: row.canEdit,
+        delete: row.canDelete,
+        cancel: row.canCancel || row.providerCancelSupported,
+      };
 
   function openCollectModal() {
     setCollectTarget(
@@ -59,155 +52,114 @@ export function InvoicesRowActions({ row }: InvoicesRowActionsProps) {
         collectTargetType: "INVOICE",
         collectTargetId: row.id,
         documentNo: row.invoiceNo,
-        totalAmount: row.totalAmount,
-        paidAmount: row.paidAmount,
-        remainingAmount: row.remainingAmount,
+        totalAmount: row.totalAmount ?? 0,
+        paidAmount: row.paidAmount ?? 0,
+        remainingAmount: row.remainingAmount ?? 0,
       })
     );
   }
 
-  async function handleCancel() {
-    const confirmed = window.confirm(
-      `${row.invoiceNo} numaralı faturayı iptal etmek istediğinize emin misiniz?`
-    );
+  async function handleCancelConfirm(input: { reason: string }) {
+    setError("");
+    setSuccess("");
 
-    if (!confirmed) return;
+    if (row.requiresProviderCancel) {
+      return { ok: false, message: E_INVOICE_PROVIDER_CANCEL_MESSAGE };
+    }
 
-    setMessage(null);
+    const endpoint = row.providerCancelSupported
+      ? `/api/invoices/${row.id}/e-document/cancel`
+      : `/api/invoices/${row.id}`;
 
-    const result = await mutate(`/api/invoices/${row.id}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ action: "cancel" }),
+    const result = await mutate(endpoint, {
+      method: row.providerCancelSupported ? "POST" : "PATCH",
+      headers: row.providerCancelSupported
+        ? undefined
+        : { "Content-Type": "application/json" },
+      body: row.providerCancelSupported
+        ? undefined
+        : JSON.stringify({ action: "cancel", reason: input.reason }),
     });
 
-    if (!result.ok) {
-      setMessage(result.error ?? "İptal işlemi başarısız.");
+    if (!result.ok && result.error !== "duplicate_submit") {
+      return { ok: false, message: result.error || "Fatura iptal edilemedi." };
     }
+
+    notifyTenantCacheSync();
+    setSuccess(row.providerCancelSupported ? "E-Arşiv belgesi iptal edildi." : "Fatura iptal edildi.");
+    return { ok: true };
   }
 
-  const isBusy = isSubmitting;
+  async function handleDeleteConfirm() {
+    setError("");
+    setSuccess("");
+
+    const result = await mutate(`/api/invoices/${row.id}`, {
+      method: "DELETE",
+    });
+
+    if (!result.ok && result.error !== "duplicate_submit") {
+      return { ok: false, message: result.error || "Fatura silinemedi." };
+    }
+
+    notifyTenantCacheSync();
+    setSuccess("Fatura silindi.");
+    return { ok: true };
+  }
 
   return (
-    <>
+    <div onClick={(event) => event.stopPropagation()}>
       <div className="flex flex-col items-center gap-1">
-        <div className="flex items-center justify-center gap-1">
-          <Link
-            href={row.detailHref}
-            className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-[#24345f] transition hover:border-blue-100 hover:bg-blue-50 hover:text-blue-600"
-            title="Detay"
-          >
-            <Eye size={13} />
-          </Link>
+        <TransactionRecordActions
+          actions={menuActions}
+          viewHref={row.detailHref}
+          editHref={row.canEdit ? row.editHref : undefined}
+          onCancel={
+            row.canCancel || row.providerCancelSupported
+              ? () => setCancelOpen(true)
+              : undefined
+          }
+          onDelete={row.canDelete ? () => setDeleteOpen(true) : undefined}
+          ariaLabel={`${row.invoiceNo} fatura işlemleri`}
+        />
 
+        {showCollectionsLink ? (
           <Link
-            href={row.editHref}
-            className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-[#24345f] transition hover:border-blue-100 hover:bg-blue-50 hover:text-blue-600"
-            title="Düzenle"
+            href={row.collectionsHref}
+            className="text-[10px] font-bold text-blue-600 hover:underline"
+            aria-label={`${row.invoiceNo} tahsilatları görüntüle`}
           >
-            <Edit3 size={13} />
+            Tahsilatlar
           </Link>
+        ) : null}
 
+        {row.requiresProviderCancel ? (
+          <p className="max-w-[160px] text-center text-[9px] font-semibold text-amber-700">
+            {E_INVOICE_PROVIDER_CANCEL_MESSAGE}
+          </p>
+        ) : null}
+
+        {row.canCollect ? (
           <button
             type="button"
-            onClick={handleDownload}
-            disabled={isBusy}
-            className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-[#24345f] transition hover:bg-slate-50 disabled:opacity-60"
-            title="PDF indir"
+            onClick={openCollectModal}
+            disabled={isSubmitting}
+            className="text-[10px] font-bold text-emerald-700 hover:underline disabled:opacity-60"
+            aria-label={`${row.invoiceNo} tahsilat al`}
           >
-            <Download size={13} />
+            Tahsilat Al
           </button>
+        ) : null}
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                disabled={isBusy}
-                className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-[#24345f] transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
-                title="İşlemler"
-              >
-                <MoreVertical size={13} />
-              </button>
-            </DropdownMenuTrigger>
-
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuItem asChild>
-                <Link href={row.detailHref} className="cursor-pointer">
-                  <Eye size={14} />
-                  Detay görüntüle
-                </Link>
-              </DropdownMenuItem>
-
-              <DropdownMenuItem asChild>
-                <Link href={row.editHref} className="cursor-pointer">
-                  <Edit3 size={14} />
-                  Düzenle
-                </Link>
-              </DropdownMenuItem>
-
-              <DropdownMenuItem onClick={handleDownload} className="cursor-pointer">
-                <Download size={14} />
-                PDF indir / yazdır
-              </DropdownMenuItem>
-
-              <DropdownMenuItem onClick={handlePrint} className="cursor-pointer">
-                <Printer size={14} />
-                Yazdır
-              </DropdownMenuItem>
-
-              {row.canConvertToEInvoice ? (
-                <DropdownMenuItem asChild>
-                  <Link
-                    href={`/invoices/e-invoice?convertFrom=${row.id}`}
-                    className="cursor-pointer"
-                  >
-                    <Send size={14} />
-                    e-Fatura / e-Arşiv&apos;e dönüştür
-                  </Link>
-                </DropdownMenuItem>
-              ) : null}
-
-              {row.saleId ? (
-                <DropdownMenuItem asChild>
-                  <Link href={`/sales/${row.saleId}`} className="cursor-pointer">
-                    <ShoppingCart size={14} />
-                    Bağlı satışa git
-                  </Link>
-                </DropdownMenuItem>
-              ) : null}
-
-              {row.canCollect ? (
-                <DropdownMenuItem
-                  onClick={openCollectModal}
-                  className="cursor-pointer"
-                >
-                  <Wallet size={14} />
-                  Tahsilat al
-                </DropdownMenuItem>
-              ) : null}
-
-              {row.canCancel ? (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onClick={() => void handleCancel()}
-                    className="cursor-pointer"
-                  >
-                    <XCircle size={14} />
-                    {isBusy ? "İptal ediliyor..." : "Faturayı iptal et"}
-                  </DropdownMenuItem>
-                </>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        {message ? (
+        {error ? (
           <p className="max-w-[180px] text-center text-[10px] font-semibold text-rose-500">
-            {message}
+            {error}
+          </p>
+        ) : null}
+
+        {success ? (
+          <p className="max-w-[180px] text-center text-[10px] font-semibold text-emerald-600">
+            {success}
           </p>
         ) : null}
       </div>
@@ -216,6 +168,42 @@ export function InvoicesRowActions({ row }: InvoicesRowActionsProps) {
         target={collectTarget}
         onClose={() => setCollectTarget(null)}
       />
-    </>
+
+      <TransactionCancelDialog
+        open={cancelOpen}
+        onOpenChange={setCancelOpen}
+        title={row.providerCancelSupported ? "E-Arşiv Belgesini İptal Et" : "Faturayı İptal Et"}
+        description={
+          row.providerCancelSupported
+            ? "Belge sağlayıcı üzerinden iptal edilecek. Yerel durum yalnızca sağlayıcı onayı sonrası güncellenir."
+            : "Bu fatura iptal edilecek. Bağlı satış ve cari kayıtlar kontrollü şekilde güncellenir."
+        }
+        recordLabel={row.invoiceNo}
+        recordSummary={`${formatInvoiceMoney(row.totalAmount ?? 0)} · Ödenen ${formatInvoiceMoney(row.paidAmount ?? 0)}`}
+        requiresReason={row.requiresCancelReason || row.providerCancelSupported}
+        impactWarning={
+          (row.paidAmount ?? 0) > 0
+            ? "Tahsilatı olan faturalar önce tahsilat iadesi ile kapatılmalıdır."
+            : undefined
+        }
+        confirmLabel={row.providerCancelSupported ? "E-Arşiv İptal Et" : "Faturayı İptal Et"}
+        onConfirm={handleCancelConfirm}
+        onSuccess={() => notifyTenantCacheSync()}
+      />
+
+      <TransactionCancelDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Faturayı Sil"
+        description="Taslak fatura kalıcı olarak silinecek."
+        recordLabel={row.invoiceNo}
+        requiresReason={false}
+        confirmLabel="Sil"
+        onConfirm={handleDeleteConfirm}
+        onSuccess={() => notifyTenantCacheSync()}
+      />
+
+      {isSubmitting ? <span className="sr-only">İşleniyor</span> : null}
+    </div>
   );
 }

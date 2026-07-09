@@ -137,6 +137,31 @@ export default function EInvoicePage() {
     null
   );
   const [error, setError] = useState("");
+  const [eDocumentReady, setEDocumentReady] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    async function loadEDocumentStatus() {
+      try {
+        const res = await fetch("/api/integrations/e-document");
+        const data = await res.json();
+        if (res.ok && data.success) {
+          const summary = data.data as {
+            status?: string;
+            providerConnectionReady?: boolean;
+          };
+          setEDocumentReady(
+            summary.status === "CONNECTED" && Boolean(summary.providerConnectionReady)
+          );
+          return;
+        }
+        setEDocumentReady(false);
+      } catch {
+        setEDocumentReady(false);
+      }
+    }
+
+    loadEDocumentStatus();
+  }, []);
 
   useEffect(() => {
     async function loadData() {
@@ -592,6 +617,25 @@ export default function EInvoicePage() {
             </div>
           </div>
         </section>
+
+        {eDocumentReady === false ? (
+          <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm font-black text-[#0f1f4d]">
+              E-fatura ayarlarınızı tamamlayın
+            </p>
+            <p className="mt-2 text-[12px] font-semibold leading-5 text-amber-900">
+              Canlı e-Fatura / e-Arşiv gönderimi için Trendyol E-Faturam veya
+              desteklenen sağlayıcı bağlantısı gereklidir. Taslak oluşturabilirsiniz;
+              gönderim entegrasyon tamamlanınca aktif olur.
+            </p>
+            <Link
+              href="/settings/integrations"
+              className="mt-3 inline-flex text-xs font-black text-blue-700 hover:underline"
+            >
+              Entegrasyon ayarlarına git
+            </Link>
+          </section>
+        ) : null}
 
         {sourceSale && !sourceSale.invoice ? (
           <section className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">

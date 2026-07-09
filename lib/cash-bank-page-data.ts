@@ -1,5 +1,8 @@
 import { db } from "@/lib/prisma";
 import { endOfMonth, startOfMonth } from "@/lib/dashboard-metrics";
+import { getTransactionDirection } from "@/lib/cash-bank-account-utils";
+import { resolveCashBankTransactionMutationContext } from "@/lib/cash-bank-transaction-row-utils";
+import { isFinanceMirrorTransaction } from "@/lib/finance-reversal-utils";
 import {
   buildBalanceBreakdown,
   formatCashMoney,
@@ -125,19 +128,90 @@ export async function getCashBankPageData(
   );
   const totalBalance = cashTotal + bankTotal;
 
+  const transferGroupIds = Array.from(
+    new Set(
+      accounts
+        .flatMap((account) => account.transactions)
+        .map((transaction) => transaction.transferGroupId)
+        .filter((value): value is string => Boolean(value))
+    )
+  );
+
+  const cancelledTransferKeys =
+    transferGroupIds.length > 0
+      ? await db.accountTransferIdempotency.findMany({
+          where: {
+            companyId,
+            status: "COMPLETED",
+            OR: transferGroupIds.map((groupId) => ({
+              idempotencyKey: `cancel-transfer:${groupId}`,
+            })),
+          },
+          select: { idempotencyKey: true },
+        })
+      : [];
+
+  const cancelledTransferGroupIds = new Set(
+    cancelledTransferKeys.map((entry) =>
+      entry.idempotencyKey.replace(/^cancel-transfer:/, "")
+    )
+  );
+
   const allTransactions: RawTransaction[] = accounts
     .flatMap((account) =>
-      account.transactions.map((transaction) => ({
-        id: transaction.id,
-        date: new Date(transaction.date),
-        createdAt: new Date(transaction.createdAt),
-        title: transaction.title,
-        type: transaction.type,
-        amount: Number(transaction.amount),
-        accountName: account.name,
-        accountType: account.type,
-        bankName: account.bankName,
-      }))
+      account.transactions.map((transaction) => {
+        const mutation = resolveCashBankTransactionMutationContext(transaction);
+        const isMirror = isFinanceMirrorTransaction(transaction);
+        const isTransfer = mutation.isTransfer;
+        const transferCancelled =
+          Boolean(transaction.transferGroupId) &&
+          cancelledTransferGroupIds.has(transaction.transferGroupId!);
+
+        return {
+          id: transaction.id,
+          date: new Date(transaction.date),
+          createdAt: new Date(transaction.createdAt),
+          title: transaction.title,
+          type: transaction.type,
+          amount: Number(transaction.amount),
+          accountName: account.name,
+          accountType: account.type,
+          bankName: account.bankName,
+          accountId: account.id,
+          direction: getTransactionDirection(transaction),
+          expenseId: transaction.expenseId,
+          invoiceId: transaction.invoiceId,
+          supplierId: transaction.supplierId,
+          transferGroupId: transaction.transferGroupId,
+          isLinked: mutation.isLinked,
+          isTransfer,
+          isMirror,
+          transferCancelled,
+          lifecycleActions:
+            transferCancelled || isMirror
+              ? {
+                  view: true,
+                  edit: false,
+                  delete: false,
+                  cancel: false,
+                  reverse: false,
+                  archive: false,
+                  restore: false,
+                }
+              : isTransfer
+                ? {
+                    view: true,
+                    edit: false,
+                    delete: false,
+                    cancel: true,
+                    reverse: false,
+                    archive: false,
+                    restore: false,
+                  }
+                : mutation.lifecycleActions,
+          linkedHref: mutation.linkedHref,
+        };
+      })
     )
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 

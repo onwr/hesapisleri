@@ -26,7 +26,7 @@ import {
   TopProductsTable,
 } from "@/components/reports/report-charts";
 import { ReportsPageControls } from "@/components/reports/reports-page-controls";
-import { endOfMonth, startOfMonth } from "@/lib/dashboard-metrics";
+import { resolveMonthFinancialPeriod } from "@/lib/finance/financial-period";
 import { formatNumber } from "@/lib/format-utils";
 import { getReportsPageData } from "@/lib/reports-page-data";
 import { getCachedReportsPageData } from "@/lib/tenant-cache/cached-tenant-page-data";
@@ -149,9 +149,10 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const now = new Date();
   const activeTab = parseReportTab(params.tab);
   const activeReport = parseReportView(params.report);
+  const month = resolveMonthFinancialPeriod({ referenceDate: now });
   const { from, to } = normalizeDateRange(
-    parseDateParam(params.from) ?? startOfMonth(now),
-    parseDateParam(params.to) ?? endOfMonth(now)
+    parseDateParam(params.from) ?? month.from,
+    parseDateParam(params.to) ?? month.toInclusive
   );
 
   const data = await getCachedReportsPageData({

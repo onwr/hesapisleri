@@ -1,12 +1,15 @@
 import { calculateInventoryValue } from "@/lib/inventory-value-utils";
 import { db } from "@/lib/prisma";
-import { endOfMonth, startOfMonth } from "@/lib/dashboard-metrics";
 import { toIsoString } from "@/lib/format-utils";
 import {
   buildMonthlyCashFlowData,
-  combineFinanceBreakdown,
   sumActiveAccountBalances,
 } from "@/lib/finance-aggregation-utils";
+import { buildCanonicalFinancialSummary } from "@/lib/finance/financial-summary-service";
+import {
+  COMPANY_FINANCE_TIMEZONE,
+  resolveMonthFinancialPeriod,
+} from "@/lib/finance/financial-period";
 import { getCompanyAccountTransactions } from "@/lib/finance-aggregation-service";
 import {
   buildReportKpiCards,
@@ -168,29 +171,35 @@ export async function getReportsPageData(
     0
   );
 
-  const financeBreakdown = combineFinanceBreakdown(
+  const financeSummary = buildCanonicalFinancialSummary(
     accountTransactions,
     expenses,
     from,
-    to
+    to,
+    { toMode: "inclusive", accrualSalesTotal: totalSalesAccrual }
   );
-  const previousFinanceBreakdown = combineFinanceBreakdown(
+  const previousFinanceSummary = buildCanonicalFinancialSummary(
     accountTransactions,
     expenses,
     previousPeriod.from,
-    previousPeriod.to
+    previousPeriod.to,
+    { toMode: "inclusive" }
   );
 
-  const totalIncome = financeBreakdown.totalIncome;
-  const totalExpenses = financeBreakdown.totalExpense;
-  const previousIncomeTotal = previousFinanceBreakdown.totalIncome;
-  const previousExpensesTotal = previousFinanceBreakdown.totalExpense;
+  const totalIncome = financeSummary.revenue.total;
+  const totalExpenses = financeSummary.expenses.cashTotal;
+  const previousIncomeTotal = previousFinanceSummary.revenue.total;
+  const previousExpensesTotal = previousFinanceSummary.expenses.cashTotal;
+  const financeBreakdown = financeSummary.breakdown;
+  const previousFinanceBreakdown = previousFinanceSummary.breakdown;
 
   const monthlyFinanceData = buildMonthlyCashFlowData(
     accountTransactions,
     expenses,
     from,
-    to
+    to,
+    6,
+    { toMode: "inclusive", timeZone: COMPANY_FINANCE_TIMEZONE }
   ).map(({ month, income, expense, net }) => ({
     month,
     income,
@@ -394,7 +403,20 @@ export async function getReportsPageData(
     ...customers.map((item) => item.updatedAt),
   ].reduce((latest, date) => (date > latest ? date : latest), now);
 
-  const periodLabel = `${startOfMonth(from).getTime() === startOfMonth(to).getTime() ? "Bu Ay" : "Seçili Dönem"}`;
+  const fromMonth = resolveMonthFinancialPeriod({
+    referenceDate: from,
+    timezone: COMPANY_FINANCE_TIMEZONE,
+  });
+  const toMonth = resolveMonthFinancialPeriod({
+    referenceDate: to,
+    timezone: COMPANY_FINANCE_TIMEZONE,
+  });
+  const periodLabel = `${fromMonth.from.getTime() === toMonth.from.getTime() ? "Bu Ay" : "Seçili Dönem"}`;
+
+  const defaultPeriod = resolveMonthFinancialPeriod({
+    referenceDate: now,
+    timezone: COMPANY_FINANCE_TIMEZONE,
+  });
 
   return {
     kpiCards,
@@ -412,7 +434,11 @@ export async function getReportsPageData(
     totalSales: totalSalesAccrual,
     totalIncome,
     totalExpenses,
-    netProfit: financeBreakdown.netCashFlow,
+    netProfit: financeSummary.profit.operational,
+    cashNetProfit: financeSummary.profit.cashNet,
+    accrualProfit: financeSummary.profit.accrual,
+    financeMirrorOutTotal: financeSummary.adjustments.financeMirrorOutTotal,
+    metricVersion: financeSummary.metricVersion,
     financeBreakdown: {
       saleCollectionIncome: financeBreakdown.saleCollectionIncome,
       manualIncome: financeBreakdown.manualIncome,
@@ -431,7 +457,7 @@ export async function getReportsPageData(
     periodLabel,
     lastUpdatedAt: toIsoString(latestUpdate) ?? new Date().toISOString(),
     reportCards: REPORT_CARDS,
-    defaultFrom: startOfMonth(now).toISOString(),
-    defaultTo: endOfMonth(now).toISOString(),
+    defaultFrom: defaultPeriod.from.toISOString(),
+    defaultTo: defaultPeriod.toInclusive.toISOString(),
   };
 }

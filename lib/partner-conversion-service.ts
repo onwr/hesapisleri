@@ -216,3 +216,37 @@ export async function linkPartnerUserByEmail(
     data: { userId: user.id },
   });
 }
+
+/**
+ * Oturumlu kullanıcı referans linkiyle geldiğinde (ör. /r/CODE → billing),
+ * şirketin henüz referringPartnerId'si yoksa kayıt anındaki gibi atama yapar.
+ * Mevcut atama veya self-referral varsa sessizce atlanır.
+ */
+export async function applyPartnerReferralToExistingCompany(input: {
+  companyId: string;
+  userId: string;
+  referralCode?: string | null;
+  clickId?: string | null;
+}) {
+  const referralCode = input.referralCode?.trim();
+  if (!referralCode) return null;
+
+  const company = await db.company.findUnique({
+    where: { id: input.companyId },
+    select: { referringPartnerId: true },
+  });
+
+  if (company?.referringPartnerId) return null;
+
+  const partner = await resolvePartnerFromAttribution({ referralCode });
+  if (!partner) return null;
+
+  return createPartnerSignupConversion({
+    companyId: input.companyId,
+    userId: input.userId,
+    partnerId: partner.id,
+    referralCode: partner.referralCode,
+    clickId: input.clickId,
+    source: "COOKIE",
+  });
+}

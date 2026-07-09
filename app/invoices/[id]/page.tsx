@@ -10,6 +10,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { InvoiceDetailActions } from "@/components/invoices/invoice-detail-actions";
+import { InvoiceCollectionRowActions } from "@/components/invoices/invoice-collection-row-actions";
 import { InvoiceEDocumentPanel } from "@/components/invoices/invoice-e-document-panel";
 import { AppShell } from "@/components/layout/app-shell";
 import { guardPageModule } from "@/lib/module-access";
@@ -156,12 +157,14 @@ const { id } = await params;
               >
                 PDF
               </a>
-              <Link
-                href={editHref}
-                className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-black text-[#0f1f4d]"
-              >
-                Düzenle
-              </Link>
+              {detail.canEdit ? (
+                <Link
+                  href={editHref}
+                  className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-black text-[#0f1f4d]"
+                >
+                  Düzenle
+                </Link>
+              ) : null}
               {canConvert ? (
                 <Link
                   href={`/invoices/e-invoice?convertFrom=${invoice.id}`}
@@ -177,8 +180,14 @@ const { id } = await params;
                 total={detail.total}
                 paidAmount={detail.paidAmount}
                 remainingAmount={detail.remainingAmount}
+                editHref={editHref}
                 canCollect={detail.canCollect}
                 canCancel={detail.canCancel}
+                canDelete={detail.canDelete}
+                canEdit={detail.canEdit}
+                requiresCancelReason={detail.requiresCancelReason}
+                lifecycleActions={detail.lifecycleActions}
+                providerCancelSupported={detail.providerCancelSupported}
               />
             </div>
           </div>
@@ -372,9 +381,21 @@ const { id } = await params;
                       <p className="mt-1 text-[11px] text-slate-500">{collection.note}</p>
                     ) : null}
                   </div>
-                  <p className="text-[14px] font-black text-emerald-600">
-                    +{formatMoney(collection.amount)}
-                  </p>
+                  <div className="flex flex-col items-end gap-2 md:flex-row md:items-center">
+                    <p className="text-[14px] font-black text-emerald-600">
+                      +{formatMoney(collection.amount)}
+                    </p>
+                    <InvoiceCollectionRowActions
+                      invoiceId={detail.id}
+                      invoiceNo={detail.invoiceNo}
+                      transactionId={collection.id}
+                      title={collection.title}
+                      amount={collection.amount}
+                      accountName={collection.accountName}
+                      isReversal={collection.isReversal}
+                      invoiceStatus={detail.status}
+                    />
+                  </div>
                 </div>
               ))}
             </div>

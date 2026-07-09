@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { requireApiModuleAccess } from "@/lib/module-access";
 import { z } from "zod";
-import { createNotification } from "@/lib/notification-service";
 import { db } from "@/lib/prisma";
-import { cancelSaleById } from "@/lib/sale-cancel-service";
+import { requireApiModuleAccess } from "@/lib/module-access";
 import { parseNormalInvoiceMeta } from "@/lib/normal-invoice-meta";
-import { reverseCustomerDebtFromDocument, getInvoiceEffectivePaidAmount } from "@/lib/customer-balance-utils";
-import { validateInvoiceCancelEligibility } from "@/lib/invoice-service";
+import {
+  cancelInvoiceRecord,
+  deleteInvoiceRecord,
+} from "@/lib/invoice-cancel-service";
 import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 type Props = {
@@ -17,6 +17,7 @@ type Props = {
 
 const patchSchema = z.object({
   action: z.enum(["cancel"]),
+  reason: z.string().trim().min(1, "İptal nedeni zorunludur.").optional(),
 });
 
 export async function GET(_req: Request, { params }: Props) {
@@ -25,12 +26,10 @@ export async function GET(_req: Request, { params }: Props) {
     const auth = await requireApiModuleAccess("invoices");
     if ("error" in auth) return auth.error;
 
-    const companyId = auth.companyId;
-    const userId = auth.userId;
     const invoice = await db.invoice.findFirst({
       where: {
         id,
-        companyId: companyId,
+        companyId: auth.companyId,
       },
       include: {
         customer: true,
@@ -93,8 +92,6 @@ export async function PATCH(req: Request, { params }: Props) {
     const auth = await requireApiModuleAccess("invoices");
     if ("error" in auth) return auth.error;
 
-    const companyId = auth.companyId;
-    const userId = auth.userId;
     const body = await req.json();
     const parsed = patchSchema.safeParse(body);
 
@@ -105,126 +102,27 @@ export async function PATCH(req: Request, { params }: Props) {
       );
     }
 
-    const invoice = await db.invoice.findFirst({
-      where: {
-        id,
-        companyId: companyId,
-      },
-      include: {
-        sale: true,
-      },
+    const result = await cancelInvoiceRecord({
+      companyId: auth.companyId,
+      userId: auth.userId,
+      invoiceId: id,
+      reason: parsed.data.reason,
     });
 
-    if (!invoice) {
+    if (!result.ok) {
       return NextResponse.json(
-        { success: false, message: "Fatura bulunamadı." },
-        { status: 404 }
+        { success: false, message: result.message },
+        { status: result.status }
       );
     }
-
-    if (invoice.status === "CANCELLED") {
-      return NextResponse.json(
-        { success: false, message: "Bu fatura zaten iptal edilmiş." },
-        { status: 400 }
-      );
-    }
-
-    if (invoice.status === "APPROVED") {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Onaylanmış e-fatura iptal edilemez.",
-        },
-        { status: 400 }
-      );
-    }
-
-    const cancelEligibility = validateInvoiceCancelEligibility(invoice);
-    if (!cancelEligibility.ok) {
-      return NextResponse.json(
-        { success: false, message: cancelEligibility.message },
-        { status: 400 }
-      );
-    }
-
-    if (invoice.saleId) {
-      const result = await cancelSaleById(
-        invoice.saleId,
-        companyId,
-        userId
-      );
-
-      if (!result.ok) {
-        return NextResponse.json(
-          { success: false, message: result.message },
-          { status: result.status }
-        );
-      }
-
-      return NextResponse.json(
-        buildTenantMutationSuccess(companyId!, {
-          reason: "invoice-cancel",
-          entity: { id: invoice.id },
-          message: result.message,
-          entityIds: { invoiceId: invoice.id },
-        }),
-      );
-    }
-
-    await db.$transaction(async (tx) => {
-      const effectivePaid = getInvoiceEffectivePaidAmount(invoice);
-
-      await reverseCustomerDebtFromDocument(
-        tx,
-        companyId!,
-        invoice.customerId,
-        Number(invoice.total),
-        effectivePaid
-      );
-
-      await tx.invoice.update({
-        where: { id: invoice.id },
-        data: {
-          status: "CANCELLED",
-          paymentStatus: "UNPAID",
-          paidAmount: 0,
-        },
-      });
-
-      await tx.activityLog.create({
-        data: {
-          companyId: companyId!,
-          userId: userId,
-          action: "UPDATE",
-          module: "invoices",
-          message: `${invoice.invoiceNo} numaralı fatura iptal edildi.`,
-        },
-      });
-
-      await createNotification(
-        {
-          companyId: companyId!,
-          userId: userId,
-          type: "WARNING",
-          category: "INVOICES",
-          module: "invoices",
-          entityType: "INVOICE",
-          entityId: invoice.id,
-          actionUrl: `/invoices/${invoice.id}`,
-          title: "Fatura iptal edildi",
-          message: `${invoice.invoiceNo} numaralı fatura iptal edildi.`,
-        },
-        tx
-      );
-    });
 
     return NextResponse.json(
-      buildTenantMutationSuccess(companyId!, {
+      buildTenantMutationSuccess(auth.companyId, {
         reason: "invoice-cancel",
-        entity: { id: invoice.id },
-        message: "Fatura başarıyla iptal edildi.",
-        entityIds: { invoiceId: invoice.id },
-      }),
+        entity: { id },
+        message: result.message ?? "Fatura iptal edildi.",
+        entityIds: { invoiceId: id },
+      })
     );
   } catch (error) {
     console.error("INVOICE_CANCEL_API_ERROR", error);
@@ -234,6 +132,43 @@ export async function PATCH(req: Request, { params }: Props) {
         success: false,
         message: "Fatura iptal edilirken bir hata oluştu.",
       },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(_req: Request, { params }: Props) {
+  try {
+    const { id } = await params;
+    const auth = await requireApiModuleAccess("invoices");
+    if ("error" in auth) return auth.error;
+
+    const result = await deleteInvoiceRecord({
+      companyId: auth.companyId,
+      userId: auth.userId,
+      invoiceId: id,
+    });
+
+    if (!result.ok) {
+      return NextResponse.json(
+        { success: false, message: result.message },
+        { status: result.status }
+      );
+    }
+
+    return NextResponse.json(
+      buildTenantMutationSuccess(auth.companyId, {
+        reason: "invoice-delete",
+        entity: { id },
+        message: "Fatura silindi.",
+        entityIds: { invoiceId: id },
+      })
+    );
+  } catch (error) {
+    console.error("INVOICE_DELETE_API_ERROR", error);
+
+    return NextResponse.json(
+      { success: false, message: "Fatura silinirken bir hata oluştu." },
       { status: 500 }
     );
   }

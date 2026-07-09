@@ -1,17 +1,20 @@
-import { z } from "zod";
-import { db } from "@/lib/prisma";
-import { getPlatformAiConfig } from "@/lib/ai/ai-config";
-import { serializeForAi } from "@/lib/ai/ai-redaction";
-import type { AiRuntimeContext } from "@/lib/ai/ai-context-builder";
-import {
-  endOfMonth,
-  startOfMonth,
-  sumSalesTotal,
-} from "@/lib/dashboard-metrics";
+import { sumSalesTotal } from "@/lib/dashboard-metrics";
 import { activeSaleStatusFilter } from "@/lib/sale-query-utils";
 import { getInvoiceRemainingAmount } from "@/lib/invoice-payment-utils";
 import { sumActiveAccountBalances } from "@/lib/finance-aggregation-utils";
-import { getCompanyExpensesForFinance } from "@/lib/finance-aggregation-service";
+import {
+  getCanonicalFinancialSummary,
+  FINANCIAL_METRIC_VERSION,
+} from "@/lib/finance/financial-summary-service";
+import {
+  CASH_RESULT_LABEL,
+  resolveMonthFinancialPeriod,
+} from "@/lib/finance/financial-period";
+import { getPlatformAiConfig } from "@/lib/ai/ai-config";
+import { serializeForAi } from "@/lib/ai/ai-redaction";
+import type { AiRuntimeContext } from "@/lib/ai/ai-context-builder";
+import { db } from "@/lib/prisma";
+import { z } from "zod";
 
 const dateRangeSchema = z.object({
   from: z.string().optional(),
@@ -28,6 +31,11 @@ function parseDate(value?: string, fallback?: Date) {
   if (!value) return fallback || new Date();
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? fallback || new Date() : parsed;
+}
+
+function defaultMonthRange(now = new Date()) {
+  const month = resolveMonthFinancialPeriod({ referenceDate: now });
+  return { from: month.from, to: month.toInclusive };
 }
 
 function clampDateRange(from: Date, to: Date) {
@@ -52,8 +60,8 @@ export async function getDashboardSummary(
 ) {
   const now = new Date();
   const range = clampDateRange(
-    parseDate(args.from, startOfMonth(now)),
-    parseDate(args.to, endOfMonth(now))
+    parseDate(args.from, defaultMonthRange(now).from),
+    parseDate(args.to, defaultMonthRange(now).to)
   );
 
   const saleWhere = {
@@ -62,10 +70,10 @@ export async function getDashboardSummary(
     createdAt: { gte: range.from, lte: range.to },
   };
 
-  const [sales, expenses, accounts, unpaidInvoices, lowStockCount] =
+  const [sales, financeSummary, accounts, unpaidInvoices, lowStockCount] =
     await Promise.all([
       db.sale.findMany({ where: saleWhere, select: { total: true, createdAt: true } }),
-      getCompanyExpensesForFinance(ctx.companyId),
+      getCanonicalFinancialSummary(ctx.companyId, range.from, range.to),
       db.account.findMany({
         where: { companyId: ctx.companyId, status: "ACTIVE" },
         select: { balance: true },
@@ -88,9 +96,8 @@ export async function getDashboardSummary(
     ]);
 
   const totalSales = sumSalesTotal(sales);
-  const periodExpenses = expenses
-    .filter((row) => row.date >= range.from && row.date <= range.to)
-    .reduce((sum, row) => sum + Number(row.amount), 0);
+  const accrualProfit =
+    Math.round((totalSales - financeSummary.expenses.accruedTotal) * 100) / 100;
   const pendingCollection = unpaidInvoices.reduce(
     (sum, invoice) =>
       sum + getInvoiceRemainingAmount(Number(invoice.total), Number(invoice.paidAmount)),
@@ -102,10 +109,20 @@ export async function getDashboardSummary(
 
   return serializeForAi({
     module: "dashboard",
+    metricVersion: FINANCIAL_METRIC_VERSION,
     period: { from: range.from.toISOString(), to: range.to.toISOString() },
     totalSales,
-    totalExpenses: periodExpenses,
-    profit: totalSales - periodExpenses,
+    salesBasis: "createdAt",
+    salesBasisLabel: "Kayıt Oluşturma Tarihine Göre Satış",
+    /** Accrual sales KPI — same basis as Sales page / Dashboard sales card (createdAt) */
+    cashIncome: financeSummary.revenue.total,
+    totalExpenses: financeSummary.expenses.cashTotal,
+    /** Same as Dashboard/Reports Operasyonel Nakit Sonucu: cashIncome − cashExpense */
+    profit: financeSummary.profit.operational,
+    profitLabel: CASH_RESULT_LABEL,
+    accrualProfit,
+    cashNet: financeSummary.profit.cashNet,
+    financeMirrorOutTotal: financeSummary.adjustments.financeMirrorOutTotal,
     accountBalance: sumActiveAccountBalances(accounts),
     pendingCollection,
     overdueInvoiceCount: overdueCount,
@@ -120,8 +137,8 @@ export async function getSalesSummary(
 ) {
   const now = new Date();
   const range = clampDateRange(
-    parseDate(args.from, startOfMonth(now)),
-    parseDate(args.to, endOfMonth(now))
+    parseDate(args.from, defaultMonthRange(now).from),
+    parseDate(args.to, defaultMonthRange(now).to)
   );
 
   const sales = await db.sale.findMany({
@@ -164,8 +181,8 @@ export async function getTopProducts(
 ) {
   const now = new Date();
   const range = clampDateRange(
-    parseDate(args.from, startOfMonth(now)),
-    parseDate(args.to, endOfMonth(now))
+    parseDate(args.from, defaultMonthRange(now).from),
+    parseDate(args.to, defaultMonthRange(now).to)
   );
 
   const items = await db.saleItem.findMany({
@@ -272,32 +289,29 @@ export async function getCashFlowSummary(
 ) {
   const now = new Date();
   const range = clampDateRange(
-    parseDate(args.from, startOfMonth(now)),
-    parseDate(args.to, endOfMonth(now))
+    parseDate(args.from, defaultMonthRange(now).from),
+    parseDate(args.to, defaultMonthRange(now).to)
   );
 
-  const transactions = await db.accountTransaction.findMany({
-    where: {
-      account: { companyId: ctx.companyId },
-      createdAt: { gte: range.from, lte: range.to },
-    },
-    select: { type: true, amount: true },
-  });
-
-  let income = 0;
-  let expense = 0;
-  for (const tx of transactions) {
-    const amount = Number(tx.amount);
-    if (tx.type === "INCOME" || tx.type === "TRANSFER") income += amount;
-    if (tx.type === "EXPENSE" || tx.type === "PAYMENT") expense += amount;
-  }
+  const summary = await getCanonicalFinancialSummary(
+    ctx.companyId,
+    range.from,
+    range.to
+  );
 
   return serializeForAi({
     module: "cash-bank",
-    income,
-    expense,
-    net: income - expense,
-    transactionCount: transactions.length,
+    metricVersion: FINANCIAL_METRIC_VERSION,
+    period: { from: range.from.toISOString(), to: range.to.toISOString() },
+    income: summary.revenue.total,
+    expense: summary.expenses.cashTotal,
+    net: summary.profit.operational,
+    cashNet: summary.profit.cashNet,
+    financeMirrorOutTotal: summary.adjustments.financeMirrorOutTotal,
+    transferInTotal: summary.adjustments.transferInTotal,
+    transferOutTotal: summary.adjustments.transferOutTotal,
+    basisNote:
+      "Transfer hareketleri gelir/gidere dahil değildir. Ters kayıtlar financeMirrorOutTotal alanında ayrıdır.",
   });
 }
 
@@ -330,17 +344,20 @@ export async function getExpenseSummary(
 ) {
   const now = new Date();
   const range = clampDateRange(
-    parseDate(args.from, startOfMonth(now)),
-    parseDate(args.to, endOfMonth(now))
+    parseDate(args.from, defaultMonthRange(now).from),
+    parseDate(args.to, defaultMonthRange(now).to)
   );
   const expenses = await db.expense.findMany({
     where: {
       companyId: ctx.companyId,
+      status: { not: "CANCELLED" },
       date: { gte: range.from, lte: range.to },
     },
     select: {
       amount: true,
       category: true,
+      paymentStatus: true,
+      status: true,
     },
   });
   const byCategory = new Map<string, number>();
@@ -349,9 +366,21 @@ export async function getExpenseSummary(
     byCategory.set(key, (byCategory.get(key) || 0) + Number(expense.amount));
   }
 
+  const summary = await getCanonicalFinancialSummary(
+    ctx.companyId,
+    range.from,
+    range.to
+  );
+
   return serializeForAi({
     module: "expenses",
-    total: expenses.reduce((sum, row) => sum + Number(row.amount), 0),
+    metricVersion: FINANCIAL_METRIC_VERSION,
+    /** Accrual list total (matches Expenses page “aktif giderler”) */
+    accruedTotal: summary.expenses.accruedTotal,
+    /** Cash P&L expense (matches Dashboard/Reports) */
+    cashTotal: summary.expenses.cashTotal,
+    unpaidAccrued: summary.expenses.unpaidAccrued,
+    total: summary.expenses.accruedTotal,
     count: expenses.length,
     topCategories: [...byCategory.entries()]
       .sort((a, b) => b[1] - a[1])
@@ -520,8 +549,8 @@ export async function getEmployeePaymentSummary(
 ) {
   const now = new Date();
   const range = clampDateRange(
-    parseDate(args.from, startOfMonth(now)),
-    parseDate(args.to, endOfMonth(now))
+    parseDate(args.from, defaultMonthRange(now).from),
+    parseDate(args.to, defaultMonthRange(now).to)
   );
 
   const payments = await db.employeePayment.findMany({

@@ -422,11 +422,12 @@ export function DirectoryPageClient({
                 <UserPlus size={28} />
               </div>
               <h2 className="text-lg font-black text-[#0f1f4d]">
-                Fihristte kayıt bulunmuyor.
+                Fihristte kayıt bulunmuyor
               </h2>
               <p className="mt-2 text-sm leading-6 text-slate-500">
-                İlk kişiyi ekleyin veya müşteri/çalışan kayıtlarınızı fihriste
-                aktarın.
+                Müşteri, tedarikçi ve kişilerin birleşik iletişim rehberi burada
+                listelenir. Satış ve cari hesap için Müşteriler modülünü
+                kullanın.
               </p>
               {canManage ? (
                 <button

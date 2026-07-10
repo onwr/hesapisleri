@@ -13,6 +13,10 @@ import {
   type AiResponseBlock,
   type AiStructuredResponse,
 } from "@/lib/ai/ai-structured-output";
+import {
+  sanitizeStructuredAiResponse,
+  stripUnsafeAiDisplayText,
+} from "@/lib/ai/ai-display-safety";
 
 const MODULE_LABELS: Record<string, string> = {
   dashboard: "Dashboard",
@@ -203,15 +207,26 @@ export function resolveAssistantDisplay(
   structured?: unknown
 ): { mode: "structured"; data: AiStructuredResponse } | { mode: "text"; content: string } {
   const fromStructured = parseStructuredResponse(structured);
-  if (fromStructured) return { mode: "structured", data: fromStructured };
+  if (fromStructured) {
+    const sanitized = sanitizeStructuredAiResponse(fromStructured);
+    if (sanitized) return { mode: "structured", data: sanitized };
+  }
 
   const trimmed = content.trim();
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
     const fromContent = parseStructuredResponse(safeParseJson(trimmed));
-    if (fromContent) return { mode: "structured", data: fromContent };
+    if (fromContent) {
+      const sanitized = sanitizeStructuredAiResponse(fromContent);
+      if (sanitized) return { mode: "structured", data: sanitized };
+    }
+    return {
+      mode: "text",
+      content:
+        "Yanıt güvenli biçimde gösterilemedi. Lütfen sorunuzu yeniden deneyin.",
+    };
   }
 
-  return { mode: "text", content };
+  return { mode: "text", content: stripUnsafeAiDisplayText(content) };
 }
 
 type AiStructuredMessageProps = {

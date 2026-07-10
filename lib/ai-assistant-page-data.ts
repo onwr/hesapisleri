@@ -353,10 +353,8 @@ export async function getAiAssistantPageData(
         profit >= 0
           ? "bg-emerald-50 text-emerald-600"
           : "bg-rose-50 text-rose-500",
-      badge:
-        profit >= 0
-          ? "bg-emerald-100 text-emerald-700"
-          : "bg-rose-100 text-rose-700",
+      badgeLabel: profit >= 0 ? "Olumlu" : "Risk",
+      severity: profit >= 0 ? "LOW" : "HIGH",
     },
     {
       title: "Bekleyen tahsilatları takip edin",
@@ -366,7 +364,8 @@ export async function getAiAssistantPageData(
           : "Bekleyen tahsilat görünmüyor. Nakit akışı daha sağlıklı.",
       iconKey: "wallet",
       color: "bg-orange-50 text-orange-500",
-      badge: "bg-orange-100 text-orange-700",
+      badgeLabel: unpaidInvoiceTotal > 0 ? "Takip" : "İyi",
+      severity: unpaidInvoiceTotal > 0 ? "MEDIUM" : "LOW",
     },
     {
       title: "Stok durumunu kontrol edin",
@@ -376,7 +375,14 @@ export async function getAiAssistantPageData(
           : "Kritik seviyede görünen ürün bulunmuyor.",
       iconKey: "package",
       color: "bg-blue-50 text-blue-600",
-      badge: "bg-blue-100 text-blue-700",
+      badgeLabel:
+        lowStockProducts.length > 0 || outOfStockProducts.length > 0
+          ? "Stok"
+          : "İyi",
+      severity:
+        lowStockProducts.length > 0 || outOfStockProducts.length > 0
+          ? "MEDIUM"
+          : "LOW",
     },
   ];
 

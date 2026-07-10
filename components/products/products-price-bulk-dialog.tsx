@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Percent, TrendingDown, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,32 +12,33 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  buildBulkPriceAdjustmentPlan,
+  type BulkPriceAdjustInput,
+  type BulkPriceProductSnapshot,
+} from "@/lib/product-bulk-service";
+import { formatProductMoney } from "@/lib/products-page-utils";
 
 type ProductsPriceBulkDialogProps = {
   open: boolean;
   selectedCount: number;
+  selectedProducts: BulkPriceProductSnapshot[];
   onClose: () => void;
-  onApply: (input: {
-    priceField: "sell" | "buy" | "both";
-    direction: "increase" | "decrease";
-    mode: "percent" | "fixed";
-    value: number;
-  }) => void;
+  onApply: (input: BulkPriceAdjustInput) => void;
   isPending?: boolean;
 };
 
 export function ProductsPriceBulkDialog({
   open,
   selectedCount,
+  selectedProducts,
   onClose,
   onApply,
   isPending = false,
 }: ProductsPriceBulkDialogProps) {
-  const [priceField, setPriceField] = useState<"sell" | "buy" | "both">("sell");
-  const [direction, setDirection] = useState<"increase" | "decrease">(
-    "increase"
-  );
-  const [mode, setMode] = useState<"percent" | "fixed">("percent");
+  const [priceField, setPriceField] = useState<BulkPriceAdjustInput["priceField"]>("sell");
+  const [direction, setDirection] = useState<BulkPriceAdjustInput["direction"]>("increase");
+  const [mode, setMode] = useState<BulkPriceAdjustInput["mode"]>("percent");
   const [value, setValue] = useState("10");
 
   useEffect(() => {
@@ -49,12 +50,36 @@ export function ProductsPriceBulkDialog({
     }
   }, [open]);
 
+  const parsedValue = Number(value);
+  const hasValidValue = Number.isFinite(parsedValue) && parsedValue > 0;
+
+  const preview = useMemo(() => {
+    if (!hasValidValue || selectedProducts.length === 0) {
+      return null;
+    }
+
+    return buildBulkPriceAdjustmentPlan(selectedProducts, {
+      priceField,
+      direction,
+      mode,
+      value: parsedValue,
+    });
+  }, [
+    direction,
+    hasValidValue,
+    mode,
+    parsedValue,
+    priceField,
+    selectedProducts,
+  ]);
+
+  const hasNegativeResult = Boolean(preview && preview.negativeResultCount > 0);
+
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    const parsed = Number(value);
-    if (Number.isNaN(parsed) || parsed <= 0) return;
+    if (!hasValidValue || hasNegativeResult) return;
 
-    onApply({ priceField, direction, mode, value: parsed });
+    onApply({ priceField, direction, mode, value: parsedValue });
   }
 
   return (
@@ -78,7 +103,7 @@ export function ProductsPriceBulkDialog({
               <select
                 value={priceField}
                 onChange={(e) =>
-                  setPriceField(e.target.value as "sell" | "buy" | "both")
+                  setPriceField(e.target.value as BulkPriceAdjustInput["priceField"])
                 }
                 className="mt-2 h-11 w-full rounded-xl border border-slate-200 px-3 text-[13px] font-medium"
               >
@@ -159,13 +184,47 @@ export function ProductsPriceBulkDialog({
                 required
               />
             </div>
+
+            {preview ? (
+              <div
+                className={[
+                  "rounded-xl border px-3 py-3 text-[12px]",
+                  hasNegativeResult
+                    ? "border-rose-200 bg-rose-50 text-rose-800"
+                    : "border-slate-200 bg-slate-50 text-slate-700",
+                ].join(" ")}
+              >
+                <p className="font-black">
+                  {hasNegativeResult
+                    ? "İşlem uygulanmadı. Bazı ürünlerin fiyatı 0'ın altına düşecekti."
+                    : "Önizleme"}
+                </p>
+                <p className="mt-1">
+                  Geçerli değişiklik: {preview.validChangeCount}
+                </p>
+                <p>
+                  En düşük yeni fiyat:{" "}
+                  {preview.lowestNewPrice === null
+                    ? "—"
+                    : formatProductMoney(preview.lowestNewPrice)}
+                </p>
+                {hasNegativeResult ? (
+                  <p className="mt-1 font-bold">
+                    Negatif sonuca düşen ürün: {preview.negativeResultCount}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>
               Vazgeç
             </Button>
-            <Button type="submit" disabled={isPending}>
+            <Button
+              type="submit"
+              disabled={isPending || !hasValidValue || hasNegativeResult}
+            >
               {isPending ? "Uygulanıyor..." : "Fiyatları güncelle"}
             </Button>
           </DialogFooter>

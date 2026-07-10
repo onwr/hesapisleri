@@ -10,6 +10,7 @@ import type {
   MarketplaceChannel,
   NormalizedMarketplaceOrder,
 } from "@/lib/marketplace/marketplace-types";
+import { buildMarketplaceOrderNote } from "@/lib/marketplace/marketplace-order-note";
 
 type SyncInput = {
   companyId: string;
@@ -170,13 +171,19 @@ async function processMarketplaceOrder(input: {
     ? "WAITING"
     : order.orderStatus;
 
-  const noteParts = [
-    `Pazaryeri siparişi (${input.channel}). Dış durum: ${order.externalStatus}.`,
-    order.externalPackageId ? `Paket: ${order.externalPackageId}.` : "",
-    hasUnmatched
-      ? `Eşleşmeyen SKU: ${unmatchedSkus.join(", ")}. Ürün eşlemesi yapıldıktan sonra onaylayın.`
-      : "",
-  ].filter(Boolean);
+  const unmatchedMessage = hasUnmatched
+    ? `Eşleşmeyen SKU: ${unmatchedSkus.join(", ")}. Ürün eşlemesi yapıldıktan sonra onaylayın.`
+    : null;
+
+  const initialOrderNote = buildMarketplaceOrderNote({
+    existingNote: undefined,
+    buyerName: order.customer.name,
+    buyerPhone: order.customer.phone,
+    channel: input.channel,
+    externalStatus: order.externalStatus,
+    externalPackageId: order.externalPackageId,
+    unmatchedSkus: hasUnmatched ? unmatchedSkus : undefined,
+  });
 
   const existing = await tx.sale.findFirst({
     where: {
@@ -184,7 +191,7 @@ async function processMarketplaceOrder(input: {
       sourceChannel: toSaleChannel(input.channel),
       externalOrderId: order.externalOrderId,
     },
-    select: { id: true },
+    select: { id: true, orderNote: true },
   });
 
   if (existing) {
@@ -239,6 +246,16 @@ async function processMarketplaceOrder(input: {
         : "Pazaryeri senkronunda içerik/tutar farkı tespit edildi ve sipariş WAITING olduğu için kalemler/tutarlar güncellendi.";
     }
 
+    const mergedOrderNote = buildMarketplaceOrderNote({
+      existingNote: current.orderNote,
+      buyerName: order.customer.name,
+      buyerPhone: order.customer.phone,
+      channel: input.channel,
+      externalStatus: order.externalStatus,
+      externalPackageId: order.externalPackageId,
+      unmatchedSkus: hasUnmatched ? unmatchedSkus : undefined,
+    });
+
     await tx.sale.update({
       where: { id: existing.id },
       data: {
@@ -247,7 +264,7 @@ async function processMarketplaceOrder(input: {
         trackingNumber: order.shipping?.trackingNumber ?? null,
         shippedAt: order.shipping?.shippedAt ?? null,
         deliveredAt: order.shipping?.deliveredAt ?? null,
-        orderNote: noteParts.join(" "),
+        orderNote: mergedOrderNote,
         ...(shouldKeepItems
           ? {}
           : {
@@ -293,7 +310,7 @@ async function processMarketplaceOrder(input: {
       errors: hasUnmatched
         ? [
             {
-              message: noteParts[noteParts.length - 1] ?? "Eşleşmeyen SKU bulundu.",
+              message: unmatchedMessage ?? "Eşleşmeyen SKU bulundu.",
               externalOrderId: order.externalOrderId,
               merchantSku: unmatchedSkus.join(", "),
               rawStatus: order.externalStatus,
@@ -329,7 +346,7 @@ async function processMarketplaceOrder(input: {
       trackingNumber: order.shipping?.trackingNumber ?? null,
       shippedAt: order.shipping?.shippedAt ?? null,
       deliveredAt: order.shipping?.deliveredAt ?? null,
-      orderNote: noteParts.join(" "),
+      orderNote: initialOrderNote,
       warehouseId: input.defaultWarehouseId ?? null,
       createdAt: order.createdAt,
       items: {
@@ -351,7 +368,7 @@ async function processMarketplaceOrder(input: {
     errors: hasUnmatched
       ? [
           {
-            message: noteParts[noteParts.length - 1] ?? "Eşleşmeyen SKU bulundu.",
+            message: unmatchedMessage ?? "Eşleşmeyen SKU bulundu.",
             externalOrderId: order.externalOrderId,
             merchantSku: unmatchedSkus.join(", "),
             rawStatus: order.externalStatus,

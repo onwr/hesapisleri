@@ -35,9 +35,6 @@ function FeaturedCard({
   plan: PublicPlan;
   registrationEnabled: boolean;
 }) {
-  const monthlyEq =
-    plan.yearlyPrice > 0 ? Math.round(plan.yearlyPrice / 12) : plan.monthlyPrice;
-
   return (
     <div className="relative flex flex-col rounded-2xl overflow-hidden shadow-2xl shadow-blue-900/20">
       <div className="absolute inset-0 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800" />
@@ -75,9 +72,10 @@ function FeaturedCard({
                 </span>
                 <span className="text-blue-300 text-base mb-1">/ay</span>
               </div>
-              {plan.yearlyPrice > 0 && plan.yearlyPrice < plan.monthlyPrice * 12 && (
+              {plan.showAnnualDiscount && plan.annualEquivalentMonthlyPrice != null && (
                 <p className="text-blue-300 text-xs mt-2">
-                  Yıllık ödeyince {formatPrice(monthlyEq, plan.currency)}/ay
+                  Yıllık ödeyince{" "}
+                  {formatPrice(plan.annualEquivalentMonthlyPrice, plan.currency)}/ay
                 </p>
               )}
             </>
@@ -130,9 +128,6 @@ function StandardCard({
   plan: PublicPlan;
   registrationEnabled: boolean;
 }) {
-  const monthlyEq =
-    plan.yearlyPrice > 0 ? Math.round(plan.yearlyPrice / 12) : plan.monthlyPrice;
-
   return (
     <div className="flex flex-col rounded-2xl border border-slate-200 bg-white p-7 h-full shadow-sm hover:shadow-md transition-shadow">
       {plan.badgeText && (
@@ -157,9 +152,10 @@ function StandardCard({
               </span>
               <span className="text-slate-400 text-base mb-1">/ay</span>
             </div>
-            {plan.yearlyPrice > 0 && plan.yearlyPrice < plan.monthlyPrice * 12 && (
+            {plan.showAnnualDiscount && plan.annualEquivalentMonthlyPrice != null && (
               <p className="text-slate-400 text-xs mt-2">
-                Yıllık ödeyince {formatPrice(monthlyEq, plan.currency)}/ay
+                Yıllık ödeyince{" "}
+                {formatPrice(plan.annualEquivalentMonthlyPrice, plan.currency)}/ay
               </p>
             )}
           </>

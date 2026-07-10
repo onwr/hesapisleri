@@ -243,6 +243,8 @@ export function PosCartPanel({
           type="button"
           onClick={onOpenPayment}
           disabled={checkingOut || cart.length === 0}
+          aria-disabled={checkingOut || cart.length === 0}
+          aria-describedby={cart.length === 0 ? "pos-empty-cart-hint" : undefined}
           className={[
             "flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-sm font-black text-white transition disabled:opacity-50",
             POS_GRADIENT_CHECKOUT_CLASS,
@@ -253,6 +255,15 @@ export function PosCartPanel({
           ) : null}
           Satışı Tamamla
         </button>
+        {cart.length === 0 ? (
+          <p
+            id="pos-empty-cart-hint"
+            className="text-center text-xs font-semibold text-slate-500"
+            role="status"
+          >
+            Satışı tamamlamak için sepete en az bir ürün ekleyin.
+          </p>
+        ) : null}
         <p className="hidden text-center text-[10px] font-semibold text-slate-400 xl:block">
           Nakit <kbd className="rounded border px-1">F2</kbd> · Kart{" "}
           <kbd className="rounded border px-1">F4</kbd> · Barkod{" "}

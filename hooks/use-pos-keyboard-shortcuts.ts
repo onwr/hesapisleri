@@ -80,7 +80,7 @@ export function usePosKeyboardShortcuts({
 
       if (event.key === "F8") {
         event.preventDefault();
-        onClearCart();
+        if (!cartEmpty) onClearCart();
         return;
       }
     }

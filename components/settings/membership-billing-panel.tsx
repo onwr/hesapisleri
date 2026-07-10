@@ -37,6 +37,11 @@ type BillingData = {
     plan: { id: string; name: string };
     currentPeriodStart: string | null;
     currentPeriodEnd: string | null;
+    trialEndsAt?: string | null;
+    nextBillingDate?: string | null;
+    primaryDateLabel?: string | null;
+    primaryDateDisplay?: string | null;
+    periodEndDisplay?: string | null;
     remainingDays: number;
     isExpired: boolean;
   };
@@ -569,7 +574,9 @@ export function MembershipBillingPanel({
             {formatNumber(data.subscription.remainingDays)} gün kaldı
           </span>
           <span className="text-[11px] font-semibold text-slate-500">
-            Bitiş: {formatShortDisplayDate(data.subscription.currentPeriodEnd)}
+            {data.subscription.primaryDateLabel ?? "Paket bitiş tarihi"}:{" "}
+            {data.subscription.primaryDateDisplay ??
+              formatShortDisplayDate(data.subscription.currentPeriodEnd)}
           </span>
         </div>
       </div>

@@ -35,6 +35,8 @@ export function TeamShell({
   isReadOnlyViewer = false,
   children,
 }: TeamShellProps) {
+  const showEmptyTeamState = stats.totalCount === 0;
+
   return (
     <div className="space-y-4">
       <section className={TEAM_HERO_CLASS}>
@@ -82,6 +84,25 @@ export function TeamShell({
         ) : null}
       </section>
 
+      {showEmptyTeamState ? (
+        <section className="rounded-[1.75rem] border border-dashed border-slate-200 bg-slate-50/70 px-5 py-8 text-center">
+          <p className="text-lg font-black text-[#0f1f4d]">Henüz çalışan eklenmedi</p>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
+            İlk personelinizi eklediğinizde izin, ödeme ve performans istatistikleri
+            burada görünecek.
+          </p>
+          {canManageEmployees ? (
+            <button
+              type="button"
+              onClick={onCreateEmployee}
+              className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#0f1f4d] px-5 text-sm font-black text-white"
+            >
+              <UserPlus size={16} />
+              İlk Çalışanı Ekle
+            </button>
+          ) : null}
+        </section>
+      ) : (
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
           title="Aktif Çalışan"
@@ -101,7 +122,9 @@ export function TeamShell({
           title="Bekleyen Ödeme"
           value={String(stats.pendingPaymentCount)}
           subtitle={
-            stats.monthlyPayable > 0
+            stats.totalCount === 0
+              ? "Çalışan yok"
+              : stats.monthlyPayable > 0
               ? `Toplam ${formatMoney(stats.monthlyPayable)}`
               : "Ödeme bekleyen kayıt"
           }
@@ -115,7 +138,9 @@ export function TeamShell({
           title="Bu Ay Satış Yapan"
           value={String(stats.salesThisMonthEmployeeCount)}
           subtitle={
-            stats.thisMonthSalesTotal > 0
+            stats.totalCount === 0
+              ? "Çalışan yok"
+              : stats.thisMonthSalesTotal > 0
               ? formatMoney(stats.thisMonthSalesTotal)
               : "Satış kaydı olan personel"
           }
@@ -130,6 +155,7 @@ export function TeamShell({
           color="red"
         />
       </section>
+      )}
 
       <CompactActionCardGrid columns="4">
         {canManageEmployees ? (

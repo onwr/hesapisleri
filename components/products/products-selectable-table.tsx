@@ -44,6 +44,20 @@ export function ProductsSelectableTable({
     failed: Array<{ productId: string; message: string; code?: string }>;
   } | null>(null);
 
+  const selectedProducts = useMemo(
+    () =>
+      rows
+        .filter((row) => selectedIds.has(row.id))
+        .map((row) => ({
+          id: row.id,
+          name: row.name,
+          sku: row.sku,
+          buyPrice: row.buyPrice,
+          sellPrice: row.sellPrice,
+        })),
+    [rows, selectedIds]
+  );
+
   const productNameById = useMemo(
     () => Object.fromEntries(rows.map((row) => [row.id, row.name])),
     [rows]
@@ -80,10 +94,15 @@ export function ProductsSelectableTable({
     });
 
     if (!result.ok) {
+      const isNegativePrice =
+        result.error?.includes("0'ın altına") ||
+        result.error?.includes("0’ın altına");
       setBulkResult({
         open: true,
         title: "Toplu işlem başarısız",
-        summary: result.error ?? "İşlem tamamlanamadı.",
+        summary: isNegativePrice
+          ? "İşlem uygulanmadı. Bazı ürünlerin fiyatı 0'ın altına düşecekti."
+          : (result.error ?? "İşlem tamamlanamadı."),
         successCount: 0,
         failed: [],
       });
@@ -347,6 +366,7 @@ export function ProductsSelectableTable({
         open={priceDialogOpen}
         onClose={() => setPriceDialogOpen(false)}
         selectedCount={selectedIds.size}
+        selectedProducts={selectedProducts}
         onApply={handleBulkPrice}
         isPending={isSubmitting}
       />

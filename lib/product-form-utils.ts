@@ -4,6 +4,11 @@ import {
   parseProductMoneyInput,
 } from "@/lib/money-input-utils";
 import {
+  canonicalProductPriceSchema,
+  parseProductPriceInput,
+  PRODUCT_PRICE_NEGATIVE_ERROR,
+} from "@/lib/product-price-validation";
+import {
   normalizeServiceProductFields,
   parseProductType,
   type ProductTypeKey,
@@ -94,7 +99,18 @@ function humanizeProductFieldError(field: string, message: string) {
   ) {
     return `${label} için geçersiz seçim.`;
   }
-  if (message.includes("Too small") || message.includes("too small")) {
+  if (
+    message.includes("Too small") ||
+    message.includes("too small") ||
+    message === PRODUCT_PRICE_NEGATIVE_ERROR
+  ) {
+    if (
+      field === "buyPrice" ||
+      field === "sellPrice" ||
+      message === PRODUCT_PRICE_NEGATIVE_ERROR
+    ) {
+      return PRODUCT_PRICE_NEGATIVE_ERROR;
+    }
     return `${label} çok kısa.`;
   }
   if (message.includes("Too big") || message.includes("too big")) {
@@ -135,8 +151,8 @@ export const productFormSchema = z.object({
   minStock: z.number().min(0).default(DEFAULT_MIN_STOCK),
   unitType: z.enum(PRODUCT_UNIT_TYPES).default("PIECE"),
   warehouseLocation: optionalTextField,
-  buyPrice: z.number().min(0).default(0),
-  sellPrice: z.number().min(0).default(0),
+  buyPrice: canonicalProductPriceSchema.default(0),
+  sellPrice: canonicalProductPriceSchema.default(0),
   vatRate: z.number().min(0).default(20),
 });
 
@@ -212,10 +228,31 @@ export function resolveInitialBarcodePayloadMode(
   return normalizeOptionalText(barcode) ? "include" : "omit";
 }
 
+export function validateProductFormMoneyFields(
+  form: Pick<ProductFormValues, "buyPrice" | "sellPrice">
+) {
+  const errors: Record<string, string> = {};
+
+  for (const field of ["buyPrice", "sellPrice"] as const) {
+    const parsed = parseProductPriceInput(form[field], { field });
+    if (!parsed.ok) {
+      errors[field] = parsed.message;
+    }
+  }
+
+  return errors;
+}
+
 export function buildProductPayload(
   form: ProductFormValues,
   options?: BuildProductPayloadOptions
 ): ProductFormInput {
+  const priceErrors = validateProductFormMoneyFields(form);
+  if (Object.keys(priceErrors).length > 0) {
+    const firstField = Object.keys(priceErrors)[0] as keyof typeof priceErrors;
+    throw new Error(priceErrors[firstField]);
+  }
+
   const productType = parseProductType(form.productType);
   const payload: ProductFormInput = {
     productType,

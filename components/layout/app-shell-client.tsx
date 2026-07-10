@@ -29,6 +29,8 @@ type AppShellClientProps = {
     remainingDays: number;
     isExpired: boolean;
     periodEndLabel?: string | null;
+    primaryDateLabel?: string | null;
+    primaryDateDisplay?: string | null;
     policyNote?: string | null;
   };
 };
@@ -47,6 +49,8 @@ function AppShellMain({ children }: { children: ReactNode }) {
 
   return (
     <main
+      id="main-content"
+      tabIndex={-1}
       className={`px-5 py-6 text-[15px] transition-[margin] duration-200 max-md:min-w-0 lg:px-8 ${sidebarOffsetClass(collapsed)}`}
     >
       {children}

@@ -11,7 +11,7 @@ import { isPlatformSuperAdminUser } from "@/lib/admin-auth";
 import { redirectIfMaintenanceActive } from "@/lib/platform-runtime/platform-availability";
 import { AUTH_COOKIE_NAME } from "./auth-cookie";
 import {
-  buildClearSessionUrl,
+  buildSessionExpiredLoginUrl,
   sanitizeAuthRedirectPath,
 } from "./auth-redirect";
 import {
@@ -270,7 +270,7 @@ export async function requireAuthenticatedUser() {
   }
 
   if (state.status === "INVALID_SESSION") {
-    redirect(buildClearSessionUrl("/login?reason=session-expired"));
+    redirect(buildSessionExpiredLoginUrl());
   }
 
   return state;
@@ -296,7 +296,7 @@ export async function requireCompanyUser() {
   }
 
   if (state.status === "INVALID_SESSION") {
-    redirect(buildClearSessionUrl("/login?reason=session-expired"));
+    redirect(buildSessionExpiredLoginUrl());
   }
 
   if (state.status === "COMPANY_REQUIRED") {

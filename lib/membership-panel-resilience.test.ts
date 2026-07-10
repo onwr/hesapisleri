@@ -17,20 +17,20 @@ const APP_SHELL_PATH = "components/layout/app-shell.tsx";
 const DASHBOARD_PAGE_PATH = "app/dashboard/page.tsx";
 
 describe("membership panel resilience — kaynak tarama", () => {
-  it("getSidebarMembershipSummary artık resolveUserCompanyEntitlementSafe kullanıyor (kullanıcı bazlı, firma değişiminde abonelik korunur), throw eden ensureCompanySubscription'ı doğrudan çağırmıyor", async () => {
+  it("getSidebarMembershipSummary artık resolveMembershipDisplaySafe kullanıyor (kullanıcı bazlı, firma değişiminde abonelik korunur), throw eden ensureCompanySubscription'ı doğrudan çağırmıyor", async () => {
     const content = await fs.readFile(MEMBERSHIP_SERVICE_PATH, "utf8");
     const fnStart = content.indexOf("export async function getSidebarMembershipSummary");
     const fnBody = content.slice(fnStart, fnStart + 700);
-    assert.ok(fnBody.includes("resolveUserCompanyEntitlementSafe({ companyId, userId })"));
+    assert.ok(fnBody.includes("resolveMembershipDisplaySafe({ companyId, userId })"));
     assert.ok(!fnBody.includes("await ensureCompanySubscription(companyId)"));
   });
 
-  it("getMembershipAlertForCompany artık resolveUserCompanyEntitlementSafe kullanıyor ve null döndürebiliyor", async () => {
+  it("getMembershipAlertForCompany artık resolveMembershipDisplaySafe kullanıyor ve null döndürebiliyor", async () => {
     const content = await fs.readFile(MEMBERSHIP_SERVICE_PATH, "utf8");
     const fnStart = content.indexOf("export async function getMembershipAlertForCompany");
     const fnBody = content.slice(fnStart, fnStart + 400);
-    assert.ok(fnBody.includes("resolveUserCompanyEntitlementSafe({ companyId, userId })"));
-    assert.ok(fnBody.includes("if (!subscription) return null;"));
+    assert.ok(fnBody.includes("resolveMembershipDisplaySafe({ companyId, userId })"));
+    assert.ok(fnBody.includes("if (!membershipDisplay) return null;"));
   });
 
   it("ensureCompanySubscriptionSafe try/catch ile sarmalıyor, hatayı yutuyor (panel çökmesin)", async () => {

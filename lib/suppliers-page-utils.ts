@@ -8,6 +8,7 @@ import {
   type SupplierListBalanceDirection,
 } from "@/lib/supplier-utils";
 import type { SupplierRow } from "@/lib/supplier-utils";
+import { getSupplierOperationalBadge } from "@/lib/supplier-status-view";
 
 export type SupplierTabKey = "all" | "active" | "passive" | "payable" | "overdue";
 
@@ -246,26 +247,16 @@ export function getSupplierBalanceStatus(balance: number) {
   }
 
   return {
-    label: "Hesap Kapalı",
+    label: "Bakiye Yok",
     amountClass: "text-[#0f1f4d]",
-    subLabel: "Kapalı",
+    subLabel: "Denk",
     payableAmount: 0,
     receivableAmount: 0,
   };
 }
 
 export function getSupplierStatusBadge(isActive: boolean) {
-  if (isActive) {
-    return {
-      label: "Aktif",
-      className: "bg-emerald-100 text-emerald-700",
-    };
-  }
-
-  return {
-    label: "Pasif",
-    className: "bg-slate-100 text-slate-600",
-  };
+  return getSupplierOperationalBadge(isActive);
 }
 
 export function getCategoryBadge(category?: string | null) {

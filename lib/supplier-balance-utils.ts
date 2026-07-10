@@ -7,7 +7,7 @@ export type SupplierOpeningBalanceDirection = "PAYABLE" | "RECEIVABLE" | "SETTLE
 export const SUPPLIER_BALANCE_LABELS = {
   PAYABLE: "Tedarikçiye Borcumuz",
   RECEIVABLE: "Tedarikçiden Alacağımız",
-  SETTLED: "Hesap Kapalı",
+  SETTLED: "Bakiye Yok",
 } as const;
 
 export const SUPPLIER_OPENING_DIRECTION_LABELS = {

@@ -1,4 +1,5 @@
 import type { OrderSourceChannel, OrderStatus, PaymentStatus } from "@prisma/client";
+import { resolveSaleCustomerDisplay } from "@/lib/orders/sale-customer-display";
 import {
   formatDateDisplay,
   formatDateInputValue,
@@ -129,18 +130,25 @@ export function mapSaleToOrderRow(sale: {
   deliveredAt: Date | null;
   createdAt: Date;
   archivedAt?: Date | null;
+  orderNote?: string | null;
   customer: { name: string; phone: string | null } | null;
   items: Array<unknown>;
 }): OrderTableRow {
   const cargo = sale.shippingCarrier?.trim() || "—";
   const cargoCode = sale.trackingNumber?.trim() || null;
+  const customerDisplay = resolveSaleCustomerDisplay({
+    sourceChannel: sale.sourceChannel,
+    externalOrderId: sale.externalOrderId,
+    orderNote: sale.orderNote,
+    customer: sale.customer,
+  });
 
   return {
     id: sale.id,
     orderNo: formatOrderNo(sale.saleNo),
     saleNo: sale.saleNo,
-    customerName: sale.customer?.name ?? "Müşteri seçilmedi",
-    customerSubName: sale.customer?.phone ?? null,
+    customerName: customerDisplay.customerName,
+    customerSubName: customerDisplay.customerSubName,
     itemCount: sale.items.length,
     total: Number(sale.total),
     status: mapOrderStatusToLabel(sale.orderStatus),

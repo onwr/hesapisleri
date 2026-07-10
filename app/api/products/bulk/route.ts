@@ -99,6 +99,20 @@ export async function POST(req: Request) {
       }
     );
 
+    if (!result.ok) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: result.message,
+          code: result.code,
+          affectedProductCount: result.affectedProductCount,
+          violations: result.violations,
+          missingProductIds: result.missingProductIds,
+        },
+        { status: result.status }
+      );
+    }
+
     return NextResponse.json(
       buildTenantMutationSuccess(companyId, {
         reason: "product-update",

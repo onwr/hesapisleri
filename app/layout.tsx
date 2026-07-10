@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Plus_Jakarta_Sans } from "next/font/google";
+import { SkipToContentLink } from "@/components/layout/skip-to-content-link";
 import { PlatformRuntimeProvider } from "@/components/platform-runtime/platform-runtime-provider";
 import { getPublicPlatformRuntimeConfig } from "@/lib/platform-runtime";
 import "./globals.css";
@@ -33,6 +34,7 @@ export default async function RootLayout({
         className={`${plusJakarta.variable} min-h-full font-sans antialiased`}
         suppressHydrationWarning
       >
+        <SkipToContentLink />
         <PlatformRuntimeProvider config={runtimeConfig}>{children}</PlatformRuntimeProvider>
       </body>
     </html>

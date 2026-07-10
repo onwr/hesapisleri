@@ -21,6 +21,8 @@ import {
   authPrimaryButtonClassName,
   authFlatFormClassName,
 } from "@/components/auth/auth-styles";
+import { KVKK_AYDINLATMA_PATH } from "@/lib/legal/kvkk-consent";
+import { PRIVACY_POLICY_PATH } from "@/lib/legal/privacy-policy";
 import { AppLoadingScreen } from "@/components/layout/app-loading-screen";
 import type { LoadingPreset } from "@/lib/loading-presets";
 import { Button } from "@/components/ui/button";
@@ -142,7 +144,7 @@ export function LoginForm({
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, remember }),
       });
 
       const data = await res.json();
@@ -263,27 +265,34 @@ export function LoginForm({
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="remember"
-                checked={remember}
-                onCheckedChange={(checked) => setRemember(checked === true)}
-                className="rounded-md border-slate-300 data-checked:border-blue-600 data-checked:bg-blue-600"
-              />
-              <Label
-                htmlFor="remember"
-                className="cursor-pointer text-sm font-medium text-slate-600"
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="remember"
+                  checked={remember}
+                  onCheckedChange={(checked) => setRemember(checked === true)}
+                  disabled={isSubmitting}
+                  aria-describedby="remember-help"
+                />
+                <Label
+                  htmlFor="remember"
+                  className="cursor-pointer text-sm font-medium text-slate-600"
+                >
+                  Beni hatırla
+                </Label>
+              </div>
+              <Link
+                href="/forgot-password"
+                className="text-sm font-semibold text-blue-600 hover:text-blue-700"
               >
-                Beni hatırla
-              </Label>
+                Şifremi unuttum
+              </Link>
             </div>
-            <Link
-              href="/forgot-password"
-              className="text-sm font-semibold text-blue-600 hover:text-blue-700"
-            >
-              Şifremi unuttum
-            </Link>
+            <p id="remember-help" className="sr-only">
+              İşaretlenirse oturum daha uzun süre açık kalır; işaretlenmezse tarayıcı
+              kapanınca sona erer.
+            </p>
           </div>
 
           <AuthAlert message={error} />
@@ -329,6 +338,26 @@ export function LoginForm({
             className="font-black text-blue-600 hover:text-blue-700"
           >
             Kayıt olun
+          </Link>
+        </p>
+
+        <p className="mt-4 text-center text-xs text-slate-400">
+          <Link
+            href={KVKK_AYDINLATMA_PATH}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-slate-500 hover:text-slate-700"
+          >
+            KVKK Aydınlatma Metni
+          </Link>
+          {" · "}
+          <Link
+            href={PRIVACY_POLICY_PATH}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-slate-500 hover:text-slate-700"
+          >
+            Gizlilik Politikası
           </Link>
         </p>
       </div>

@@ -7,7 +7,6 @@ import type {
 import { z } from "zod";
 import { db } from "@/lib/prisma";
 import {
-  calculateMembershipAmount,
   calculateMembershipEndDate,
   getMembershipPaymentStatusLabel,
   getMembershipPeriodLabel,
@@ -17,6 +16,9 @@ import {
   getSubscriptionStatusLabel,
   resolveMembershipPeriodStart,
 } from "@/lib/membership-utils";
+import {
+  buildCanonicalMembershipDisplay,
+} from "@/lib/membership-display-dto";
 import { createPartnerPaymentConversion } from "@/lib/partner-conversion-service";
 import { assertCompanyAccess } from "@/lib/company-access";
 import {
@@ -369,7 +371,11 @@ export async function getMembershipBillingData(input: {
   }
 
   const effectiveStatus = getMembershipStatus(subscription);
-  const remainingDays = getRemainingMembershipDays(subscription.currentPeriodEnd);
+  const membershipDisplay = buildCanonicalMembershipDisplay({
+    subscription,
+    sourceCompanyId,
+    isSharedEntitlement,
+  });
 
   const lastPaid = payments.find((payment) => payment.status === "PAID") ?? null;
   const billingPlan = await serializeBillingPlanForCompany(
@@ -383,11 +389,17 @@ export async function getMembershipBillingData(input: {
       statusLabel: getSubscriptionStatusLabel(effectiveStatus),
       // subscriptionPlan: aboneliğin gerçek planı — tek kaynak, fallback yok
       plan: { id: billingPlan.id, name: billingPlan.name },
-      currentPeriodStart: subscription.currentPeriodStart?.toISOString() ?? null,
-      currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() ?? null,
-      trialEndsAt: subscription.trialEndsAt?.toISOString() ?? null,
-      remainingDays,
-      isExpired: effectiveStatus === "EXPIRED",
+      currentPeriodStart: membershipDisplay.currentPeriodStart,
+      currentPeriodEnd: membershipDisplay.currentPeriodEnd,
+      trialEndsAt: membershipDisplay.trialEndsAt,
+      nextBillingDate: membershipDisplay.nextBillingDate,
+      cancelAtPeriodEnd: membershipDisplay.cancelAtPeriodEnd,
+      autoRenew: membershipDisplay.autoRenew,
+      remainingDays: membershipDisplay.remainingDays,
+      isExpired: membershipDisplay.isExpired,
+      primaryDateLabel: membershipDisplay.primaryDateLabel,
+      primaryDateDisplay: membershipDisplay.primaryDateDisplay,
+      periodEndDisplay: membershipDisplay.periodEndDisplay,
     },
     isSharedEntitlement,
     canManageBilling,
@@ -451,7 +463,13 @@ export async function createMembershipPayment(input: {
     );
   }
 
-  const amount = calculateMembershipAmount(plan, input.period);
+  const resolved = await resolveSubscriptionPrice({
+    companyId: input.companyId,
+    planId: plan.id,
+    billingInterval: input.period,
+    isRenewal: subscription.status === "ACTIVE",
+  });
+  const amount = resolved.totalMinor / 100;
   const periodStart = resolveMembershipPeriodStart(
     subscription.currentPeriodEnd,
     new Date()
@@ -870,74 +888,104 @@ async function resolveUserCompanyEntitlementSafe(input: {
   }
 }
 
+async function resolveMembershipDisplaySafe(input: {
+  userId?: string;
+  companyId: string;
+}) {
+  if (!input.userId) {
+    const subscription = await ensureCompanySubscriptionSafe(input.companyId);
+    if (!subscription) return null;
+    return buildCanonicalMembershipDisplay({
+      subscription,
+      sourceCompanyId: input.companyId,
+      isSharedEntitlement: false,
+    });
+  }
+
+  try {
+    const resolved = await resolveUserCompanyEntitlement({
+      userId: input.userId,
+      companyId: input.companyId,
+    });
+    return buildCanonicalMembershipDisplay({
+      subscription: resolved.subscription,
+      sourceCompanyId: resolved.sourceCompanyId,
+      isSharedEntitlement: resolved.isSharedEntitlement,
+    });
+  } catch (error) {
+    console.error("MEMBERSHIP_SUBSCRIPTION_RESOLVE_FAILED", {
+      companyId: input.companyId,
+      userId: input.userId,
+      errorCode: error instanceof MembershipServiceError ? error.status : "UNKNOWN",
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
 export async function getMembershipAlertForCompany(
   companyId: string,
   userId?: string
 ) {
-  const subscription = await resolveUserCompanyEntitlementSafe({ companyId, userId });
-  if (!subscription) return null;
-  const status = getMembershipStatus(subscription);
+  const membershipDisplay = await resolveMembershipDisplaySafe({ companyId, userId });
+  if (!membershipDisplay) return null;
+
+  const status = membershipDisplay.subscriptionStatus;
+  const remainingDays = membershipDisplay.remainingDays;
 
   if (status === "EXPIRED") {
     return {
       type: "expired" as const,
-      message:
-        "Üyelik süreniz doldu. Kullanıma devam etmek için ödeme yapın.",
+      message: membershipDisplay.primaryDateDisplay
+        ? `Üyelik süreniz ${membershipDisplay.primaryDateDisplay} tarihinde doldu. Kullanıma devam etmek için ödeme yapın.`
+        : "Üyelik süreniz doldu. Kullanıma devam etmek için ödeme yapın.",
       actionUrl: "/settings/billing",
+      membershipDisplay,
     };
   }
-
-  const remainingDays = getRemainingMembershipDays(subscription.currentPeriodEnd);
 
   if (status === "TRIAL" && remainingDays <= 7) {
     return {
       type: "expiring" as const,
-      message: `Deneme süreniz ${remainingDays} gün içinde bitiyor. Üyeliğinizi uzatmak için ödeme yapın.`,
+      message: membershipDisplay.primaryDateDisplay
+        ? `Deneme süreniz ${membershipDisplay.primaryDateDisplay} tarihinde bitiyor (${remainingDays} gün kaldı). Üyeliğinizi uzatmak için ödeme yapın.`
+        : `Deneme süreniz ${remainingDays} gün içinde bitiyor. Üyeliğinizi uzatmak için ödeme yapın.`,
       actionUrl: "/settings/billing",
+      membershipDisplay,
     };
   }
 
   if (status === "ACTIVE" && remainingDays > 0 && remainingDays <= 7) {
     return {
       type: "expiring" as const,
-      message: `Üyeliğiniz ${remainingDays} gün içinde sona erecek. Kesintisiz kullanım için ödeme yapın.`,
+      message: membershipDisplay.primaryDateDisplay
+        ? `${membershipDisplay.primaryDateLabel} ${membershipDisplay.primaryDateDisplay} (${remainingDays} gün kaldı). Kesintisiz kullanım için ödeme yapın.`
+        : `Üyeliğiniz ${remainingDays} gün içinde sona erecek. Kesintisiz kullanım için ödeme yapın.`,
       actionUrl: "/settings/billing",
+      membershipDisplay,
     };
   }
 
   return null;
 }
 
-const EFFECTIVE_MEMBERSHIP_STATUS_LABELS: Record<
-  ReturnType<typeof getMembershipStatus>,
-  string
-> = {
-  TRIAL: "Deneme",
-  ACTIVE: "Aktif",
-  EXPIRED: "Süresi doldu",
-  PAST_DUE: "Gecikmiş",
-  GRACE_PERIOD: "Ek süre",
-  CANCEL_AT_PERIOD_END: "İptal bekliyor",
-  CANCELLED: "İptal",
-  SUSPENDED: "Askıda",
-};
-
 export async function getSidebarMembershipSummary(companyId: string, userId?: string) {
-  const subscription = await resolveUserCompanyEntitlementSafe({ companyId, userId });
-  if (!subscription) {
+  const membershipDisplay = await resolveMembershipDisplaySafe({ companyId, userId });
+  if (!membershipDisplay) {
     return {
       status: "UNKNOWN" as const,
       statusLabel: "Kurulum bekleniyor",
       remainingDays: 0,
       isExpired: false,
       periodEndLabel: null,
+      primaryDateLabel: null,
+      primaryDateDisplay: null,
       policyNote:
         "Üyelik paketi bilgisi şu anda alınamadı. Destek ekibimizle iletişime geçin.",
     };
   }
-  const status = getMembershipStatus(subscription);
-  const remainingDays = getRemainingMembershipDays(subscription.currentPeriodEnd);
-  const periodEnd = subscription.currentPeriodEnd;
+
+  const status = membershipDisplay.subscriptionStatus;
 
   let policyNote: string | null = null;
   if (status === "EXPIRED") {
@@ -953,16 +1001,12 @@ export async function getSidebarMembershipSummary(companyId: string, userId?: st
 
   return {
     status,
-    statusLabel: EFFECTIVE_MEMBERSHIP_STATUS_LABELS[status],
-    remainingDays,
-    isExpired: status === "EXPIRED",
-    periodEndLabel: periodEnd
-      ? new Intl.DateTimeFormat("tr-TR", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-        }).format(periodEnd)
-      : null,
+    statusLabel: membershipDisplay.statusLabel,
+    remainingDays: membershipDisplay.remainingDays,
+    isExpired: membershipDisplay.isExpired,
+    periodEndLabel: membershipDisplay.primaryDateDisplay,
+    primaryDateLabel: membershipDisplay.primaryDateLabel,
+    primaryDateDisplay: membershipDisplay.primaryDateDisplay,
     policyNote,
   };
 }

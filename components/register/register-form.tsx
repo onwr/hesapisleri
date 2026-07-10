@@ -29,6 +29,7 @@ import type { LoadingPreset } from "@/lib/loading-presets";
 import {
   KVKK_AYDINLATMA_PATH,
 } from "@/lib/legal/kvkk-consent";
+import { PRIVACY_POLICY_PATH } from "@/lib/legal/privacy-policy";
 import type { CompanyLegalInfo } from "@/lib/legal/company-legal-info";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -235,7 +236,7 @@ export function RegisterForm({
           </p>
         ) : null}
 
-        <form onSubmit={handleRegister} className="space-y-5">
+        <form onSubmit={handleRegister} noValidate className="space-y-5">
           <div className="space-y-2">
             <Label htmlFor="name" className="text-sm font-bold text-[#24345f]">
               Ad Soyad
@@ -250,11 +251,13 @@ export function RegisterForm({
                 placeholder="Ahmet Yılmaz"
                 disabled={loading || transitioning}
                 aria-invalid={Boolean(fieldErrors.name)}
-                required
+                aria-describedby={fieldErrors.name ? "name-error" : undefined}
               />
             </div>
             {fieldErrors.name ? (
-              <p className="text-xs font-semibold text-red-600">{fieldErrors.name}</p>
+              <p id="name-error" className="text-xs font-semibold text-red-600">
+                {fieldErrors.name}
+              </p>
             ) : null}
           </div>
 
@@ -273,11 +276,13 @@ export function RegisterForm({
                 placeholder="ornek@mail.com"
                 disabled={loading || transitioning}
                 aria-invalid={Boolean(fieldErrors.email)}
-                required
+                aria-describedby={fieldErrors.email ? "email-error" : undefined}
               />
             </div>
             {fieldErrors.email ? (
-              <p className="text-xs font-semibold text-red-600">{fieldErrors.email}</p>
+              <p id="email-error" className="text-xs font-semibold text-red-600">
+                {fieldErrors.email}
+              </p>
             ) : null}
           </div>
 
@@ -299,7 +304,7 @@ export function RegisterForm({
                 placeholder="En az 8 karakter"
                 disabled={loading || transitioning}
                 aria-invalid={Boolean(fieldErrors.password)}
-                required
+                aria-describedby={fieldErrors.password ? "password-error" : undefined}
               />
               <button
                 type="button"
@@ -315,7 +320,9 @@ export function RegisterForm({
               </button>
             </div>
             {fieldErrors.password ? (
-              <p className="text-xs font-semibold text-red-600">{fieldErrors.password}</p>
+              <p id="password-error" className="text-xs font-semibold text-red-600">
+                {fieldErrors.password}
+              </p>
             ) : null}
           </div>
 
@@ -336,11 +343,13 @@ export function RegisterForm({
                 placeholder="Örnek Ticaret Ltd. Şti."
                 disabled={loading || transitioning}
                 aria-invalid={Boolean(fieldErrors.companyName)}
-                required
+                aria-describedby={fieldErrors.companyName ? "companyName-error" : undefined}
               />
             </div>
             {fieldErrors.companyName ? (
-              <p className="text-xs font-semibold text-red-600">{fieldErrors.companyName}</p>
+              <p id="companyName-error" className="text-xs font-semibold text-red-600">
+                {fieldErrors.companyName}
+              </p>
             ) : null}
           </div>
 
@@ -351,7 +360,7 @@ export function RegisterForm({
                 checked={kvkkInformed}
                 onCheckedChange={handleKvkkCheckboxChange}
                 disabled={loading || transitioning}
-                className="mt-0.5 shrink-0 rounded-md border-slate-300 data-checked:border-blue-600 data-checked:bg-blue-600"
+                className="mt-0.5 shrink-0"
               />
               <Label
                 htmlFor="kvkkInformed"
@@ -380,7 +389,7 @@ export function RegisterForm({
                   setMarketingConsent(checked === true)
                 }
                 disabled={loading || transitioning}
-                className="mt-0.5 shrink-0 rounded-md border-slate-300 data-checked:border-blue-600 data-checked:bg-blue-600"
+                className="mt-0.5 shrink-0"
               />
               <Label
                 htmlFor="marketingConsent"
@@ -417,6 +426,15 @@ export function RegisterForm({
             className="font-semibold text-slate-500 hover:text-slate-700"
           >
             Aydınlatma metnini ayrı sayfada görüntüle
+          </Link>
+          {" · "}
+          <Link
+            href={PRIVACY_POLICY_PATH}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-slate-500 hover:text-slate-700"
+          >
+            Gizlilik Politikası
           </Link>
         </p>
 

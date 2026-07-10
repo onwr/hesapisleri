@@ -77,6 +77,11 @@ const testFiles = [
   "lib/invoice-service-product-db.test.ts",
   "lib/qa-revision/faz-qa-5a-db.test.ts",
   "lib/qa-revision/faz-qa-5a1-db.test.ts",
+  "lib/qa-revision/faz-qa-5b-db.test.ts",
+  "lib/qa-revision/faz-qa-5b2-db.test.ts",
+  "lib/qa-revision/faz-qa-5b3-db.test.ts",
+  "lib/qa-revision/faz-qa-5c1-db.test.ts",
+  "lib/qa-revision/faz-qa-5d-db.test.ts",
 ];
 
 const result = spawnSync(

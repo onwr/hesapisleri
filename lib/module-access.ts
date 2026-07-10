@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { redirect } from "next/navigation";
-import { getAuthToken, verifyToken } from "@/lib/auth";
 import { getSuperAdminSession, isPlatformSuperAdminUser } from "@/lib/admin-auth";
 import { getAppSession, type AppSession } from "@/lib/app-session";
+import { resolveAuthenticatedApiSession } from "@/lib/auth/api-session";
 import {
   canAccessModule,
   canManageAccounts,
@@ -115,11 +115,6 @@ export async function requireModuleAccess(input: {
   return session;
 }
 
-type AuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
-
 async function rejectIfMaintenanceMode(isSuperAdmin: boolean) {
   const { assertPlatformAvailable } = await import(
     "@/lib/platform-runtime/platform-availability"
@@ -144,20 +139,13 @@ async function rejectIfMaintenanceMode(isSuperAdmin: boolean) {
 }
 
 export async function requireAnyApiModuleAccess(modules: AppModule[]) {
-  const token = await getAuthToken();
+  const resolved = await resolveAuthenticatedApiSession();
 
-  if (!token) {
-    return {
-      error: NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      ),
-    };
+  if (!resolved.ok) {
+    return { error: resolved.response };
   }
 
-  const payload = verifyToken<AuthPayload>(token);
-
-  if (!payload?.userId || !payload.companyId) {
+  if (!resolved.session.companyId) {
     return {
       error: NextResponse.json(
         { success: false, message: "Oturum geçersiz." },
@@ -166,13 +154,14 @@ export async function requireAnyApiModuleAccess(modules: AppModule[]) {
     };
   }
 
+  const { userId, companyId } = resolved.session;
   let lastError: ModuleAccessError | null = null;
 
   for (const module of modules) {
     try {
       const session = await requireModuleAccess({
-        userId: payload.userId,
-        companyId: payload.companyId,
+        userId,
+        companyId,
         module,
       });
 
@@ -183,8 +172,8 @@ export async function requireAnyApiModuleAccess(modules: AppModule[]) {
 
       return {
         session,
-        userId: payload.userId,
-        companyId: payload.companyId,
+        userId,
+        companyId,
       };
     } catch (error) {
       if (error instanceof ModuleAccessError) {
@@ -207,20 +196,13 @@ export async function requireAnyApiModuleAccess(modules: AppModule[]) {
 }
 
 export async function requireApiModuleAccess(module: AppModule) {
-  const token = await getAuthToken();
+  const resolved = await resolveAuthenticatedApiSession();
 
-  if (!token) {
-    return {
-      error: NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      ),
-    };
+  if (!resolved.ok) {
+    return { error: resolved.response };
   }
 
-  const payload = verifyToken<AuthPayload>(token);
-
-  if (!payload?.userId || !payload.companyId) {
+  if (!resolved.session.companyId) {
     return {
       error: NextResponse.json(
         { success: false, message: "Oturum geçersiz." },
@@ -229,10 +211,12 @@ export async function requireApiModuleAccess(module: AppModule) {
     };
   }
 
+  const { userId, companyId } = resolved.session;
+
   try {
     const session = await requireModuleAccess({
-      userId: payload.userId,
-      companyId: payload.companyId,
+      userId,
+      companyId,
       module,
     });
 
@@ -243,8 +227,8 @@ export async function requireApiModuleAccess(module: AppModule) {
 
     return {
       session,
-      userId: payload.userId,
-      companyId: payload.companyId,
+      userId,
+      companyId,
     };
   } catch (error) {
     if (error instanceof ModuleAccessError) {
@@ -431,11 +415,6 @@ export async function requireApiCashBankManage() {
   return auth;
 }
 
-type SessionAuthPayload = {
-  userId: string;
-  companyId: string | null;
-};
-
 export type AuthenticatedApiSession = {
   userId: string;
   companyId: string | null;
@@ -446,68 +425,18 @@ export async function requireAuthenticatedApiSession(): Promise<
   | { session: AuthenticatedApiSession }
   | { error: NextResponse }
 > {
-  const token = await getAuthToken();
+  const resolved = await resolveAuthenticatedApiSession();
 
-  if (!token) {
-    return {
-      error: NextResponse.json(
-        { success: false, message: "Oturum bulunamadı." },
-        { status: 401 }
-      ),
-    };
+  if (!resolved.ok) {
+    return { error: resolved.response };
   }
 
-  const payload = verifyToken<SessionAuthPayload>(token);
-
-  if (!payload?.userId) {
-    return {
-      error: NextResponse.json(
-        { success: false, message: "Oturum geçersiz." },
-        { status: 401 }
-      ),
-    };
-  }
-
-  const user = await db.user.findUnique({
-    where: { id: payload.userId },
-  });
-
-  if (!user || user.status !== "ACTIVE") {
-    return {
-      error: NextResponse.json(
-        { success: false, message: "Kullanıcı bulunamadı." },
-        { status: 401 }
-      ),
-    };
-  }
-
-  return {
-    session: {
-      userId: payload.userId,
-      companyId: payload.companyId ?? null,
-      user,
-    },
-  };
+  return { session: resolved.session };
 }
 
 export async function getOptionalAuthenticatedApiSession(): Promise<AuthenticatedApiSession | null> {
-  const token = await getAuthToken();
-  if (!token) return null;
-
-  const payload = verifyToken<SessionAuthPayload>(token);
-  if (!payload?.userId) return null;
-
-  const user = await db.user.findUnique({
-    where: { id: payload.userId },
-  });
-
-  if (!user || user.status !== "ACTIVE") return null;
-
-  return {
-    userId: user.id,
-    companyId: payload.companyId ?? null,
-    user,
-  };
+  const resolved = await resolveAuthenticatedApiSession();
+  return resolved.ok ? resolved.session : null;
 }
 
 export function getModuleForPath(pathname: string): AppModule | null {

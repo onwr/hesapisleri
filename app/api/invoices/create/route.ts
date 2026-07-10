@@ -16,6 +16,7 @@ import {
 } from "@/lib/invoices/mock-gib";
 import { persistInvoiceFinancialSnapshot } from "@/lib/invoice-snapshot-service";
 import { calculateInvoiceLineSnapshots } from "@/lib/invoice-tax-calculation-utils";
+import { buildZodValidationErrorBody } from "@/lib/api-zod-validation";
 import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 const invoiceItemSchema = z.object({
@@ -65,14 +66,9 @@ export async function POST(req: Request) {
     const parsed = createNormalInvoiceSchema.safeParse(body);
 
     if (!parsed.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Bilgileri kontrol edin.",
-          errors: parsed.error.flatten().fieldErrors,
-        },
-        { status: 400 }
-      );
+      return NextResponse.json(buildZodValidationErrorBody(parsed.error), {
+        status: 400,
+      });
     }
 
     const {

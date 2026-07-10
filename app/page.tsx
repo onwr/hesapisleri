@@ -169,7 +169,7 @@ export default async function HomePage() {
         trialDays={settings.trialDays}
       />
 
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <HeroSection
           registrationEnabled={settings.registrationEnabled}
           trialDays={settings.trialDays}

@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/layout/app-shell";
+import { ResponsivePageHeader } from "@/components/layout/responsive-page-header";
 import { DirectoryPageClient } from "@/components/directory/directory-page-client";
 import { guardPageModule } from "@/lib/module-access";
 import { getDirectoryPageData } from "@/lib/directory-page-data";
@@ -36,13 +37,19 @@ export default async function DirectoryPage({ searchParams }: DirectoryPageProps
 
   return (
     <AppShell>
-      <DirectoryPageClient
-        contacts={pageData.contacts}
-        summary={pageData.summary}
-        tags={pageData.tags}
-        canManage={canManageDirectory(effectiveRole, companyUser.isOwner)}
-        initialFilters={pageData.filters}
-      />
+      <div className="space-y-5">
+        <ResponsivePageHeader
+          title="Fihrist"
+          description="Müşteri, tedarikçi ve kişilerin birleşik iletişim rehberi. Satış ve cari hesap yönetimi için Müşteriler modülünü kullanın."
+        />
+        <DirectoryPageClient
+          contacts={pageData.contacts}
+          summary={pageData.summary}
+          tags={pageData.tags}
+          canManage={canManageDirectory(effectiveRole, companyUser.isOwner)}
+          initialFilters={pageData.filters}
+        />
+      </div>
     </AppShell>
   );
 }

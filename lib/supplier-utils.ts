@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { roundCashMoney } from "@/lib/cash-bank-account-utils";
 import { resolveSupplierBalanceView } from "@/lib/supplier-balance-utils";
+import { canonicalProductPriceSchema } from "@/lib/product-price-validation";
 
 export const SUPPLIER_CATEGORIES = [
   "Hammadde",
@@ -141,7 +142,7 @@ export const supplierProductSchema = z.object({
   productId: z.string().min(1),
   supplierSku: z.string().optional(),
   supplierBarcode: z.string().optional(),
-  purchasePrice: z.number().nonnegative().optional(),
+  purchasePrice: canonicalProductPriceSchema.optional(),
   currency: z.string().optional(),
   minOrderQuantity: z.number().int().positive().optional().nullable(),
   leadTimeDays: z.number().int().nonnegative().optional().nullable(),

@@ -32,6 +32,7 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       ...process.env,
+      APP_URL: BASE_URL,
       DATABASE_URL: process.env.TEST_DATABASE_URL,
       DIRECT_URL: process.env.TEST_DATABASE_URL,
       NODE_ENV: "test",

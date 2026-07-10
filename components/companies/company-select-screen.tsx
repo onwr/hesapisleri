@@ -15,6 +15,15 @@ import { Input } from "@/components/ui/input";
 import type { CompanyListItem } from "@/lib/create-company-api-utils";
 import { filterCompaniesBySearch } from "@/lib/create-company-api-utils";
 
+async function logoutAndRedirectToLogin() {
+  try {
+    await fetch("/api/auth/logout", { method: "POST" });
+  } catch {
+    // yönlendirme yine de devam eder
+  }
+  window.location.replace("/login");
+}
+
 function getInitials(name: string) {
   return name
     .split(" ")
@@ -38,13 +47,13 @@ export function CompanySelectScreen() {
       const json = await res.json();
 
       if (!res.ok || !json.success) {
-        window.location.replace("/api/auth/clear-session?next=/login");
+        await logoutAndRedirectToLogin();
         return;
       }
 
       setCompanies(json.data ?? []);
     } catch {
-      window.location.replace("/api/auth/clear-session?next=/login");
+      await logoutAndRedirectToLogin();
     } finally {
       setLoading(false);
     }

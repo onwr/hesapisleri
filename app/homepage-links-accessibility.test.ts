@@ -33,10 +33,14 @@ const mockPlan: PublicPlan = {
   isFeatured: true,
   monthlyPrice: 499,
   yearlyPrice: 4990,
+  annualEquivalentMonthlyPrice: 416,
+  showAnnualDiscount: true,
   currency: "TRY",
   features: ["Satış", "Stok", "Fatura"],
   trialEnabled: true,
   trialDays: 14,
+  billingPeriods: ["MONTHLY", "YEARLY"],
+  isPurchasable: true,
 };
 
 function renderSection(component: ReturnType<typeof createElement>) {

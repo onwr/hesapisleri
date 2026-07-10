@@ -14,6 +14,7 @@ export const PUBLIC_ROUTES = [
   "/partnership/apply",
   "/kvkk-aydinlatma-metni",
   "/kvkk",
+  "/privacy",
   "/maintenance",
 ] as const;
 

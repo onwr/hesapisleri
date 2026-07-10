@@ -5,6 +5,9 @@ Bu doküman, uygulama kodunun (özellikle `lib/payments/trusted-client-ip.ts`
 ve `lib/auth/auth-rate-limit-service.ts`) doğru çalışması için nginx
 tarafında yapılması gereken ayarları ve doğrulama komutlarını içerir.
 
+**Durum:** Kod tarafı hazır; aşağıdaki operasyon adımları production sunucuda
+manuel uygulanmayı bekliyor.
+
 ## 1. `server_tokens off;`
 
 nginx sürüm bilgisinin HTTP yanıt header'larında ve hata sayfalarında
@@ -19,12 +22,52 @@ http {
 }
 ```
 
-Uygulama:
+### Operasyon adımları (production)
+
+**1. Yedek alın**
+
+```bash
+sudo cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.bak.$(date +%F-%H%M%S)
+```
+
+**2. `http {}` bloğuna ekleyin**
 
 ```bash
 sudo nano /etc/nginx/nginx.conf
-# http {} bloğunun içine "server_tokens off;" ekleyin
+# http {} bloğunun içine şu satırı ekleyin:
+# server_tokens off;
 ```
+
+**3. Yapılandırmayı doğrulayın**
+
+```bash
+sudo nginx -t
+```
+
+Beklenen çıktı: `syntax is ok` / `test is successful`
+
+**4. Reload**
+
+```bash
+sudo systemctl reload nginx
+```
+
+**5. Header kontrolü**
+
+```bash
+curl -I https://hesapisleri.com
+curl -I https://hesapisleri.com/olmayan-sayfa
+```
+
+Beklenen: `Server` header'ında sürüm numarası görünmemeli (`nginx/1.24.0` gibi
+değil; çoğu kurulumda yalnızca `nginx` görünür).
+
+**Notlar**
+
+- `server_tokens off` yalnızca sürüm bilgisini gizler; `Server` header'ını
+  tamamen kaldırmayabilir.
+- `nginx-extras` kurmayın; header'ı tamamen kaldırmak bu fazın kapsamı dışındadır.
+- Tam `nginx.conf` dosyasını ezme; yalnızca `server_tokens off;` satırını ekleyin.
 
 ## 2. Client IP forwarding (trusted proxy)
 
@@ -60,13 +103,13 @@ bilgisi yanlış olabilir.
 Değişiklik sonrası sırayla:
 
 ```bash
-nginx -t
+sudo nginx -t
 ```
 
 Sözdizimi hatasızsa (`syntax is ok` / `test is successful`):
 
 ```bash
-systemctl reload nginx
+sudo systemctl reload nginx
 ```
 
 Ardından gerçek yanıt header'larını doğrulayın (`Server` header'ında sürüm
@@ -75,6 +118,7 @@ içermemeli):
 
 ```bash
 curl -I https://hesapisleri.com
+curl -I https://hesapisleri.com/olmayan-sayfa
 ```
 
 Beklenen çıktı örneği:
@@ -86,8 +130,8 @@ server: nginx
 ```
 
 (`server: nginx/1.24.0 (Ubuntu)` gibi bir satır görürseniz `server_tokens off;`
-henüz etkili olmamış demektir — `nginx -t` ve `systemctl reload nginx`
-adımlarını tekrar kontrol edin.)
+henüz etkili olmamış demektir — yedek, `nginx -t` ve `reload` adımlarını
+tekrar kontrol edin.)
 
 ## Kapsam dışı
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { emailSchema } from "@/lib/auth/register-schema";
+import { buildZodValidationErrorBody } from "@/lib/api-zod-validation";
 import { requestPasswordReset } from "@/lib/auth/password-reset-service";
 import { getTrustedClientIp } from "@/lib/payments/trusted-client-ip";
 import {
@@ -40,11 +41,10 @@ export async function POST(req: Request) {
 
     if (!parsed.success) {
       return NextResponse.json(
-        {
-          success: false,
+        buildZodValidationErrorBody(parsed.error, {
           message: "Geçerli bir e-posta adresi girin.",
-          errors: parsed.error.flatten().fieldErrors,
-        },
+          fieldLabels: { email: "E-posta" },
+        }),
         { status: 400 }
       );
     }

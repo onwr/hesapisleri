@@ -20,6 +20,7 @@ import {
   MARKETING_CONSENT_VERSION,
 } from "@/lib/legal/kvkk-consent";
 import { getTrustedClientIp } from "@/lib/payments/trusted-client-ip";
+import { buildZodValidationErrorBody } from "@/lib/api-zod-validation";
 import { registerSchema, REGISTER_FIELD_ERROR_MESSAGES } from "@/lib/auth/register-schema";
 import { isPrismaUniqueConstraintError } from "@/lib/prisma-transaction-utils";
 
@@ -31,14 +32,9 @@ export async function POST(req: Request) {
     const parsed = registerSchema.safeParse(body);
 
     if (!parsed.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Bilgileri kontrol edin.",
-          errors: parsed.error.flatten().fieldErrors,
-        },
-        { status: 400 }
-      );
+      return NextResponse.json(buildZodValidationErrorBody(parsed.error), {
+        status: 400,
+      });
     }
 
     const {

@@ -32,6 +32,8 @@ export function AuthShell({
 
   return (
     <main
+      id="main-content"
+      tabIndex={-1}
       className={[
         "min-h-dvh",
         useWhitePanel ? "bg-white" : "bg-[#f7f8ff]",

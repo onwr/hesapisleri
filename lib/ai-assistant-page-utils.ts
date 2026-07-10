@@ -22,12 +22,15 @@ export type AiMetricCard = {
   color: "emerald" | "rose" | "orange" | "blue" | "violet";
 };
 
+import type { AiInsightSeverity } from "@/lib/ai/ai-display-safety";
+
 export type AiInsightCard = {
   title: string;
   description: string;
   iconKey: "trendingUp" | "trendingDown" | "wallet" | "package";
   color: string;
-  badge: string;
+  badgeLabel: string;
+  severity: AiInsightSeverity;
 };
 
 export type AiRecommendation = {

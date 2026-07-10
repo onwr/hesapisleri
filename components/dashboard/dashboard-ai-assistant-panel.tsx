@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, Send, Sparkles } from "lucide-react";
+import { AiStructuredMessage } from "@/components/ai-assistant/ai-structured-message";
 import {
   endOfMonth,
   startOfMonth,
@@ -36,6 +37,7 @@ export function DashboardAiAssistantPanel({
   const [input, setInput] = useState("");
   const [lastQuestion, setLastQuestion] = useState<string | null>(null);
   const [assistantReply, setAssistantReply] = useState<string | null>(null);
+  const [assistantStructured, setAssistantStructured] = useState<unknown>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,6 +83,7 @@ export function DashboardAiAssistantPanel({
       const data = (await response.json()) as {
         success?: boolean;
         message?: string;
+        structured?: unknown;
       };
 
       if (!response.ok || !data.success || !data.message) {
@@ -90,6 +93,7 @@ export function DashboardAiAssistantPanel({
       }
 
       setAssistantReply(data.message);
+      setAssistantStructured(data.structured ?? null);
       setInput("");
     } catch (requestError) {
       const message =
@@ -101,9 +105,6 @@ export function DashboardAiAssistantPanel({
       setIsLoading(false);
     }
   }
-
-  const displayText =
-    assistantReply ?? safeInsights[activeInsight] ?? safeInsights[0];
 
   const detailHref = lastQuestion
     ? `/ai-assistant?topic=chat&q=${encodeURIComponent(lastQuestion)}`
@@ -136,9 +137,14 @@ export function DashboardAiAssistantPanel({
             <Loader2 size={14} className="animate-spin text-blue-600" />
             Yanıt hazırlanıyor...
           </div>
+        ) : assistantReply ? (
+          <AiStructuredMessage
+            content={assistantReply}
+            structured={assistantStructured ?? undefined}
+          />
         ) : (
           <p className="text-[13px] font-medium leading-5 text-[#24345f]">
-            {displayText}
+            {safeInsights[activeInsight] ?? safeInsights[0]}
           </p>
         )}
 
@@ -208,6 +214,7 @@ export function DashboardAiAssistantPanel({
             type="button"
             onClick={() => {
               setAssistantReply(null);
+              setAssistantStructured(null);
               setLastQuestion(null);
               setError(null);
             }}

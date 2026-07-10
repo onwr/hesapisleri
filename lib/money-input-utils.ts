@@ -1,4 +1,10 @@
+import {
+  parseProductPriceInput,
+  PRODUCT_PRICE_NEGATIVE_ERROR,
+} from "@/lib/product-price-validation";
+
 export const PRODUCT_MONEY_MIN = 0;
+export { PRODUCT_PRICE_NEGATIVE_ERROR };
 
 export function parseTurkishMoneyInput(value: string): number {
   const trimmed = value.trim().replace(/\s/g, "");
@@ -61,11 +67,15 @@ export function isValidProductMoneyInput(value: string) {
 }
 
 export function parseProductMoneyInput(value: string): number {
-  const parsed = parseTurkishMoneyInput(value);
-  if (!Number.isFinite(parsed) || parsed < PRODUCT_MONEY_MIN) {
-    return PRODUCT_MONEY_MIN;
+  const parsed = parseProductPriceInput(value);
+  if (!parsed.ok) {
+    throw new Error(parsed.message);
   }
-  return parsed;
+  return parsed.value;
+}
+
+export function tryParseProductMoneyInput(value: string) {
+  return parseProductPriceInput(value);
 }
 
 /** @deprecated use parseTurkishMoneyInput */

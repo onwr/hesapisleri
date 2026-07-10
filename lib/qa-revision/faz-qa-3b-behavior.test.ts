@@ -46,7 +46,7 @@ describe("Faz 3B balance direction", () => {
   it("SETTLED zero balance", () => {
     assert.equal(resolveSupplierBalanceDirection(0), "SETTLED");
     const view = resolveSupplierBalanceView(0);
-    assert.equal(view.netStatusLabel, "Hesap Kapalı");
+    assert.equal(view.netStatusLabel, "Bakiye Yok");
   });
 });
 

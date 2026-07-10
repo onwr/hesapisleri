@@ -31,11 +31,11 @@ describe("sanitizeAuthRedirectPath", () => {
   });
 });
 
-describe("buildClearSessionUrl", () => {
-  it("clear-session url üretir", () => {
+describe("buildSessionExpiredLoginUrl", () => {
+  it("doğrudan login URL üretir", () => {
     assert.equal(
       buildClearSessionUrl("/login?reason=session-expired"),
-      "/api/auth/clear-session?next=%2Flogin%3Freason%3Dsession-expired"
+      "/login?reason=session-expired"
     );
   });
 });

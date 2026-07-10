@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { PRIVACY_POLICY_PATH } from "@/lib/legal/privacy-policy";
 
 type Props = {
   brandName: string;
@@ -37,7 +38,7 @@ const FOOTER_COLS = [
     title: "Yasal",
     links: [
       { label: "KVKK Aydınlatma Metni", href: "/kvkk-aydinlatma-metni" },
-      { label: "Gizlilik Politikası", href: "/kvkk" },
+      { label: "Gizlilik Politikası", href: PRIVACY_POLICY_PATH },
     ],
   },
 ];

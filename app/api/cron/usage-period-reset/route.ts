@@ -6,7 +6,10 @@ export async function POST(req: Request) {
   const secret = process.env.CRON_SECRET;
   const authHeader = req.headers.get("authorization");
   if (!secret || authHeader !== `Bearer ${secret}`) {
-    return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { success: false, message: "Yetkisiz cron isteği." },
+      { status: 401 }
+    );
   }
 
   try {

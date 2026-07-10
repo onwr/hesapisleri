@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { passwordSchema } from "@/lib/auth/register-schema";
+import { buildZodValidationErrorBody } from "@/lib/api-zod-validation";
 import {
   consumePasswordResetToken,
   PasswordResetTokenError,
@@ -40,14 +41,9 @@ export async function POST(req: Request) {
     const parsed = resetPasswordSchema.safeParse(body);
 
     if (!parsed.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Bilgileri kontrol edin.",
-          errors: parsed.error.flatten().fieldErrors,
-        },
-        { status: 400 }
-      );
+      return NextResponse.json(buildZodValidationErrorBody(parsed.error), {
+        status: 400,
+      });
     }
 
     await consumePasswordResetToken({

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/prisma";
 import { comparePassword } from "@/lib/auth";
 import { attachAuthCookie } from "@/lib/auth-session-utils";
+import { mapZodFieldErrors } from "@/lib/api-user-error";
 import { resolveLoginEmail } from "@/lib/employee-pos-utils";
 import {
   getPostAuthRedirectPath,
@@ -18,6 +19,7 @@ import {
 const loginSchema = z.object({
   email: z.string().min(1, "E-posta veya kullanıcı adı zorunludur."),
   password: z.string().min(1, "Şifre zorunludur."),
+  remember: z.boolean().optional().default(false),
 });
 
 function tooManyAttemptsResponse(retryAfterSeconds: number) {
@@ -59,17 +61,21 @@ export async function POST(req: Request) {
     const parsed = loginSchema.safeParse(body);
 
     if (!parsed.success) {
+      const fieldErrors = parsed.error.flatten().fieldErrors;
       return NextResponse.json(
         {
           success: false,
           message: "Bilgileri kontrol edin.",
-          errors: parsed.error.flatten().fieldErrors,
+          errors: mapZodFieldErrors(fieldErrors, {
+            email: "E-posta",
+            password: "Şifre",
+          }),
         },
         { status: 400 }
       );
     }
 
-    const { email: emailOrUsername, password } = parsed.data;
+    const { email: emailOrUsername, password, remember } = parsed.data;
 
     let email: string;
     try {
@@ -190,13 +196,17 @@ export async function POST(req: Request) {
       },
     });
 
-    await attachAuthCookie(response, {
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-      companyId: activeCompany?.id ?? null,
-      sv: updatedUser.sessionVersion,
-    });
+    await attachAuthCookie(
+      response,
+      {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        companyId: activeCompany?.id ?? null,
+        sv: updatedUser.sessionVersion,
+      },
+      { remember }
+    );
 
     return response;
   } catch (error) {

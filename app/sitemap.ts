@@ -10,6 +10,7 @@ const PUBLIC_ROUTES = [
   "/",
   "/kvkk",
   "/kvkk-aydinlatma-metni",
+  "/privacy",
 ] as const;
 
 export default function sitemap(): MetadataRoute.Sitemap {

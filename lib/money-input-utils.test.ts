@@ -59,9 +59,14 @@ describe("isValidMoneyInput", () => {
 });
 
 describe("parseProductMoneyInput", () => {
-  it("negatif ve geçersiz değerleri sıfıra çeker", () => {
-    assert.equal(parseProductMoneyInput("-10"), 0);
-    assert.equal(parseProductMoneyInput("abc"), 0);
+  it("negatif değerleri reddeder", () => {
+    assert.throws(() => parseProductMoneyInput("-10"), /Fiyat 0'dan küçük olamaz/);
+    assert.throws(() => parseProductMoneyInput("-0,01"), /Fiyat 0'dan küçük olamaz/);
+    assert.throws(() => parseProductMoneyInput("-1.000,50"), /Fiyat 0'dan küçük olamaz/);
+  });
+
+  it("geçerli değerleri parse eder", () => {
     assert.equal(parseProductMoneyInput("1108,60"), 1108.6);
+    assert.equal(parseProductMoneyInput("0"), 0);
   });
 });

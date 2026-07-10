@@ -78,14 +78,14 @@ describe("resolveUserCompanyEntitlement — kaynak tarama", () => {
 });
 
 describe("getSidebarMembershipSummary / getMembershipAlertForCompany — kullanıcı bazlı çözümleme", () => {
-  it("her ikisi de artık userId parametresi alıyor ve resolveUserCompanyEntitlementSafe kullanıyor", async () => {
+  it("her ikisi de artık userId parametresi alıyor ve resolveMembershipDisplaySafe kullanıyor", async () => {
     const content = await fs.readFile(SERVICE_PATH, "utf8");
     assert.ok(content.includes("export async function getSidebarMembershipSummary(companyId: string, userId?: string)"));
     assert.ok(content.includes("export async function getMembershipAlertForCompany("));
 
     const sidebarStart = content.indexOf("export async function getSidebarMembershipSummary");
     const sidebarBody = content.slice(sidebarStart, sidebarStart + 300);
-    assert.ok(sidebarBody.includes("resolveUserCompanyEntitlementSafe({ companyId, userId })"));
+    assert.ok(sidebarBody.includes("resolveMembershipDisplaySafe({ companyId, userId })"));
   });
 
   it("AppShell (her sayfada render edilir) session.user.id'yi geçiyor", async () => {

@@ -12,6 +12,7 @@ import {
   textResponse,
   type AiStructuredResponse,
 } from "@/lib/ai/ai-structured-output";
+import { prepareAiInsightForCache } from "@/lib/ai/ai-display-safety";
 import { logAiUsage } from "@/lib/ai/ai-usage-service";
 import { getCompanyAiSettingsView } from "@/lib/ai/ai-settings-service";
 import type { AiRuntimeContext } from "@/lib/ai/ai-context-builder";
@@ -188,9 +189,17 @@ ${JSON.stringify(toolData).slice(0, 12000)}`;
     parseStructuredResponse(safeJsonParse(result.message)) ||
     textResponse(result.message, sourceModules);
 
+  const sanitizedStructured = prepareAiInsightForCache(structured);
+  const safeStructured =
+    sanitizedStructured ??
+    textResponse(
+      "Yanıt güvenli biçimde gösterilemedi. Lütfen sorunuzu yeniden deneyin.",
+      sourceModules
+    );
+
   const commentary =
-    structured.blocks.find((b) => b.type === "text")?.content ||
-    structured.blocks
+    safeStructured.blocks.find((b) => b.type === "text")?.content ||
+    safeStructured.blocks
       .map((b) => {
         if (b.type === "metric") return `${b.label}: ${b.value}`;
         if (b.type === "warning") return b.message;
@@ -201,23 +210,25 @@ ${JSON.stringify(toolData).slice(0, 12000)}`;
 
   const payload: AiInsightCommentary = {
     commentary,
-    blocks: structured.blocks,
-    sourceModules: structured.sourceModules.length
-      ? structured.sourceModules
+    blocks: safeStructured.blocks,
+    sourceModules: safeStructured.sourceModules.length
+      ? safeStructured.sourceModules
       : sourceModules,
     period,
     generatedAt: new Date().toISOString(),
-    responseMode: "openai",
-    provider: "openai",
+    responseMode: sanitizedStructured ? "openai" : "rules_fallback",
+    provider: sanitizedStructured ? "openai" : "rules",
     model,
   };
 
-  await setModuleInsightCache(input.companyId, `commentary-${input.moduleKey}`, payload, {
-    from: runtime.from,
-    to: runtime.to,
-    model,
-    provider: "openai",
-  });
+  if (sanitizedStructured) {
+    await setModuleInsightCache(input.companyId, `commentary-${input.moduleKey}`, payload, {
+      from: runtime.from,
+      to: runtime.to,
+      model,
+      provider: "openai",
+    });
+  }
 
   await logAiUsage({
     companyId: input.companyId,

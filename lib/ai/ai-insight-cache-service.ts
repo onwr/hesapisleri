@@ -1,6 +1,7 @@
 import { db } from "@/lib/prisma";
 import type { AiStructuredResponse } from "@/lib/ai/ai-structured-output";
 import { buildInsightCacheKey } from "@/lib/ai/ai-cache-key";
+import { prepareAiInsightForCache } from "@/lib/ai/ai-display-safety";
 
 const DEFAULT_TTL_MS = 30 * 60 * 1000;
 
@@ -88,15 +89,24 @@ export async function getOrBuildDashboardExecutiveSummary(input: {
   if (cached) return cached;
 
   const built = await input.builder();
-  await setCachedInsight({
-    companyId: input.companyId,
-    cacheKey,
-    content: built,
-    provider: built.provider,
-    model: built.model || input.model || undefined,
-    ttlMs: input.ttlMs,
+  const sanitizedBlocks = prepareAiInsightForCache({
+    blocks: built.blocks,
+    sourceModules: built.sourceModules ?? [],
   });
-  return built;
+  if (sanitizedBlocks) {
+    await setCachedInsight({
+      companyId: input.companyId,
+      cacheKey,
+      content: { ...built, blocks: sanitizedBlocks.blocks },
+      provider: built.provider,
+      model: built.model || input.model || undefined,
+      ttlMs: input.ttlMs,
+    });
+  }
+  return {
+    ...built,
+    blocks: sanitizedBlocks?.blocks ?? built.blocks,
+  };
 }
 
 export async function getModuleInsightCache<T>(

@@ -53,12 +53,21 @@ describe("QA Faz 1.1 — CSRF production-benzeri", () => {
     });
   }
 
-  it("same-origin localhost POST kabul edilir (NODE_ENV=production)", () => {
+  it("production APP_URL same-origin POST kabul edilir", () => {
+    const result = runProductionOriginGuardCheck({
+      origin: "https://hesapisleri.com",
+      referer: null,
+    });
+    assert.equal(result.allowed, true);
+  });
+
+  it("production localhost origin reddedilir", () => {
     const result = runProductionOriginGuardCheck({
       origin: "http://localhost:3000",
       referer: null,
     });
-    assert.equal(result.allowed, true);
+    assert.equal(result.allowed, false);
+    assert.equal(result.status, 403);
   });
 
   it("farklı origin POST reddedilir (403)", () => {

@@ -13,6 +13,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
+import { ResponsivePageHeader } from "@/components/layout/responsive-page-header";
 import { guardPageModule } from "@/lib/module-access";
 
 import {
@@ -140,6 +141,10 @@ const activeTab = parseCustomerTab(params.tab);
     <AppShell>
       <TenantPageSync />
       <div className="space-y-5">
+        <ResponsivePageHeader
+          title="Müşteriler"
+          description="Satış, bakiye ve cari hesap yönetimi. İletişim rehberi için Fihrist modülünü kullanın."
+        />
         <div className="flex justify-end">
           <AiPageTriggerButton moduleKey="customers" />
         </div>

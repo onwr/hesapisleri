@@ -31,6 +31,8 @@ type AppSidebarProps = {
     remainingDays: number;
     isExpired: boolean;
     periodEndLabel?: string | null;
+    primaryDateLabel?: string | null;
+    primaryDateDisplay?: string | null;
     policyNote?: string | null;
   };
 };
@@ -84,7 +86,7 @@ function SidebarMembershipSummary({
       <p className="mt-0.5 text-[12px] font-black">{remainingLabel}</p>
       {summary.periodEndLabel ? (
         <p className="mt-1 text-[11px] font-semibold opacity-80">
-          Bitiş: {summary.periodEndLabel}
+          {summary.primaryDateLabel ?? "Bitiş"}: {summary.periodEndLabel}
         </p>
       ) : null}
       {summary.policyNote ? (
@@ -113,9 +115,19 @@ function SidebarLinkItem({
   return (
     <Link
       href={entry.href}
-      title={collapsed ? entry.title : undefined}
+      title={
+        collapsed
+          ? entry.hint
+            ? `${entry.title} — ${entry.hint}`
+            : entry.title
+          : entry.hint
+            ? `${entry.title} — ${entry.hint}`
+            : undefined
+      }
+      aria-label={entry.hint ? `${entry.title}. ${entry.hint}` : entry.title}
       className={[
-        "group flex h-[39px] items-center rounded-2xl text-[14px] font-bold transition-all duration-200 max-[820px]:h-[34px] max-[820px]:rounded-xl max-[820px]:text-[13px]",
+        "group flex items-center rounded-2xl text-[14px] font-bold transition-all duration-200 max-[820px]:h-[34px] max-[820px]:rounded-xl max-[820px]:text-[13px]",
+        entry.hint && !collapsed ? "h-auto min-h-[39px] py-2" : "h-[39px]",
         collapsed ? "justify-center px-0" : "gap-3 px-3.5",
         isActive
           ? "bg-linear-to-r from-blue-600 to-blue-500 text-white shadow-[0_12px_26px_rgba(37,99,235,0.24)]"
@@ -132,22 +144,32 @@ function SidebarLinkItem({
       />
 
       {!collapsed ? (
-        <>
-          <span className="min-w-0 flex-1 truncate">{entry.title}</span>
-
-          {entry.badge ? (
+        <div className="min-w-0 flex-1">
+          <span className="block truncate">{entry.title}</span>
+          {entry.hint ? (
             <span
               className={[
-                "ml-auto rounded-full px-2.5 py-1 text-[11px] font-black leading-none",
-                isActive
-                  ? "bg-white/20 text-white"
-                  : "bg-emerald-100 text-emerald-700",
+                "mt-0.5 block truncate text-[10px] font-semibold leading-tight",
+                isActive ? "text-blue-100" : "text-slate-400",
               ].join(" ")}
             >
-              {entry.badge}
+              {entry.hint}
             </span>
           ) : null}
-        </>
+        </div>
+      ) : null}
+
+      {!collapsed && entry.badge ? (
+        <span
+          className={[
+            "ml-auto rounded-full px-2.5 py-1 text-[11px] font-black leading-none",
+            isActive
+              ? "bg-white/20 text-white"
+              : "bg-emerald-100 text-emerald-700",
+          ].join(" ")}
+        >
+          {entry.badge}
+        </span>
       ) : null}
     </Link>
   );

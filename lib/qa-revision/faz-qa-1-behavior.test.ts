@@ -225,9 +225,10 @@ describe("QA Faz 1 — CSRF origin doğrulaması", () => {
     assert.match(transactions, /verifyApiMutationOrigin/);
   });
 
-  it("verifyApiMutationOrigin test bypass kodu içerir", () => {
+  it("verifyApiMutationOrigin explicit test bypass kodu içerir", () => {
     const guard = read("lib/api-origin-guard.ts");
-    assert.match(guard, /NODE_ENV === "test"/);
+    assert.match(guard, /MUTATION_ORIGIN_GUARD_DISABLED/);
+    assert.doesNotMatch(guard, /NODE_ENV === "test"/);
   });
 });
 
@@ -278,11 +279,15 @@ describe("QA Faz 1 — public SEO", () => {
 describe("QA Faz 1 — 404 davranışı", () => {
   it("not-found noindex ve public linkler içerir", () => {
     const notFound = read("app/not-found.tsx");
+    const publicPanel = read("components/layout/not-found-panels.tsx");
+    const publicBody = publicPanel.slice(
+      publicPanel.indexOf("export function PublicNotFoundPanel")
+    );
     assert.match(notFound, /Sayfa bulunamadı/);
     assert.match(notFound, /index:\s*false/);
-    assert.match(notFound, /href="\/"/);
-    assert.match(notFound, /href="\/login"/);
-    assert.doesNotMatch(notFound, /href="\/dashboard"/);
+    assert.match(publicBody, /href="\/"/);
+    assert.match(publicBody, /href="\/login"/);
+    assert.doesNotMatch(publicBody, /href="\/dashboard"/);
   });
 });
 

@@ -678,9 +678,10 @@ describe("public-plan-service — query safety", () => {
     assert.match(service, /return \[\]/);
   });
 
-  it("converts Decimal prices to Number", () => {
-    assert.match(service, /Number\(p\.monthlyPrice\)/);
-    assert.match(service, /Number\(p\.yearlyPrice\)/);
+  it("canonical plan display fiyatlarını kullanır", () => {
+    assert.match(service, /buildCanonicalPlanDisplay/);
+    assert.match(service, /display\.monthlyPrice/);
+    assert.match(service, /display\.annualPrice/);
   });
 });
 

@@ -27,6 +27,7 @@ import { resolveWarehouseId } from "@/lib/warehouse-service";
 import { invalidateDashboardCache } from "@/lib/dashboard-cache-invalidation";
 import { requireApiTenantContext } from "@/lib/tenant/tenant-context";
 import { assertOptionalTenantCustomer } from "@/lib/tenant/tenant-resource";
+import { buildZodValidationErrorBody } from "@/lib/api-zod-validation";
 import { TenantNotFoundError } from "@/lib/tenant/tenant-errors";
 
 const saleItemSchema = z.object({
@@ -62,14 +63,9 @@ export async function POST(req: Request) {
     const parsed = createSaleSchema.safeParse(body);
 
     if (!parsed.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Bilgileri kontrol edin.",
-          errors: parsed.error.flatten().fieldErrors,
-        },
-        { status: 400 }
-      );
+      return NextResponse.json(buildZodValidationErrorBody(parsed.error), {
+        status: 400,
+      });
     }
 
     const { customerId, note, items, paymentStatus, warehouseId, accountId } =

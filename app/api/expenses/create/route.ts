@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireApiModuleAccess } from "@/lib/module-access";
 import { createExpenseRecord } from "@/lib/expense-service";
 import { createExpenseSchema } from "@/lib/expense-utils";
+import { buildZodValidationErrorBody } from "@/lib/api-zod-validation";
 import { buildTenantMutationSuccess } from "@/lib/tenant-cache/tenant-mutation-response";
 
 export async function POST(req: Request) {
@@ -21,14 +22,9 @@ export async function POST(req: Request) {
     });
 
     if (!parsed.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Bilgileri kontrol edin.",
-          errors: parsed.error.flatten().fieldErrors,
-        },
-        { status: 400 }
-      );
+      return NextResponse.json(buildZodValidationErrorBody(parsed.error), {
+        status: 400,
+      });
     }
 
     const result = await createExpenseRecord({

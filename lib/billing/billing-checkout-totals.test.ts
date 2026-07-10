@@ -27,4 +27,16 @@ describe("billing checkout totals", () => {
     assert.match(src, /resolveSubscriptionPrice/);
     assert.match(src, /resolved\.totalMinor \/ 100/);
   });
+
+  it("createMembershipPayment checkout ile aynı fiyat çözümleyicisini kullanır", () => {
+    const src = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../membership-service.ts"),
+      "utf8"
+    );
+    const start = src.indexOf("export async function createMembershipPayment");
+    const end = src.indexOf("async function applyPaidMembershipPayment");
+    const body = src.slice(start, end);
+    assert.match(body, /resolveSubscriptionPrice/);
+    assert.match(body, /resolved\.totalMinor \/ 100/);
+  });
 });

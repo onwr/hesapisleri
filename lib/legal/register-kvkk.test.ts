@@ -55,6 +55,8 @@ describe("register KVKK aydınlatma", () => {
     assert.match(source, /marketingConsentText/);
     assert.match(source, /marketingConsent/);
     assert.match(source, /legalInfo/);
+    assert.match(source, /PRIVACY_POLICY_PATH/);
+    assert.match(source, /noValidate/);
   });
 
   it("public aydınlatma page exists", () => {

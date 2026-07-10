@@ -1,6 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { buildZodValidationErrorBody } from "@/lib/api-zod-validation";
 import { requireAuthenticatedApiSession } from "@/lib/module-access";
 import {
   AuthCompaniesError,
@@ -24,11 +25,10 @@ export async function POST(req: Request) {
 
     if (!parsed.success) {
       return NextResponse.json(
-        {
-          success: false,
+        buildZodValidationErrorBody(parsed.error, {
           message: "Firma seçimini kontrol edin.",
-          errors: parsed.error.flatten().fieldErrors,
-        },
+          fieldLabels: { companyId: "Firma" },
+        }),
         { status: 400 }
       );
     }

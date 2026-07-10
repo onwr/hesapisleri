@@ -55,16 +55,23 @@ export function sanitizeAuthRedirectPath(
   return normalized;
 }
 
-export function buildClearSessionUrl(nextPath: string) {
+export function buildSessionExpiredLoginUrl(
+  nextPath = "/login?reason=session-expired"
+) {
   const trimmed = nextPath.trim();
   const destination =
     trimmed.startsWith("/") &&
     !trimmed.startsWith("//") &&
     !trimmed.includes("://")
       ? trimmed
-      : "/login";
+      : "/login?reason=session-expired";
 
-  return `/api/auth/clear-session?next=${encodeURIComponent(destination)}`;
+  return destination;
+}
+
+/** @deprecated GET clear-session kaldırıldı; doğrudan login URL kullanın. */
+export function buildClearSessionUrl(nextPath: string) {
+  return buildSessionExpiredLoginUrl(nextPath);
 }
 
 export function createAuthRedirectDestination(input: {

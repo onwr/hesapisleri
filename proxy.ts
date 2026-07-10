@@ -1,7 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  createCsrfOriginRejectedResponse,
+  normalizeApiPathname,
+  shouldRejectUntrustedMutation,
+} from "@/lib/api-origin-guard";
 import { AUTH_COOKIE_NAME } from "@/lib/auth/auth-cookie";
 import {
-  buildClearSessionUrl,
+  buildSessionExpiredLoginUrl,
   createAuthRedirectDestination,
 } from "@/lib/auth/auth-redirect";
 import {
@@ -41,6 +46,11 @@ function redirectTo(request: NextRequest, destination: string, reason?: string) 
   return NextResponse.redirect(target);
 }
 
+function withPathnameHeader(response: NextResponse, pathname: string) {
+  response.headers.set("x-pathname", pathname);
+  return response;
+}
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -51,11 +61,24 @@ export function proxy(request: NextRequest) {
     pathname === "/sitemap.xml" ||
     /\.(?:svg|png|jpg|jpeg|gif|webp|ico)$/.test(pathname)
   ) {
-    return NextResponse.next();
+    return withPathnameHeader(NextResponse.next(), pathname);
+  }
+
+  if (
+    pathname.startsWith("/api/") &&
+    shouldRejectUntrustedMutation({
+      method: request.method,
+      pathname: normalizeApiPathname(pathname),
+      origin: request.headers.get("origin"),
+      referer: request.headers.get("referer"),
+      authorization: request.headers.get("authorization"),
+    })
+  ) {
+    return withPathnameHeader(createCsrfOriginRejectedResponse(), pathname);
   }
 
   if (isAuthApiRoute(pathname)) {
-    return NextResponse.next();
+    return withPathnameHeader(NextResponse.next(), pathname);
   }
 
   const token = getTokenFromRequest(request);
@@ -64,28 +87,25 @@ export function proxy(request: NextRequest) {
   if (isProtectedRoute(pathname)) {
     if (!hasValidToken) {
       if (token) {
-        return redirectTo(
-          request,
-          buildClearSessionUrl(
-            `/login?next=${encodeURIComponent(pathname)}&reason=session-expired`
-          ),
-          "invalid-token"
-        );
+        const loginUrl = new URL("/login", request.url);
+        loginUrl.searchParams.set("next", pathname);
+        loginUrl.searchParams.set("reason", "session-expired");
+        return withPathnameHeader(NextResponse.redirect(loginUrl), pathname);
       }
 
       const loginUrl = new URL("/login", request.url);
       loginUrl.searchParams.set("next", pathname);
-      return NextResponse.redirect(loginUrl);
+      return withPathnameHeader(NextResponse.redirect(loginUrl), pathname);
     }
 
-    return NextResponse.next();
+    return withPathnameHeader(NextResponse.next(), pathname);
   }
 
   if (isAuthRoute(pathname) && hasValidToken) {
-    return NextResponse.next();
+    return withPathnameHeader(NextResponse.next(), pathname);
   }
 
-  return NextResponse.next();
+  return withPathnameHeader(NextResponse.next(), pathname);
 }
 
 export const config = {

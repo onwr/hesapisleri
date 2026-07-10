@@ -29,6 +29,9 @@ import {
 } from "@/lib/supplier-utils";
 import { formatShortDisplayDate } from "@/lib/format-utils";
 import { SUPPLIER_BALANCE_LABELS } from "@/lib/supplier-balance-utils";
+import {
+  buildSupplierStatusView,
+} from "@/lib/supplier-status-view";
 import { SupplierLedgerTable } from "@/components/suppliers/supplier-ledger-table";
 import { SupplierFinanceModal } from "@/components/suppliers/supplier-finance-modal";
 import { SupplierCustomerRoleModal } from "@/components/suppliers/supplier-customer-role-modal";
@@ -362,16 +365,32 @@ export function SupplierDetailClient({
                     Favori
                   </span>
                 ) : null}
-                <span
-                  className={[
-                    "rounded-md px-2 py-0.5 text-[10px] font-black",
-                    supplier.isActive
-                      ? "bg-emerald-50 text-emerald-700"
-                      : "bg-slate-100 text-slate-600",
-                  ].join(" ")}
-                >
-                  {supplier.isActive ? "Aktif" : "Pasif"}
-                </span>
+                {(() => {
+                  const statusView = buildSupplierStatusView({
+                    isActive: supplier.isActive,
+                    signedBalance: supplier.currentBalance,
+                  });
+                  return (
+                    <>
+                      <span
+                        className={[
+                          "rounded-md px-2 py-0.5 text-[10px] font-black",
+                          statusView.operationalBadgeClass,
+                        ].join(" ")}
+                      >
+                        Tedarikçi: {statusView.operationalLabel}
+                      </span>
+                      <span
+                        className={[
+                          "rounded-md px-2 py-0.5 text-[10px] font-black",
+                          statusView.accountBadgeClass,
+                        ].join(" ")}
+                      >
+                        Cari: {statusView.accountLabel}
+                      </span>
+                    </>
+                  );
+                })()}
               </div>
               {getSupplierSecondaryLine(supplier) ? (
                 <p className="mt-1 text-[12px] text-slate-500">

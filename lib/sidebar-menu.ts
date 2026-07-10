@@ -27,6 +27,7 @@ import {
 export type SidebarMenuItem = {
   type: "link";
   title: string;
+  hint?: string;
   href: string;
   icon: LucideIcon;
   module: AppModule;
@@ -65,10 +66,11 @@ const SIDEBAR_LINK_ITEMS: Omit<SidebarMenuItem, "type">[] = [
     icon: ShoppingCart,
     module: "sales",
   },
-  { title: "Müşteriler", href: "/customers", icon: Users, module: "customers" },
+  { title: "Müşteriler", hint: "Satış, bakiye ve cari hesap", href: "/customers", icon: Users, module: "customers" },
   { title: "Tedarikçiler", href: "/suppliers", icon: Truck, module: "suppliers" },
   {
     title: "Fihrist",
+    hint: "Birleşik iletişim rehberi",
     href: "/directory",
     icon: BookUser,
     module: "directory",

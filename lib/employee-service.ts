@@ -12,6 +12,10 @@ import type {
 } from "@prisma/client";
 import { db } from "@/lib/prisma";
 import {
+  buildCanonicalTeamSummary,
+  toEmployeeStatsFromTeamSummary,
+} from "@/lib/team-summary";
+import {
   buildEmployeeActionUrl,
   calculateEmployeeBalance,
   calculateLeaveDays,
@@ -2248,33 +2252,38 @@ export async function listEmployees(input: {
     },
   });
 
-  const summary = {
-    activeCount: allEmployees.filter((e) => e.status === "ACTIVE").length,
-    onLeaveCount: allEmployees.filter((e) => e.status === "ON_LEAVE").length,
-    passiveCount: allEmployees.filter((e) => e.status === "PASSIVE").length,
-    terminatedCount: allEmployees.filter((e) => e.status === "TERMINATED")
-      .length,
-    totalCount: allEmployees.length,
-    monthlyPayable: allEmployees.reduce((sum, e) => {
-      const salary = Number(e.salaryRecords[0]?.amount ?? 0);
-      const pending = e.payments.reduce((p, pay) => p + Number(pay.amount), 0);
-      return sum + salary + pending;
-    }, 0),
-    pendingLeaveCount: allEmployees.reduce(
-      (sum, e) => sum + e.leaveRequests.length,
-      0
-    ),
-    pendingPaymentCount: allEmployees.reduce(
-      (sum, e) => sum + e.payments.length,
-      0
-    ),
-    withUserAccountCount: allEmployees.filter((e) => e.companyUserId).length,
-    withPosAccessCount: allEmployees.filter(
-      (e) => e.companyUser?.role === "POS_STAFF"
-    ).length,
+  const teamSummary = buildCanonicalTeamSummary({
+    employees: allEmployees.map((employee) => ({
+      status: employee.status,
+      salaryAmount: Number(employee.salaryRecords[0]?.amount ?? 0),
+      pendingPaymentCount: employee.payments.length,
+      pendingLeaveCount: employee.leaveRequests.length,
+    })),
     salesThisMonthEmployeeCount: enriched.filter(
-      (e) => e.performanceSummary.thisMonthSaleCount > 0
+      (employee) => employee.performanceSummary.thisMonthSaleCount > 0
     ).length,
+    withUserAccountCount: allEmployees.filter((employee) => employee.companyUserId)
+      .length,
+    withPosAccessCount: allEmployees.filter(
+      (employee) => employee.companyUser?.role === "POS_STAFF"
+    ).length,
+  });
+
+  const summary = {
+    ...toEmployeeStatsFromTeamSummary(teamSummary),
+    monthlyPayable: allEmployees
+      .filter(
+        (employee) =>
+          employee.status === "ACTIVE" || employee.status === "ON_LEAVE"
+      )
+      .reduce((sum, employee) => {
+        const salary = Number(employee.salaryRecords[0]?.amount ?? 0);
+        const pending = employee.payments.reduce(
+          (paymentSum, payment) => paymentSum + Number(payment.amount),
+          0
+        );
+        return sum + salary + pending;
+      }, 0),
   };
 
   const linkedUserIdsForSales = allEmployees

@@ -25,6 +25,7 @@ import { getAuthToken, verifyToken } from "@/lib/auth";
 import { endOfMonth, startOfMonth } from "@/lib/dashboard-metrics";
 import { db } from "@/lib/prisma";
 import { getAiAssistantPageData } from "@/lib/ai-assistant-page-data";
+import { AI_INSIGHT_SEVERITY_STYLES } from "@/lib/ai/ai-display-safety";
 import {
   normalizeDateRange,
   parseAiTopic,
@@ -217,8 +218,13 @@ export default async function AiAssistantPage({ searchParams }: AiAssistantPageP
                           >
                             <Icon size={18} />
                           </div>
-                          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-extrabold text-slate-600">
-                            {insight.badge}
+                          <span
+                            className={[
+                              "rounded-full px-2.5 py-1 text-[10px] font-extrabold",
+                              AI_INSIGHT_SEVERITY_STYLES[insight.severity].badgeClassName,
+                            ].join(" ")}
+                          >
+                            {insight.badgeLabel}
                           </span>
                         </div>
                         <h3 className="mt-3 text-[14px] font-black text-[#0f1f4d]">

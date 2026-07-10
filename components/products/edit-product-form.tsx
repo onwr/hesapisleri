@@ -24,6 +24,7 @@ import {
   productToFormValues,
   resolveInitialBarcodePayloadMode,
   shouldIncludeBarcodeInJsonPayload,
+  validateProductFormMoneyFields,
   type ProductBarcodePayloadMode,
   type ProductFormValues,
   type ProductUnitType,
@@ -73,7 +74,24 @@ export function EditProductForm({ companyId, product }: EditProductFormProps) {
     setError("");
     setFieldErrors({});
 
-    const payload = buildProductPayload(form, { barcodeMode: barcodePayloadMode });
+    const moneyErrors = validateProductFormMoneyFields(form);
+    if (Object.keys(moneyErrors).length > 0) {
+      setFieldErrors(moneyErrors);
+      setError(Object.values(moneyErrors)[0]);
+      return;
+    }
+
+    let payload;
+    try {
+      payload = buildProductPayload(form, { barcodeMode: barcodePayloadMode });
+    } catch (validationError) {
+      const message =
+        validationError instanceof Error
+          ? validationError.message
+          : "Fiyat alanlarını kontrol edin.";
+      setError(message);
+      return;
+    }
     const { stock: _stock, ...updatePayload } = payload;
     const requestBody = shouldIncludeBarcodeInJsonPayload(barcodePayloadMode)
       ? updatePayload

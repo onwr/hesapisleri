@@ -82,6 +82,7 @@ const testFiles = [
   "lib/qa-revision/faz-qa-5b3-db.test.ts",
   "lib/qa-revision/faz-qa-5c1-db.test.ts",
   "lib/qa-revision/faz-qa-5d-db.test.ts",
+  "lib/qa-revision/faz-qa-5e-db.test.ts",
 ];
 
 const result = spawnSync(

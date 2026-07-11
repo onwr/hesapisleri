@@ -89,7 +89,7 @@ export function buildMetric(input: {
     formattedValue,
     previousValue: input.previousValue,
     changeValue,
-    changePercent: percentChange(input.value, input.previousValue),
+    changePercent: percentChange(input.value, input.previousValue) ?? 0,
     comparisonLabel: input.comparisonLabel ?? "önceki döneme göre",
     href: input.href,
     currency: input.currency,

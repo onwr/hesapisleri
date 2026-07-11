@@ -245,6 +245,8 @@ export function RegisterForm({
               <User className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
               <Input
                 id="name"
+                name="name"
+                autoComplete="name"
                 value={form.name}
                 onChange={(e) => updateForm("name", e.target.value)}
                 className={authInputWithIconClassName}
@@ -269,7 +271,9 @@ export function RegisterForm({
               <Mail className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
               <Input
                 id="email"
+                name="email"
                 type="email"
+                autoComplete="email"
                 value={form.email}
                 onChange={(e) => updateForm("email", e.target.value)}
                 className={authInputWithIconClassName}
@@ -297,7 +301,9 @@ export function RegisterForm({
               <Lock className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
               <Input
                 id="password"
+                name="password"
                 type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
                 value={form.password}
                 onChange={(e) => updateForm("password", e.target.value)}
                 className={authInputWithToggleClassName}
@@ -337,6 +343,8 @@ export function RegisterForm({
               <Building2 className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
               <Input
                 id="companyName"
+                name="organization"
+                autoComplete="organization"
                 value={form.companyName}
                 onChange={(e) => updateForm("companyName", e.target.value)}
                 className={authInputWithIconClassName}

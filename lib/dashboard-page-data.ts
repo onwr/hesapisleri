@@ -40,10 +40,10 @@ export type DashboardPageData = {
   monthLabel: string;
   todaySales: number;
   yesterdaySales: number;
-  todaySalesChange: number;
+  todaySalesChange: number | null;
   monthSales: number;
   lastMonthSales: number;
-  monthSalesChange: number;
+  monthSalesChange: number | null;
   pendingCollection: number;
   dueCollection: number;
   monthExpenses: number;

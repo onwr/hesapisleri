@@ -1,5 +1,9 @@
 import { db } from "@/lib/prisma";
-import { percentChange, startOfDay } from "@/lib/dashboard-metrics";
+import { startOfDay } from "@/lib/dashboard-metrics";
+import {
+  formatPercentageChangeBadge,
+  resolvePercentageChange,
+} from "@/lib/finance/percentage-change";
 import {
   COMPANY_FINANCE_TIMEZONE,
   isInHalfOpenRange,
@@ -176,12 +180,14 @@ function buildCategoryBreakdown(
 }
 
 function buildChangeLabel(current: number, previous: number, invert = false) {
-  const change = percentChange(current, previous);
-  const improved = invert ? change <= 0 : change >= 0;
+  const badge = formatPercentageChangeBadge(
+    resolvePercentageChange(current, previous),
+    { invert }
+  );
 
   return {
-    change: `${change >= 0 ? "+" : ""}${change}%`.replace("+-", "-"),
-    positive: improved,
+    change: badge.label,
+    positive: badge.positive,
   };
 }
 

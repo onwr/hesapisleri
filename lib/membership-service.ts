@@ -19,6 +19,10 @@ import {
 import {
   buildCanonicalMembershipDisplay,
 } from "@/lib/membership-display-dto";
+import {
+  pickLatestPaidMembershipPayment,
+  resolveMembershipPaymentAmount,
+} from "@/lib/billing/membership-payment-display";
 import { createPartnerPaymentConversion } from "@/lib/partner-conversion-service";
 import { assertCompanyAccess } from "@/lib/company-access";
 import {
@@ -202,7 +206,7 @@ function serializePayment(payment: {
     id: payment.id,
     period: payment.period,
     periodLabel: payment.period ? getMembershipPeriodLabel(payment.period) : "—",
-    amount: Number(payment.amount),
+    amount: resolveMembershipPaymentAmount(payment),
     currency: payment.currency,
     status: payment.status,
     statusLabel: getMembershipPaymentStatusLabel(payment.status),
@@ -377,7 +381,7 @@ export async function getMembershipBillingData(input: {
     isSharedEntitlement,
   });
 
-  const lastPaid = payments.find((payment) => payment.status === "PAID") ?? null;
+  const lastPaid = pickLatestPaidMembershipPayment(payments);
   const billingPlan = await serializeBillingPlanForCompany(
     subscriptionPlan,
     input.companyId

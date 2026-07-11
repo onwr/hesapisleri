@@ -53,7 +53,10 @@ export type DirectorySyncResult = {
 export type DirectorySummary = {
   total: number;
   favorites: number;
+  /** Fihristte müşteri kaynaklı aktif kişi sayısı */
   customers: number;
+  /** Müşteriler modülündeki aktif CRM kayıt sayısı */
+  crmActiveCustomers: number;
   employees: number;
   suppliers: number;
   manual: number;
@@ -221,6 +224,7 @@ export async function getDirectorySummary(companyId: string): Promise<DirectoryS
     total,
     favorites,
     customers,
+    crmActiveCustomers,
     employees,
     suppliers,
     manual,
@@ -233,6 +237,7 @@ export async function getDirectorySummary(companyId: string): Promise<DirectoryS
     db.directoryContact.count({
       where: { companyId, isActive: true, type: "CUSTOMER" },
     }),
+    db.customer.count({ where: { companyId, status: "ACTIVE" } }),
     db.directoryContact.count({
       where: { companyId, isActive: true, type: "EMPLOYEE" },
     }),
@@ -263,6 +268,7 @@ export async function getDirectorySummary(companyId: string): Promise<DirectoryS
     total,
     favorites,
     customers,
+    crmActiveCustomers,
     employees,
     suppliers,
     manual,

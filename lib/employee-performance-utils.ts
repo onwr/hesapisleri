@@ -1,4 +1,5 @@
 import { roundCashMoney } from "@/lib/cash-bank-account-utils";
+import { percentChange } from "@/lib/dashboard-metrics";
 import { calculateLeaveDays } from "@/lib/employee-utils";
 import { endOfDay, startOfDay } from "@/lib/calendar-utils";
 
@@ -152,10 +153,9 @@ export function calculatePerformanceScore(input: {
 }
 
 export function calculatePercentChange(current: number, previous: number) {
-  if (previous === 0) {
-    return current === 0 ? 0 : 100;
-  }
-  return roundCashMoney(((current - previous) / previous) * 100);
+  const change = percentChange(current, previous);
+  if (change === null) return 0;
+  return roundCashMoney(change);
 }
 
 export function parsePerformanceDepartment(value: string | null | undefined) {

@@ -7,13 +7,13 @@ import {
 
 export { formatMoney };
 
-export function percentChange(current: number, previous: number) {
-  if (previous === 0) {
-    return current > 0 ? 100 : 0;
-  }
+export {
+  formatPercentageChangeBadge,
+  percentChange,
+  resolvePercentageChange,
+} from "@/lib/finance/percentage-change";
 
-  return Math.round(((current - previous) / previous) * 100);
-}
+import { percentChange as computePercentChange } from "@/lib/finance/percentage-change";
 
 export function startOfDay(date: Date) {
   const d = new Date(date);
@@ -204,22 +204,22 @@ export function buildDashboardAiInsights(
   pendingCollection: number
 ) {
   const insights: string[] = [];
-  const expenseChange = percentChange(monthExpenses, lastMonthExpenses);
-  const salesChange = percentChange(monthSales, lastMonthSales);
+  const expenseChange = computePercentChange(monthExpenses, lastMonthExpenses);
+  const salesChange = computePercentChange(monthSales, lastMonthSales);
 
-  if (expenseChange > 10) {
+  if (expenseChange !== null && expenseChange > 10) {
     insights.push(
       `Bu ay giderlerin geçen aya göre %${expenseChange} arttı. Harcama kalemlerini gözden geçirmeniz faydalı olabilir.`
     );
   }
 
-  if (salesChange > 10) {
+  if (salesChange !== null && salesChange > 10) {
     insights.push(
       `Bu ay satış performansınız geçen aya göre %${salesChange} yükseldi. Bu ivmeyi korumak için stok ve tahsilat takibine devam edin.`
     );
   }
 
-  if (salesChange < -10) {
+  if (salesChange !== null && salesChange < -10) {
     insights.push(
       `Bu ay satışlar geçen aya göre %${Math.abs(salesChange)} geriledi. Kampanya ve tahsilat aksiyonlarını değerlendirebilirsiniz.`
     );

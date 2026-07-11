@@ -177,8 +177,11 @@ export function buildDirectorySummaryCards(
     {
       key: "customers",
       title: "Müşteriler",
-      value: String(summary.customers),
-      subtitle: "Müşteri kaynağı",
+      value: String(summary.crmActiveCustomers),
+      subtitle:
+        summary.customers > 0
+          ? `Fihristte ${summary.customers} senkronize kayıt`
+          : "Senkronize etmek için Müşterileri Aktar",
       icon: Users,
       color: "cyan",
     },
@@ -237,7 +240,7 @@ export function buildDirectoryDistribution(
       color: "#10b981",
     },
     {
-      label: "Müşteri",
+      label: "Senkronize Müşteri",
       count: summary.customers,
       percent: Math.round((summary.customers / total) * 100),
       color: "#06b6d4",

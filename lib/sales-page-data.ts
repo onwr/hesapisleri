@@ -1,9 +1,12 @@
 import { db } from "@/lib/prisma";
 import {
   formatMoney,
-  percentChange,
   startOfDay,
 } from "@/lib/dashboard-metrics";
+import {
+  formatPercentageChangeBadge,
+  resolvePercentageChange,
+} from "@/lib/finance/percentage-change";
 import {
   ACCRUAL_SALES_BY_CREATED_AT_LABEL,
   COMPANY_FINANCE_TIMEZONE,
@@ -59,12 +62,14 @@ function sumTotal<T extends { total: unknown }>(rows: T[]) {
 }
 
 function buildChangeLabel(current: number, previous: number, invert = false) {
-  const change = percentChange(current, previous);
-  const improved = invert ? change <= 0 : change >= 0;
+  const badge = formatPercentageChangeBadge(
+    resolvePercentageChange(current, previous),
+    { invert }
+  );
 
   return {
-    change: `${change >= 0 ? "+" : ""}${change}%`.replace("+-", "-"),
-    positive: improved,
+    change: badge.label,
+    positive: badge.positive,
   };
 }
 
@@ -378,6 +383,23 @@ export async function getSalesPageData(
   const monthInvoiceTotal = sumTotal(monthInvoices);
   const lastMonthInvoiceTotal = sumTotal(lastMonthInvoices);
 
+  const { from: rangeFrom, to: rangeTo } = normalizeDateRange(
+    startOfDay(options.from),
+    options.to
+  );
+  const periodInvoiceRows = filterByDateRange(
+    documentGroups.invoices,
+    rangeFrom,
+    rangeTo
+  );
+  const periodInvoiceCount = periodInvoiceRows.length;
+  const periodInvoiceTotal = periodInvoiceRows.reduce(
+    (sum, row) => sum + row.amount,
+    0
+  );
+  const periodAverage =
+    periodInvoiceCount > 0 ? periodInvoiceTotal / periodInvoiceCount : 0;
+
   const monthAverage =
     monthInvoiceCount > 0 ? monthInvoiceTotal / monthInvoiceCount : 0;
   const lastMonthAverage =
@@ -428,8 +450,8 @@ export async function getSalesPageData(
     },
     {
       title: "Toplam Fatura",
-      value: String(monthInvoiceCount),
-      subtitle: `Geçen Ay: ${lastMonthInvoiceCount}`,
+      value: String(periodInvoiceCount),
+      subtitle: `Seçili dönem · geçen ay: ${lastMonthInvoiceCount}`,
       change: invoiceCountChange.change,
       positive: invoiceCountChange.positive,
       iconKey: "file",
@@ -437,8 +459,8 @@ export async function getSalesPageData(
     },
     {
       title: "Ortalama Fatura",
-      value: formatMoney(monthAverage),
-      subtitle: `Geçen Ay: ${formatMoney(lastMonthAverage)}`,
+      value: formatMoney(periodAverage),
+      subtitle: `Seçili dönem · geçen ay: ${formatMoney(lastMonthAverage)}`,
       change: averageChange.change,
       positive: averageChange.positive,
       iconKey: "calendar",
@@ -447,10 +469,6 @@ export async function getSalesPageData(
   ];
 
   const tabRows = documentGroups[options.tab];
-  const { from: rangeFrom, to: rangeTo } = normalizeDateRange(
-    startOfDay(options.from),
-    options.to
-  );
   const filteredRows = filterByDateRange(tabRows, rangeFrom, rangeTo).sort(
     (a, b) =>
       (getTimeMs(b.createdAt) ?? 0) - (getTimeMs(a.createdAt) ?? 0)

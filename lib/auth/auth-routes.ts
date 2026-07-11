@@ -8,6 +8,7 @@ export const AUTH_ROUTES = [
 export const PUBLIC_ROUTES = [
   "/",
   "/pricing",
+  "/fiyatlandirma",
   "/partner",
   "/partnership",
   "/partner/apply",

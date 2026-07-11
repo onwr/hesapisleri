@@ -7,7 +7,7 @@ type StatCardProps = {
   value: string;
   subtitle?: string;
   comparisonLabel?: string;
-  changePercent?: number;
+  changePercent?: number | null;
   highlight?: string;
   tooltip?: string;
   icon: ReactNode;
@@ -53,7 +53,10 @@ export function StatCard({
 }: StatCardProps) {
   const showChange =
     comparisonLabel !== undefined && changePercent !== undefined;
-  const isPositive = (changePercent ?? 0) >= 0;
+  const isSpecialChange = changePercent === null;
+  const isPositive = isSpecialChange
+    ? true
+    : (changePercent ?? 0) >= 0;
 
   const card = (
     <div
@@ -107,12 +110,21 @@ export function StatCard({
                 ? "bg-emerald-100 text-emerald-700"
                 : "bg-rose-100 text-rose-700"
             }`}
-            aria-label={`${isPositive ? "Artış" : "Azalış"} yüzde ${Math.abs(changePercent ?? 0)}`}
+            aria-label={
+              isSpecialChange
+                ? comparisonLabel ?? "Yeni dönem verisi"
+                : `${isPositive ? "Artış" : "Azalış"} yüzde ${Math.abs(changePercent ?? 0)}`
+            }
           >
-            {isPositive ? <TrendingUp size={12} aria-hidden="true" /> : <TrendingDown size={12} aria-hidden="true" />}
+            {isSpecialChange ? null : isPositive ? (
+              <TrendingUp size={12} aria-hidden="true" />
+            ) : (
+              <TrendingDown size={12} aria-hidden="true" />
+            )}
             <span aria-hidden="true">
-              {isPositive ? "+" : ""}
-              %{Math.abs(changePercent ?? 0)}
+              {isSpecialChange
+                ? "Yeni"
+                : `${isPositive ? "+" : ""}%${Math.abs(changePercent ?? 0)}`}
             </span>
           </span>
         </div>

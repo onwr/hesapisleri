@@ -18,6 +18,7 @@ import {
   User,
   Wallet,
   XCircle,
+  RotateCcw,
 } from "lucide-react";
 import { PrintSaleButton } from "@/components/sales/print-sale-button";
 import { QuoteCancelButton } from "@/components/sales/quote-cancel-button";
@@ -33,11 +34,13 @@ import { getCachedSaleDetailData } from "@/lib/tenant-cache/cached-tenant-page-d
 import { formatMoney, formatDateTimeDisplay } from "@/lib/format-utils";
 import { getSaleRemainingAmount } from "@/lib/sale-payment-utils";
 import { getPosPaymentMethodLabel } from "@/lib/pos-checkout-utils";
-import { canCancelSales, canUpdateSales } from "@/lib/sale-permission-utils";
+import { canCancelSales, canReturnSales, canUpdateSales } from "@/lib/sale-permission-utils";
 import {
   validateSaleCancelEligibility,
   validateSaleEditEligibility,
 } from "@/lib/sale-mutation-policy";
+import { getSaleReturnRefundMethodLabel } from "@/lib/sale-return-utils";
+import { isReturnableSaleStatus } from "@/lib/sale-query-utils";
 
 type Props = {
   params: Promise<{
@@ -96,13 +99,15 @@ const { id } = await params;
 
   const isQuote = sale.status === "DRAFT";
   const isCancelled = sale.status === "CANCELLED";
+  const isRefunded = sale.status === "REFUNDED";
+  const isPartiallyRefunded = sale.status === "PARTIALLY_REFUNDED";
   const paidAmount = Number(sale.paidAmount);
   const saleTotal = Number(sale.total);
   const remainingAmount = getSaleRemainingAmount(saleTotal, paidAmount);
   const canCollectRemaining =
     !isQuote &&
     !isCancelled &&
-    sale.status !== "REFUNDED" &&
+    !isRefunded &&
     remainingAmount > 0;
 
   const canEditSale =
@@ -114,6 +119,19 @@ const { id } = await params;
     !isQuote &&
     canCancelSales(session.effectiveRole, session.companyUser.isOwner) &&
     validateSaleCancelEligibility(sale).ok;
+
+  const canReturnSale =
+    !isQuote &&
+    !isCancelled &&
+    isReturnableSaleStatus(sale.status) &&
+    canReturnSales(session.effectiveRole, session.companyUser.isOwner) &&
+    sale.items.some((item) => {
+      const returned = sale.returns
+        .flatMap((ret) => ret.items)
+        .filter((row) => row.saleItemId === item.id)
+        .reduce((sum, row) => sum + row.quantity, 0);
+      return returned < item.quantity;
+    });
 
   const totalQuantity = sale.items.reduce((sum, item) => sum + item.quantity, 0);
   const customerBalance = Number(sale.customer?.balance ?? 0);
@@ -155,7 +173,11 @@ const { id } = await params;
                       ? "Taslak Teklif"
                       : isCancelled
                         ? "İptal Edilmiş Kayıt"
-                        : "Satış Kaydı"}
+                        : isRefunded
+                          ? "İade Edilmiş Satış"
+                          : isPartiallyRefunded
+                            ? "Kısmi İade"
+                            : "Satış Kaydı"}
                   </span>
 
                   <span className="inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[11px] font-black backdrop-blur">
@@ -211,7 +233,17 @@ const { id } = await params;
               </div>
 
               <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap xl:justify-end">
-                <PrintSaleButton />
+                <PrintSaleButton saleId={sale.id} />
+
+                {canReturnSale ? (
+                  <Link
+                    href={`/sales/${sale.id}/return`}
+                    className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-5 text-sm font-black text-rose-700 transition hover:bg-rose-100 print:hidden"
+                  >
+                    <RotateCcw size={18} />
+                    İade / Değişim
+                  </Link>
+                ) : null}
 
                 {isQuote ? (
                   <>
@@ -406,6 +438,74 @@ const { id } = await params;
                   </p>
                 ) : null}
               </div>
+            </div>
+          </section>
+        ) : null}
+
+        {sale.returns.length > 0 ? (
+          <section className="rounded-2xl border border-amber-100 bg-amber-50/70 p-5">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-[15px] font-black text-[#0f1f4d]">
+                  İade geçmişi
+                </p>
+                <p className="mt-1 text-[12px] font-medium text-slate-600">
+                  {isPartiallyRefunded
+                    ? "Bu satışta kısmi iade kayıtları var."
+                    : isRefunded
+                      ? "Bu satış tamamen iade edilmiş."
+                      : "Bu satışa ait iade kayıtları."}
+                </p>
+              </div>
+              {canReturnSale ? (
+                <Link
+                  href={`/sales/${sale.id}/return`}
+                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 text-[12px] font-black text-rose-700"
+                >
+                  <RotateCcw size={14} />
+                  Yeni İade
+                </Link>
+              ) : null}
+            </div>
+
+            <div className="space-y-3">
+              {sale.returns.map((ret) => (
+                <div
+                  key={ret.id}
+                  className="rounded-2xl border border-amber-100 bg-white p-4"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-black text-[#0f1f4d]">
+                        {ret.returnNo}
+                      </p>
+                      <p className="mt-1 text-[12px] text-slate-500">
+                        {formatDateTimeDisplay(ret.createdAt)} ·{" "}
+                        {getSaleReturnRefundMethodLabel(ret.refundMethod)} ·{" "}
+                        {ret.reason}
+                      </p>
+                      <p className="mt-2 text-sm font-bold text-rose-700">
+                        {formatMoney(Number(ret.totalReturnAmount))}
+                      </p>
+                      <ul className="mt-2 space-y-1 text-[12px] text-slate-600">
+                        {ret.items.map((item) => (
+                          <li key={item.id}>
+                            {item.name} · {item.quantity} adet ·{" "}
+                            {formatMoney(Number(item.totalAmount))}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <Link
+                      href={`/sales/${sale.id}/returns/${ret.id}/receipt`}
+                      className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-[12px] font-black text-[#0f1f4d]"
+                    >
+                      <Printer size={14} />
+                      İade Fişi
+                    </Link>
+                  </div>
+                </div>
+              ))}
             </div>
           </section>
         ) : null}
@@ -880,7 +980,7 @@ const { id } = await params;
                     ) : null}
 
                     <div className="flex h-11 items-center justify-center">
-                      <PrintSaleButton />
+                      <PrintSaleButton saleId={sale.id} />
                     </div>
                   </div>
                 </div>

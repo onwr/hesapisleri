@@ -266,7 +266,12 @@ describe("ModulesSection", () => {
     assert.match(mod, /Stok.*Depo|Depo.*Stok/);
   });
 
-  it("contains Pazaryeri Yönetimi module", () => {
+  it("contains POS / Hızlı Satış module by default", () => {
+    assert.match(mod, /POS \/ Hızlı Satış/);
+  });
+
+  it("gates Pazaryeri Yönetimi behind marketplace feature flag", () => {
+    assert.match(mod, /isMarketplaceFeatureEnabled/);
     assert.match(mod, /Pazaryeri Yönetimi/);
   });
 
@@ -305,20 +310,9 @@ describe("IntegrationsSection — doğru entegrasyon içeriği", () => {
     assert.match(integ, /#07162D/);
   });
 
-  it("shows Trendyol logo from public", () => {
-    assert.match(catalog, /\/trendyol\.jpg/);
-  });
-
-  it("shows Hepsiburada logo from public", () => {
-    assert.match(catalog, /\/hepsiburada\.png/);
-  });
-
-  it("shows N11 and ÇiçekSepeti logos without Yakında tag", () => {
-    assert.match(catalog, /\/n11\.png/);
-    assert.match(catalog, /\/ciceksepeti\.png/);
-    assert.doesNotMatch(integ, /Yakında/);
-    assert.match(integ, /bg-white/);
-    assert.match(integ, /border-slate-100/);
+  it("gates marketplace logos behind feature flag", () => {
+    assert.match(integ, /isMarketplaceFeatureEnabled/);
+    assert.match(integ, /MARKETING_MARKETPLACE_INTEGRATIONS/);
   });
 
   it("does not show bank integration logos", () => {
@@ -368,8 +362,9 @@ describe("ComparisonSection — real features, no fake stats", () => {
     assert.match(comp, /Rol baz/);
   });
 
-  it("contains Pazaryeri row", () => {
-    assert.match(comp, /Pazaryeri/);
+  it("contains POS / cari karşılaştırması (pazaryeri flag ile kapalı)", () => {
+    assert.match(comp, /POS ile hızlı satış|Cari hesap takibi/);
+    assert.match(comp, /isMarketplaceFeatureEnabled/);
   });
 
   it("does not claim 100+ entegrasyon", () => {

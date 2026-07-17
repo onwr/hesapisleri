@@ -40,6 +40,17 @@ export const posCheckoutSchema = z
     payments: z.array(posPaymentLineSchema).default([]),
   })
   .superRefine((data, ctx) => {
+    if (
+      (data.paymentStatus === "UNPAID" || data.paymentStatus === "PARTIAL") &&
+      !data.customerId?.trim()
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Veresiye satış için müşteri seçmelisiniz.",
+        path: ["customerId"],
+      });
+    }
+
     const totals = calculatePosTotals(data.items, data.discount);
     const paymentError = validatePosCheckoutPayments({
       payments: data.payments,
@@ -143,8 +154,17 @@ export function getPosPaymentMethodLabel(method: PosPaymentMethod) {
 
 export function getPosPaymentStatusLabel(status: PosPaymentStatus) {
   if (status === "PAID") return "Ödendi";
-  if (status === "UNPAID") return "Veresiye / Ödenmedi";
-  return "Kısmi Ödeme";
+  if (status === "UNPAID") return "Cari'ye Yaz / Veresiye";
+  return "Kısmi Ödeme (Cari kalan)";
+}
+
+export function getPosOnAccountRemaining(
+  total: number,
+  paymentStatus: PosPaymentStatus,
+  paidAmount = 0
+) {
+  if (paymentStatus === "PAID") return 0;
+  return roundMoney(Math.max(0, roundMoney(total) - roundMoney(paidAmount)));
 }
 
 export function posRequiresCollectionAccount(

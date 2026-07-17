@@ -5,6 +5,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { guardPageModule } from "@/lib/module-access";
 
 import { ProductDetailView } from "@/components/products/product-detail-view";
+import { isMarketplaceFeatureEnabled } from "@/lib/features/marketplace-feature";
 import { getCachedProductDetailData } from "@/lib/tenant-cache/cached-tenant-page-data";
 import { TenantPageSync } from "@/components/tenant-cache/tenant-page-sync";
 import { toIsoString } from "@/lib/format-utils";
@@ -124,6 +125,7 @@ const { id } = await params;
             createdAt: toIsoString(sale.createdAt) ?? new Date(0).toISOString(),
           }))}
           channelMappings={channelMappings}
+          marketplaceFeatureEnabled={isMarketplaceFeatureEnabled()}
         />
       </div>
     </AppShell>

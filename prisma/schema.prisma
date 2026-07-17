@@ -62,7 +62,18 @@ enum SaleStatus {
   DRAFT
   COMPLETED
   CANCELLED
+  PARTIALLY_REFUNDED
   REFUNDED
+}
+
+enum SaleReturnStatus {
+  COMPLETED
+}
+
+enum SaleReturnRefundMethod {
+  CASH
+  CARD
+  CREDIT
 }
 
 enum OrderSourceChannel {
@@ -243,6 +254,10 @@ enum TransactionType {
   TRANSFER
   COLLECTION
   PAYMENT
+}
+
+enum CashDailyClosingStatus {
+  CLOSED
 }
 
 enum MembershipPaymentStatus {
@@ -665,6 +680,8 @@ model User {
   passwordResetTokens                PasswordResetToken[]
   passwordResetsCreated              PasswordResetToken[]     @relation("PasswordResetCreatedByAdmin")
   mobileSessions                     MobileSession[]
+  cashDailyClosings                  CashDailyClosing[]       @relation("CashDailyClosingClosedBy")
+  saleReturnsCreated                 SaleReturn[]             @relation("SaleReturnCreatedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -703,10 +720,13 @@ model Company {
   categories                     ProductCategory[]
   sales                          Sale[]
   salePayments                   SalePayment[]
+  saleReturns                    SaleReturn[]
+  saleReturnItems                SaleReturnItem[]
   invoices                       Invoice[]
   expenses                       Expense[]
   expenseCategories              ExpenseCategory[]
   accounts                       Account[]
+  cashDailyClosings              CashDailyClosing[]
   stockMovements                 StockMovement[]
   membershipPayments             MembershipPayment[]
   paymentAttempts                PaymentAttempt[]
@@ -975,8 +995,9 @@ model Customer {
 
   linkedSuppliers Supplier[] @relation("SupplierLinkedCustomer")
 
-  sales    Sale[]
-  invoices Invoice[]
+  sales       Sale[]
+  saleReturns SaleReturn[]
+  invoices    Invoice[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1211,6 +1232,7 @@ model Product {
   status            Status          @default(ACTIVE)
 
   saleItems          SaleItem[]
+  saleReturnItems    SaleReturnItem[]
   invoiceItems       InvoiceItem[]
   stockMovements     StockMovement[]
   warehouseStocks    WarehouseStock[]
@@ -1370,6 +1392,7 @@ model Sale {
 
   items    SaleItem[]
   payments SalePayment[]
+  returns  SaleReturn[]
   invoice  Invoice?
 
   createdAt DateTime @default(now())
@@ -1404,7 +1427,82 @@ model SaleItem {
   vatRate   Int     @default(20)
   total     Decimal
 
+  returnItems SaleReturnItem[]
+
   createdAt DateTime @default(now())
+}
+
+/// Satış iadesi — kısmi/tam ürün iadesi kaydı (iptal akışından ayrı).
+model SaleReturn {
+  id String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  saleId String
+  sale   Sale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  returnNo String
+  status   SaleReturnStatus @default(COMPLETED)
+
+  reason String
+  note   String?
+
+  refundMethod SaleReturnRefundMethod
+  accountId    String?
+  account      Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  totalReturnAmount     Decimal @default(0)
+  totalCashRefund       Decimal @default(0)
+  totalCardRefund       Decimal @default(0)
+  totalCreditAdjustment Decimal @default(0)
+
+  createdByUserId String?
+  createdByUser   User?   @relation("SaleReturnCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  items SaleReturnItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, returnNo])
+  @@index([companyId])
+  @@index([saleId])
+  @@index([customerId])
+  @@index([companyId, createdAt])
+}
+
+model SaleReturnItem {
+  id String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  saleReturnId String
+  saleReturn   SaleReturn @relation(fields: [saleReturnId], references: [id], onDelete: Cascade)
+
+  saleItemId String
+  saleItem   SaleItem @relation(fields: [saleItemId], references: [id], onDelete: Restrict)
+
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  name       String
+  quantity   Int
+  unitPrice  Decimal
+  totalAmount Decimal
+  restock    Boolean @default(true)
+  note       String?
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId])
+  @@index([saleReturnId])
+  @@index([saleItemId])
+  @@index([productId])
 }
 
 model SalePayment {
@@ -1757,10 +1855,12 @@ model Account {
   description   String?
   status        Status      @default(ACTIVE)
 
-  transactions     AccountTransaction[]
-  expenses         Expense[]
-  employeePayments EmployeePayment[]    @relation("EmployeePaymentAccount")
-  salePayments     SalePayment[]
+  transactions      AccountTransaction[]
+  expenses          Expense[]
+  employeePayments  EmployeePayment[]     @relation("EmployeePaymentAccount")
+  salePayments      SalePayment[]
+  saleReturns       SaleReturn[]
+  cashDailyClosings CashDailyClosing[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1800,6 +1900,48 @@ model AccountTransaction {
   @@index([invoiceId])
   @@index([supplierId])
   @@index([transferGroupId])
+}
+
+/// Gün sonu kasa kapanışı — kontrol/rapor kaydı; otomatik gelir/gider üretmez.
+model CashDailyClosing {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  closingDate DateTime
+  periodStart DateTime
+  periodEnd   DateTime
+
+  expectedCashAmount Decimal
+  countedCashAmount  Decimal
+  differenceAmount   Decimal
+
+  totalCashSales    Decimal @default(0)
+  totalCardSales    Decimal @default(0)
+  totalCreditSales  Decimal @default(0)
+  totalCollections  Decimal @default(0)
+  totalExpenses     Decimal @default(0)
+  totalRefunds      Decimal @default(0)
+  totalTransfersIn  Decimal @default(0)
+  totalTransfersOut Decimal @default(0)
+
+  note   String?
+  status CashDailyClosingStatus @default(CLOSED)
+
+  closedByUserId String
+  closedByUser   User     @relation("CashDailyClosingClosedBy", fields: [closedByUserId], references: [id], onDelete: Restrict)
+  closedAt       DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, accountId, closingDate])
+  @@index([companyId, closingDate])
+  @@index([accountId])
+  @@index([closedByUserId])
 }
 
 // Kasa/banka transferi için DB-backed idempotency — in-memory değil (process

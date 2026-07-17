@@ -20,3 +20,10 @@ export function canUpdateSales(role: PermissionRole, isOwner = false) {
 export function canCancelSales(role: PermissionRole, isOwner = false) {
   return hasSalesActionRole(role, SALES_CANCEL_ROLES, isOwner);
 }
+
+/** İade: satış iptal yetkisi veya POS personeli. */
+export function canReturnSales(role: PermissionRole, isOwner = false) {
+  const effective = resolveEffectiveRole({ role, isOwner });
+  if (effective === "POS_STAFF" || effective === "STAFF") return true;
+  return canCancelSales(role, isOwner);
+}

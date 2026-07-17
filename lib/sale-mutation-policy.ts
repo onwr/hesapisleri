@@ -52,7 +52,7 @@ export function validateSaleEditEligibility(sale: SaleWithInvoice): SaleMutation
     };
   }
 
-  if (sale.status === "REFUNDED") {
+  if (sale.status === "REFUNDED" || sale.status === "PARTIALLY_REFUNDED") {
     return {
       ok: false,
       code: "HAS_REFUND_RECORD",
@@ -105,7 +105,7 @@ export function validateSaleCancelEligibility(
     };
   }
 
-  if (sale.status === "REFUNDED") {
+  if (sale.status === "REFUNDED" || sale.status === "PARTIALLY_REFUNDED") {
     return {
       ok: false,
       code: "HAS_REFUND_RECORD",

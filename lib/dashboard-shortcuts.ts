@@ -83,8 +83,14 @@ export const DASHBOARD_SHORTCUT_CATALOG: DashboardShortcutDefinition[] = [
   },
   {
     id: "pos",
-    label: "POS / Hızlı Satış",
+    label: "Satış Yap",
     href: "/pos",
+    icon: "scan-barcode",
+  },
+  {
+    id: "pos-barcode",
+    label: "Barkodla Satış",
+    href: "/pos?focus=barcode",
     icon: "scan-barcode",
   },
   {
@@ -150,12 +156,12 @@ export const DASHBOARD_SHORTCUT_CATALOG: DashboardShortcutDefinition[] = [
 ];
 
 export const DEFAULT_DASHBOARD_SHORTCUT_IDS = [
-  "customers-new",
+  "pos",
   "products",
   "invoices",
-  "products-stocks",
   "customers",
   "cash-bank",
+  "products-stocks",
 ] as const;
 
 const catalogById = new Map(
@@ -171,8 +177,11 @@ export function getDashboardShortcutStorageKey(
 
 export function normalizeDashboardShortcutIds(
   value: unknown,
-  limit = DASHBOARD_SHORTCUT_LIMIT
+  limit = DASHBOARD_SHORTCUT_LIMIT,
+  options?: { marketplaceEnabled?: boolean }
 ): string[] {
+  const marketplaceEnabled = options?.marketplaceEnabled ?? false;
+
   if (!Array.isArray(value)) {
     return [...DEFAULT_DASHBOARD_SHORTCUT_IDS];
   }
@@ -182,6 +191,7 @@ export function normalizeDashboardShortcutIds(
 
   for (const entry of value) {
     if (typeof entry !== "string") continue;
+    if (!marketplaceEnabled && entry === "orders") continue;
     if (!catalogById.has(entry) || seen.has(entry)) continue;
     seen.add(entry);
     normalized.push(entry);
@@ -203,14 +213,19 @@ export function normalizeDashboardShortcutIds(
   return normalized.slice(0, limit);
 }
 
-export function resolveDashboardShortcuts(ids: string[]) {
-  return normalizeDashboardShortcutIds(ids).map((id) => {
-    const item = catalogById.get(id);
-    if (!item) {
-      return DASHBOARD_SHORTCUT_CATALOG[0];
+export function resolveDashboardShortcuts(
+  ids: string[],
+  options?: { marketplaceEnabled?: boolean }
+) {
+  return normalizeDashboardShortcutIds(ids, DASHBOARD_SHORTCUT_LIMIT, options).map(
+    (id) => {
+      const item = catalogById.get(id);
+      if (!item) {
+        return DASHBOARD_SHORTCUT_CATALOG[0];
+      }
+      return item;
     }
-    return item;
-  });
+  );
 }
 
 export function loadDashboardShortcutIds(

@@ -9,21 +9,26 @@ const source = fs.readFileSync(
 );
 
 describe("pos keyboard shortcuts", () => {
-  it("registers F2 F4 F6 F8 and Escape handlers", () => {
+  it("registers F2 F4 F6 F8 Escape and Ctrl+Backspace handlers", () => {
     assert.match(source, /F2/);
     assert.match(source, /F4/);
     assert.match(source, /F6/);
     assert.match(source, /F8/);
     assert.match(source, /Escape/);
+    assert.match(source, /Backspace/);
   });
 
   it("blocks checkout while pending", () => {
     assert.match(source, /if \(checkingOut\) return/);
   });
 
-  it("does not checkout on empty cart for payment shortcuts", () => {
-    assert.match(source, /if \(!cartEmpty\) onCashPayment/);
-    assert.match(source, /if \(!cartEmpty\) onCardPayment/);
+  it("F8 boş sepeti submit etmez", () => {
+    assert.match(source, /if \(!cartEmpty\) onCompleteSale/);
+  });
+
+  it("does not clear cart while editing inputs", () => {
+    assert.match(source, /isEditableTarget/);
+    assert.match(source, /!editing/);
   });
 
   it("cleans up listener on unmount", () => {

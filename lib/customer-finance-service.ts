@@ -151,7 +151,7 @@ export async function createCustomerCollection(input: {
       data: {
         accountId: account.id,
         type: "COLLECTION",
-        title: `${customer.name} tahsilatı`,
+        title: `Cari tahsilat — ${customer.name}`,
         amount: amountParsed.amount,
         date: paymentDate,
         note: input.description?.trim()

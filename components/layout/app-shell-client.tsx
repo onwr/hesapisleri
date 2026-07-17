@@ -24,6 +24,7 @@ type AppShellClientProps = {
   isOwner?: boolean;
   canUseAi?: boolean;
   aiPlatformStatus?: AiPlatformStatus;
+  marketplaceFeatureEnabled?: boolean;
   membershipSummary?: {
     statusLabel: string;
     remainingDays: number;
@@ -67,6 +68,7 @@ export function AppShellClient({
   isOwner = false,
   canUseAi = false,
   aiPlatformStatus = "enabled",
+  marketplaceFeatureEnabled = false,
   membershipSummary,
 }: AppShellClientProps) {
   return (
@@ -78,6 +80,7 @@ export function AppShellClient({
             companyName={companyName ?? "Firma"}
             companyRole={companyRole}
             isSuperAdmin={isSuperAdmin}
+            marketplaceFeatureEnabled={marketplaceFeatureEnabled}
             isOwner={isOwner}
             membershipSummary={membershipSummary}
           />

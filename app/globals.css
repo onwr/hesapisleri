@@ -140,9 +140,27 @@
   }
 }
 
+.receipt-width-80 {
+  width: 100%;
+  max-width: 80mm;
+}
+
+.receipt-width-58 {
+  width: 100%;
+  max-width: 58mm;
+}
+
+.receipt-print-area {
+  padding: 2mm 1mm;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 @media print {
   @page {
-    margin: 8mm;
+    margin: 2mm;
   }
 
   html,
@@ -169,10 +187,10 @@
     display: block !important;
   }
 
-  .print-area {
+  .print-area,
+  .receipt-print-area {
     display: block !important;
-    width: 100%;
-    max-width: 80mm;
+    width: 100% !important;
     margin: 0 auto !important;
     padding: 0 !important;
     border: none !important;
@@ -182,7 +200,16 @@
     color: black !important;
   }
 
-  .print-area * {
+  .receipt-width-80 {
+    max-width: 80mm !important;
+  }
+
+  .receipt-width-58 {
+    max-width: 58mm !important;
+  }
+
+  .print-area *,
+  .receipt-print-area * {
     color: black !important;
   }
 }

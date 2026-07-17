@@ -9,6 +9,7 @@ import {
   listMarketplaceSyncRuns,
 } from "@/lib/marketplace/marketplace-integration-service";
 import { getEDocumentIntegrationSummary } from "@/lib/e-document/e-document-integration-service";
+import { isMarketplaceFeatureEnabled } from "@/lib/features/marketplace-feature";
 import { db } from "@/lib/prisma";
 import { isIntegrationEncryptionConfigured } from "@/lib/marketplace/marketplace-crypto";
 
@@ -18,24 +19,40 @@ export default async function SettingsIntegrationsPage() {
     redirect("/unauthorized");
   }
 
+  const marketplaceFeatureEnabled = isMarketplaceFeatureEnabled();
+
   const [trendyol, hepsiburada, eDocument, runs, warehouses] = await Promise.all([
-    getMarketplaceIntegration(session.company.id, "TRENDYOL"),
-    getMarketplaceIntegration(session.company.id, "HEPSIBURADA"),
+    marketplaceFeatureEnabled
+      ? getMarketplaceIntegration(session.company.id, "TRENDYOL")
+      : Promise.resolve(null),
+    marketplaceFeatureEnabled
+      ? getMarketplaceIntegration(session.company.id, "HEPSIBURADA")
+      : Promise.resolve(null),
     getEDocumentIntegrationSummary(session.company.id),
-    listMarketplaceSyncRuns({
-      companyId: session.company.id,
-      limit: 20,
-    }),
-    db.warehouse.findMany({
-      where: { companyId: session.company.id, status: "ACTIVE" },
-      select: { id: true, name: true },
-      orderBy: [{ isDefault: "desc" }, { name: "asc" }],
-    }),
+    marketplaceFeatureEnabled
+      ? listMarketplaceSyncRuns({
+          companyId: session.company.id,
+          limit: 20,
+        })
+      : Promise.resolve([]),
+    marketplaceFeatureEnabled
+      ? db.warehouse.findMany({
+          where: { companyId: session.company.id, status: "ACTIVE" },
+          select: { id: true, name: true },
+          orderBy: [{ isDefault: "desc" }, { name: "asc" }],
+        })
+      : Promise.resolve([]),
   ]);
 
-  const connectedCount = [trendyol, hepsiburada].filter(
-    (item) => item?.status === "CONNECTED"
-  ).length + (eDocument.status === "CONNECTED" && eDocument.providerConnectionReady ? 1 : 0);
+  const connectedCount = marketplaceFeatureEnabled
+    ? [trendyol, hepsiburada].filter((item) => item?.status === "CONNECTED")
+        .length +
+      (eDocument.status === "CONNECTED" && eDocument.providerConnectionReady
+        ? 1
+        : 0)
+    : eDocument.status === "CONNECTED" && eDocument.providerConnectionReady
+      ? 1
+      : 0;
   const errorCount = runs.filter(
     (run: { status: string }) =>
       run.status === "FAILED" || run.status === "PARTIAL_SUCCESS"
@@ -49,7 +66,7 @@ export default async function SettingsIntegrationsPage() {
   return (
     <AppShell>
       <div className="space-y-5">
-        {!encryptionConfigured ? (
+        {marketplaceFeatureEnabled && !encryptionConfigured ? (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
             Pazaryeri bağlantı bilgilerini kaydetmek için sunucuda{" "}
             <code className="font-mono text-xs">INTEGRATION_ENCRYPTION_KEY</code>{" "}
@@ -63,6 +80,7 @@ export default async function SettingsIntegrationsPage() {
           errorCount={errorCount}
           lastSyncAt={lastSyncAt}
           autoSyncEnabled={autoSyncEnabled}
+          marketplaceFeatureEnabled={marketplaceFeatureEnabled}
         />
 
         <IntegrationsCenter
@@ -72,6 +90,7 @@ export default async function SettingsIntegrationsPage() {
           initialRuns={runs}
           warehouses={warehouses}
           encryptionConfigured={encryptionConfigured}
+          marketplaceFeatureEnabled={marketplaceFeatureEnabled}
         />
       </div>
     </AppShell>

@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { SettingsCenter } from "@/components/settings/settings-center";
 import { getAppSession } from "@/lib/app-session";
+import { isMarketplaceFeatureEnabled } from "@/lib/features/marketplace-feature";
 import {
   canManageMembership,
   canManageSettings,
@@ -31,6 +32,7 @@ export default async function SettingsPage() {
           session.effectiveRole,
           session.companyUser.isOwner
         )}
+        marketplaceFeatureEnabled={isMarketplaceFeatureEnabled()}
       />
     </AppShell>
   );

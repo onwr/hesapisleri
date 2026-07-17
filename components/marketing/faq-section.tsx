@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-const FAQ_ITEMS = [
+const CORE_FAQ_ITEMS = [
   {
     q: "Deneme süresi boyunca kredi kartı gerekiyor mu?",
     a: "Hayır. Deneme sürecinizde herhangi bir ödeme bilgisi girmenize gerek yoktur. Deneme süreniz dolduğunda ve devam etmek isterseniz ödeme bilgilerinizi girmeniz istenir.",
@@ -24,10 +24,6 @@ const FAQ_ITEMS = [
     a: "Excel ve CSV formatındaki müşteri, ürün ve stok verilerinizi içe aktarabilirsiniz. Daha önce farklı bir program kullandıysanız destek ekibimiz geçiş sürecinde yardımcı olur.",
   },
   {
-    q: "Trendyol ve Hepsiburada entegrasyonu nasıl çalışıyor?",
-    a: "Pazaryeri API entegrasyonları üzerinden siparişler otomatik olarak sisteme düşer, stok güncellenir ve fatura kesilebilir. API anahtarlarınızı girdikten sonra entegrasyon aktif hale gelir.",
-  },
-  {
     q: "Destek kanallarınız neler?",
     a: "E-posta ve telefon üzerinden Türkçe destek sunuyoruz. Tüm destek kanallarına hesapisleri.com üzerinden ulaşılabilir.",
   },
@@ -37,12 +33,17 @@ const FAQ_ITEMS = [
   },
 ];
 
+const MARKETPLACE_FAQ_ITEM = {
+  q: "Trendyol ve Hepsiburada entegrasyonu nasıl çalışıyor?",
+  a: "Pazaryeri API entegrasyonları üzerinden siparişler otomatik olarak sisteme düşer, stok güncellenir ve fatura kesilebilir. API anahtarlarınızı girdikten sonra entegrasyon aktif hale gelir.",
+};
+
 function FaqItem({
   item,
   open,
   onToggle,
 }: {
-  item: (typeof FAQ_ITEMS)[0];
+  item: { q: string; a: string };
   open: boolean;
   onToggle: () => void;
 }) {
@@ -70,28 +71,43 @@ function FaqItem({
   );
 }
 
-export function FaqSection() {
+type FaqSectionProps = {
+  marketplaceFeatureEnabled?: boolean;
+};
+
+export function FaqSection({
+  marketplaceFeatureEnabled = false,
+}: FaqSectionProps) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const items = marketplaceFeatureEnabled
+    ? [
+        ...CORE_FAQ_ITEMS.slice(0, 5),
+        MARKETPLACE_FAQ_ITEM,
+        ...CORE_FAQ_ITEMS.slice(5),
+      ]
+    : CORE_FAQ_ITEMS;
 
   return (
     <section id="sss" className="bg-[#07162D] py-20">
       <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
           <p className="text-xs font-semibold uppercase tracking-widest text-blue-400 mb-3">
-            Sık Sorulan Sorular
+            SSS
           </p>
           <h2 className="text-3xl font-extrabold text-white sm:text-4xl">
-            Merak ettikleriniz
+            Sıkça sorulan sorular
           </h2>
         </div>
 
-        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] px-6">
-          {FAQ_ITEMS.map((item, i) => (
+        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] px-5 sm:px-6">
+          {items.map((item, index) => (
             <FaqItem
               key={item.q}
               item={item}
-              open={openIndex === i}
-              onToggle={() => setOpenIndex(openIndex === i ? null : i)}
+              open={openIndex === index}
+              onToggle={() =>
+                setOpenIndex((prev) => (prev === index ? null : index))
+              }
             />
           ))}
         </div>

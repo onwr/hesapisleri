@@ -5,6 +5,7 @@ import {
   getPlatformSettingsFallback,
 } from "@/lib/admin/platform-settings/platform-settings-loader";
 import { getPublicPlans } from "@/lib/marketing/public-plan-service";
+import { isMarketplaceFeatureEnabled } from "@/lib/features/marketplace-feature";
 import { MarketingHeader } from "@/components/marketing/marketing-header";
 import { HeroSection } from "@/components/marketing/hero-section";
 import { AiInsightsSection } from "@/components/marketing/ai-insights-section";
@@ -24,9 +25,9 @@ export async function generateMetadata(): Promise<Metadata> {
   const brandName = settings.brandName;
   const siteUrl = settings.websiteUrl || "https://hesapisleri.com";
 
-  const title = `${brandName} | KOBİ'ler için İşletme Yönetim Platformu`;
+  const title = `${brandName} | Esnaf ve Küçük İşletmeler için POS & İşletme Yönetimi`;
   const description =
-    "Satış, stok, e-fatura, kasa ve e-ticaret entegrasyonlarını tek platformda yönetin. Trendyol, Hepsiburada ve e-Fatura / e-Arşiv dahil.";
+    "Hesap İşleri, esnaf ve küçük işletmeler için POS, stok, cari hesap, fatura ve kasa takibini tek panelde birleştiren işletme yönetim sistemidir.";
 
   return {
     title,
@@ -153,6 +154,7 @@ export default async function HomePage() {
   }
 
   const siteUrl = settings.websiteUrl || "https://hesapisleri.com";
+  const marketplaceFeatureEnabled = isMarketplaceFeatureEnabled();
 
   return (
     <>
@@ -182,7 +184,7 @@ export default async function HomePage() {
         <SecuritySection />
         <MobileExperienceSection />
         <PricingSection plans={plans} registrationEnabled={settings.registrationEnabled} />
-        <FaqSection />
+        <FaqSection marketplaceFeatureEnabled={marketplaceFeatureEnabled} />
         <ContactSection supportEmail={settings.supportEmail} />
         <FinalCtaSection
           registrationEnabled={settings.registrationEnabled}

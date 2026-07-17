@@ -260,25 +260,25 @@ export function DashboardContent({
       >
         {[
           {
-            title: "Yeni Satış",
-            description: "Hemen satış oluştur",
-            href: "/sales/new",
-            iconName: "shopping-cart" as const,
+            title: "Satış Yap",
+            description: "POS ile hızlı satış",
+            href: "/pos",
+            iconName: "scan-barcode" as const,
             gradient: "bg-linear-to-br from-emerald-500 to-green-600",
           },
           {
-            title: "Fatura Kes",
-            description: "Yeni fatura oluştur",
+            title: "Barkodla Satış",
+            description: "Barkod okutarak ekle",
+            href: "/pos?focus=barcode",
+            iconName: "scan-barcode" as const,
+            gradient: "bg-linear-to-br from-teal-500 to-cyan-600",
+          },
+          {
+            title: "Yeni Fatura",
+            description: "e-Fatura / e-Arşiv",
             href: "/invoices/e-invoice",
             iconName: "file-text" as const,
             gradient: "bg-linear-to-br from-violet-500 to-purple-600",
-          },
-          {
-            title: "Gider Ekle",
-            description: "Gider kaydı oluştur",
-            href: "/expenses/new",
-            iconName: "receipt-text" as const,
-            gradient: "bg-linear-to-br from-orange-400 to-orange-600",
           },
           {
             title: "Tahsilat Al",
@@ -288,11 +288,11 @@ export function DashboardContent({
             gradient: "bg-linear-to-br from-sky-400 to-blue-600",
           },
           {
-            title: "Ürün Ekle",
-            description: "Yeni ürün ekle",
-            href: "/products/new",
-            iconName: "package" as const,
-            gradient: "bg-linear-to-br from-rose-400 to-pink-600",
+            title: "Gider Ekle",
+            description: "Gider kaydı oluştur",
+            href: "/expenses/new",
+            iconName: "receipt-text" as const,
+            gradient: "bg-linear-to-br from-orange-400 to-orange-600",
           },
         ].map((card) => (
           <motion.div key={card.href} variants={dashboardFadeUp}>

@@ -34,12 +34,12 @@ describe("integration catalog — kod tabanı uyumu", () => {
     assert.ok(names.some((name) => name.includes("e-Fatura")));
   });
 
-  it("N11 ve ÇiçekSepeti anasayfada gösterilir, sync adaptörü aktif değil", () => {
+  it("N11 ve ÇiçekSepeti katalogda durur; UI feature flag ile gated", () => {
     const integ = src("components/marketing/integrations-section.tsx");
     const catalog = src("lib/marketing/integration-catalog.ts");
     assert.match(catalog, /key: "N11"/);
     assert.match(catalog, /key: "CICEKSEPETI"/);
-    assert.doesNotMatch(integ, /Yakında/);
+    assert.match(integ, /isMarketplaceFeatureEnabled/);
     assert.match(integ, /MARKETING_MARKETPLACE_INTEGRATIONS/);
   });
 });

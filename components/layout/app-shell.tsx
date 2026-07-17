@@ -4,6 +4,7 @@ import { getSidebarMembershipSummary } from "@/lib/membership-service";
 import { canAccessModule } from "@/lib/permission-utils";
 import { getAiPlatformStatus } from "@/lib/ai/ai-config";
 import type { AiPlatformStatus } from "@/lib/ai/ai-config";
+import { isMarketplaceFeatureEnabled } from "@/lib/features/marketplace-feature";
 import { AppShellClient } from "./app-shell-client";
 
 type AppShellProps = {
@@ -26,6 +27,7 @@ export async function AppShell({ children }: AppShellProps) {
     session.companyUser.isOwner,
   );
   const aiPlatformStatus: AiPlatformStatus = getAiPlatformStatus();
+  const marketplaceFeatureEnabled = isMarketplaceFeatureEnabled();
 
   return (
     <AppShellClient
@@ -37,6 +39,7 @@ export async function AppShell({ children }: AppShellProps) {
       membershipSummary={membershipSummary}
       canUseAi={canUseAi}
       aiPlatformStatus={aiPlatformStatus}
+      marketplaceFeatureEnabled={marketplaceFeatureEnabled}
     >
       {children}
     </AppShellClient>

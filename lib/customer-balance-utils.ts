@@ -159,14 +159,20 @@ export async function recalculateCustomerBalances(
       select: {
         total: true,
         paidAmount: true,
+        returns: {
+          where: { status: "COMPLETED" },
+          select: { totalReturnAmount: true },
+        },
       },
     });
 
     for (const sale of sales) {
-      balance += getCustomerDebtDelta(
-        Number(sale.total),
-        Number(sale.paidAmount)
+      const refunded = sale.returns.reduce(
+        (sum, row) => sum + Number(row.totalReturnAmount),
+        0
       );
+      const effectiveTotal = roundMoney(Math.max(0, Number(sale.total) - refunded));
+      balance += getCustomerDebtDelta(effectiveTotal, Number(sale.paidAmount));
     }
 
     const invoices = await tx.invoice.findMany({

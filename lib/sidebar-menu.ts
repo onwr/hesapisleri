@@ -23,6 +23,7 @@ import {
   type AppModule,
   type PermissionRole,
 } from "@/lib/permission-utils";
+import { isMarketplaceFeatureEnabled } from "@/lib/features/marketplace-feature";
 
 export type SidebarMenuItem = {
   type: "link";
@@ -51,6 +52,15 @@ export type SidebarMenuGroup = {
 
 export type SidebarNavEntry = SidebarMenuItem | SidebarMenuGroup;
 
+export type SidebarNavOptions = {
+  marketplaceEnabled?: boolean;
+};
+
+/**
+ * Esnaf odaklı menü sırası:
+ * Dashboard → POS → Satışlar → Müşteriler → Ürünler → Faturalar →
+ * Kasa → Giderler → Tedarikçiler → Çalışanlar → Raporlar → (ikincil) → Ayarlar
+ */
 const SIDEBAR_LINK_ITEMS: Omit<SidebarMenuItem, "type">[] = [
   { title: "Dashboard", href: "/dashboard", icon: Home, module: "dashboard" },
   {
@@ -66,17 +76,25 @@ const SIDEBAR_LINK_ITEMS: Omit<SidebarMenuItem, "type">[] = [
     icon: ShoppingCart,
     module: "sales",
   },
-  { title: "Müşteriler", hint: "Satış, bakiye ve cari hesap", href: "/customers", icon: Users, module: "customers" },
-  { title: "Tedarikçiler", href: "/suppliers", icon: Truck, module: "suppliers" },
   {
-    title: "Fihrist",
-    hint: "Birleşik iletişim rehberi",
-    href: "/directory",
-    icon: BookUser,
-    module: "directory",
+    title: "Müşteriler",
+    hint: "Cari hesap, satış ve bakiye",
+    href: "/customers",
+    icon: Users,
+    module: "customers",
   },
-  { title: "Ürünler", href: "/products", icon: Box, module: "products" },
-  { title: "Faturalar", href: "/invoices", icon: FileText, module: "invoices" },
+  {
+    title: "Ürünler / Stok",
+    href: "/products",
+    icon: Box,
+    module: "products",
+  },
+  {
+    title: "Faturalar / E-Fatura",
+    href: "/invoices",
+    icon: FileText,
+    module: "invoices",
+  },
   {
     title: "Kasa & Banka",
     href: "/cash-bank",
@@ -84,18 +102,26 @@ const SIDEBAR_LINK_ITEMS: Omit<SidebarMenuItem, "type">[] = [
     module: "cash-bank",
   },
   { title: "Giderler", href: "/expenses", icon: ReceiptText, module: "expenses" },
-  { title: "Raporlar", href: "/reports", icon: BarChart3, module: "reports" },
-  {
-    title: "Yapay Zekâ Asistanı",
-    href: "/ai-assistant",
-    icon: Brain,
-    module: "ai-assistant",
-  },
+  { title: "Tedarikçiler", href: "/suppliers", icon: Truck, module: "suppliers" },
   {
     title: "Çalışanlar",
     href: "/team",
     icon: UserCog,
     module: "employees",
+  },
+  { title: "Raporlar", href: "/reports", icon: BarChart3, module: "reports" },
+  {
+    title: "Fihrist",
+    hint: "Birleşik iletişim rehberi",
+    href: "/directory",
+    icon: BookUser,
+    module: "directory",
+  },
+  {
+    title: "Yapay Zekâ Asistanı",
+    href: "/ai-assistant",
+    icon: Brain,
+    module: "ai-assistant",
   },
   {
     title: "Ortaklık Programı",
@@ -175,13 +201,25 @@ export function isEcommerceSidebarPath(pathname: string) {
   );
 }
 
+function resolveMarketplaceEnabled(options?: SidebarNavOptions) {
+  if (typeof options?.marketplaceEnabled === "boolean") {
+    return options.marketplaceEnabled;
+  }
+  return isMarketplaceFeatureEnabled();
+}
+
 export function getSidebarNavItems(
   role: PermissionRole,
-  isOwner = false
+  isOwner = false,
+  options?: SidebarNavOptions
 ): SidebarNavEntry[] {
   const items: SidebarNavEntry[] = SIDEBAR_LINK_ITEMS.filter((item) =>
     canAccessModule(role, item.module, isOwner)
   ).map((item) => ({ type: "link", ...item }));
+
+  if (!resolveMarketplaceEnabled(options)) {
+    return items;
+  }
 
   const ecommerceGroup = getVisibleEcommerceGroup(role, isOwner);
   if (!ecommerceGroup) {
@@ -205,9 +243,10 @@ export function getSidebarMenuItems(role: PermissionRole, isOwner = false) {
 
 export function getSidebarVisibleLinkTitles(
   role: PermissionRole,
-  isOwner = false
+  isOwner = false,
+  options?: SidebarNavOptions
 ) {
-  return getSidebarNavItems(role, isOwner).flatMap((entry) => {
+  return getSidebarNavItems(role, isOwner, options).flatMap((entry) => {
     if (entry.type === "group") {
       return entry.items.map((item) => item.title);
     }
@@ -216,8 +255,12 @@ export function getSidebarVisibleLinkTitles(
   });
 }
 
-export function getSidebarVisibleHrefs(role: PermissionRole, isOwner = false) {
-  return getSidebarNavItems(role, isOwner).flatMap((entry) => {
+export function getSidebarVisibleHrefs(
+  role: PermissionRole,
+  isOwner = false,
+  options?: SidebarNavOptions
+) {
+  return getSidebarNavItems(role, isOwner, options).flatMap((entry) => {
     if (entry.type === "group") {
       return entry.items.map((item) => item.href);
     }

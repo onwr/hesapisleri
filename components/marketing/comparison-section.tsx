@@ -1,13 +1,22 @@
-const ROWS = [
-  { feature: "Tek panelden yönetim",          us: true,  old: false },
-  { feature: "Güncel satış ve stok görünümü", us: true,  old: false },
-  { feature: "Çoklu firma desteği",           us: true,  old: false },
-  { feature: "Rol bazlı yetkilendirme",       us: true,  old: false },
-  { feature: "Pazaryeri sipariş yönetimi",    us: true,  old: false },
-  { feature: "Finansal raporlama",            us: true,  old: "Kısıtlı" },
-  { feature: "Mobil uyumlu arayüz",           us: true,  old: "Kısıtlı" },
-  { feature: "Aktivite ve işlem geçmişi",     us: true,  old: false },
+import { isMarketplaceFeatureEnabled } from "@/lib/features/marketplace-feature";
+
+const CORE_ROWS = [
+  { feature: "Tek panelden yönetim", us: true as boolean | string, old: false as boolean | string },
+  { feature: "POS ile hızlı satış", us: true, old: false },
+  { feature: "Güncel satış ve stok görünümü", us: true, old: false },
+  { feature: "Cari hesap takibi", us: true, old: false },
+  { feature: "Çoklu firma desteği", us: true, old: false },
+  { feature: "Rol bazlı yetkilendirme", us: true, old: false },
+  { feature: "Finansal raporlama", us: true, old: "Kısıtlı" },
+  { feature: "Mobil uyumlu arayüz", us: true, old: "Kısıtlı" },
+  { feature: "Aktivite ve işlem geçmişi", us: true, old: false },
 ];
+
+const MARKETPLACE_ROW = {
+  feature: "Pazaryeri sipariş yönetimi",
+  us: true as boolean | string,
+  old: false as boolean | string,
+};
 
 function Cell({ val }: { val: boolean | string }) {
   if (val === true)
@@ -26,29 +35,44 @@ function Cell({ val }: { val: boolean | string }) {
 }
 
 export function ComparisonSection() {
+  const marketplaceEnabled = isMarketplaceFeatureEnabled();
+  const rows = marketplaceEnabled
+    ? [
+        ...CORE_ROWS.slice(0, 5),
+        MARKETPLACE_ROW,
+        ...CORE_ROWS.slice(5),
+      ]
+    : CORE_ROWS;
+
+  const bullets = marketplaceEnabled
+    ? [
+        "Satış, stok ve faturayı tek ekranda görün",
+        "Ekip üyelerinize rol bazlı erişim verin",
+        "Pazaryeri siparişlerini otomatik senkronize edin",
+      ]
+    : [
+        "POS, stok ve faturayı tek ekranda görün",
+        "Cari hesap ve kasa takibini tek yerden yönetin",
+        "Ekip üyelerinize rol bazlı erişim verin",
+      ];
+
   return (
     <section className="bg-white py-20">
       <div className="mx-auto max-w-7xl min-w-0 px-4 sm:px-6 lg:px-8">
         <div className="grid min-w-0 gap-12 items-start lg:grid-cols-[1fr_1.4fr]">
-          {/* Left */}
           <div className="lg:pt-4">
             <p className="text-xs font-semibold uppercase tracking-widest text-blue-600 mb-3">
               NEDEN HESAPIŞLERİ.COM?
             </p>
             <h2 className="text-3xl font-extrabold text-slate-900 sm:text-4xl leading-tight">
-              İşletme yönetiminde eski yöntemlerin önüne geçin
+              Esnaf işlerini tek panelde toparlayın
             </h2>
             <p className="mt-5 text-slate-500 leading-relaxed">
-              Dağınık dosyalar ve birbirinden kopuk uygulamalar yerine, tüm süreçlerinizi
-              tek merkezde yönetin. Gerçek zamanlı görünürlük, rol bazlı erişim ve entegre
-              raporlama ile işletmenizi daha kontrollü büyütün.
+              Dağınık dosyalar ve birbirinden kopuk uygulamalar yerine; POS, stok,
+              cari, fatura ve kasa süreçlerini tek merkezde yönetin.
             </p>
             <div className="mt-8 flex flex-col gap-3">
-              {[
-                "Satış, stok ve faturayı tek ekranda görün",
-                "Ekip üyelerinize rol bazlı erişim verin",
-                "Pazaryeri siparişlerini otomatik senkronize edin",
-              ].map((item) => (
+              {bullets.map((item) => (
                 <div key={item} className="flex items-start gap-2.5">
                   <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100">
                     <svg className="h-3 w-3 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -61,7 +85,6 @@ export function ComparisonSection() {
             </div>
           </div>
 
-          {/* Right: Table */}
           <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-sm">
             <table className="w-full text-sm" aria-label="Özellik karşılaştırması">
               <thead>
@@ -76,7 +99,7 @@ export function ComparisonSection() {
                 </tr>
               </thead>
               <tbody>
-                {ROWS.map((row, i) => (
+                {rows.map((row, i) => (
                   <tr key={row.feature} className={i % 2 === 0 ? "" : "bg-slate-50/50"}>
                     <td className="px-4 py-3 text-slate-700 text-sm">{row.feature}</td>
                     <td className="px-4 py-3 text-center bg-blue-50/30">

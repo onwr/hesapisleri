@@ -12,6 +12,10 @@ export function isCompletedSaleStatus(status: string) {
   return status === "COMPLETED";
 }
 
+export function isReturnableSaleStatus(status: string) {
+  return status === "COMPLETED" || status === "PARTIALLY_REFUNDED";
+}
+
 export function isActiveSaleStatus(status: string) {
   if (isQuoteSaleStatus(status)) {
     return false;

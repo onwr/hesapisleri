@@ -116,7 +116,7 @@ describe("Faz 5D — marketplace müşteri gösterimi", () => {
 describe("Faz 5D — Fihrist / Müşteriler ayrımı", () => {
   it("sidebar hint metinleri tanımlı", () => {
     const src = readSrc("lib/sidebar-menu.ts");
-    assert.match(src, /Satış, bakiye ve cari hesap/);
+    assert.match(src, /Cari hesap, satış ve bakiye/);
     assert.match(src, /Birleşik iletişim rehberi/);
   });
 

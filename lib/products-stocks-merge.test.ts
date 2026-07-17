@@ -19,7 +19,7 @@ function read(relativePath: string) {
 describe("products stocks merge", () => {
   it("sidebar Stoklar ana menüsünü göstermez", () => {
     const titles = getSidebarMenuItems("STAFF").map((item) => item.title);
-    assert.ok(titles.includes("Ürünler"));
+    assert.ok(titles.includes("Ürünler / Stok"));
     assert.ok(!titles.includes("Stoklar"));
   });
 

@@ -17,6 +17,7 @@ import {
 } from "@/lib/employee-permission-utils";
 import {
   canCancelSales,
+  canReturnSales,
   canUpdateSales,
 } from "@/lib/sale-permission-utils";
 import { db } from "@/lib/prisma";
@@ -244,8 +245,12 @@ export async function requireApiModuleAccess(module: AppModule) {
   }
 }
 
-export async function requireApiSalesAction(action: "update" | "cancel") {
-  const auth = await requireApiModuleAccess("sales");
+export async function requireApiSalesAction(action: "update" | "cancel" | "return") {
+  const moduleName = action === "return" ? "sales" : "sales";
+  const auth =
+    action === "return"
+      ? await requireAnyApiModuleAccess(["sales", "pos"])
+      : await requireApiModuleAccess(moduleName);
   if ("error" in auth) return auth;
 
   const allowed =
@@ -254,10 +259,15 @@ export async function requireApiSalesAction(action: "update" | "cancel") {
           auth.session.effectiveRole,
           auth.session.companyUser.isOwner
         )
-      : canCancelSales(
-          auth.session.effectiveRole,
-          auth.session.companyUser.isOwner
-        );
+      : action === "return"
+        ? canReturnSales(
+            auth.session.effectiveRole,
+            auth.session.companyUser.isOwner
+          )
+        : canCancelSales(
+            auth.session.effectiveRole,
+            auth.session.companyUser.isOwner
+          );
 
   if (!allowed) {
     return {
@@ -267,7 +277,9 @@ export async function requireApiSalesAction(action: "update" | "cancel") {
           message:
             action === "update"
               ? "Satış düzenleme yetkiniz yok."
-              : "Satış iptal yetkiniz yok.",
+              : action === "return"
+                ? "Satış iade yetkiniz yok."
+                : "Satış iptal yetkiniz yok.",
         },
         { status: 403 }
       ),

@@ -42,6 +42,7 @@ describe("posCheckoutSchema warehouseId", () => {
       idempotencyKey: "a".repeat(16),
       warehouseId: "warehouse-1",
       paymentStatus: "UNPAID",
+      customerId: "customer-1",
       items: [
         {
           productId: "p1",

@@ -60,6 +60,7 @@ export const TENANT_MUTATION_INVALIDATION: Record<
   "sale-create": SALES_FINANCE_DOMAINS,
   "sale-update": SALES_FINANCE_DOMAINS,
   "sale-cancel": SALES_FINANCE_DOMAINS,
+  "sale-return": SALES_FINANCE_DOMAINS,
   "sale-collect": [
     "sales",
     "sale-detail",
@@ -110,6 +111,7 @@ export const TENANT_MUTATION_INVALIDATION: Record<
   "expense-cancel": ["expenses", "cash-bank", "dashboard", "reports"],
   "expense-pay": ["expenses", "cash-bank", "dashboard", "reports", "notifications"],
   "cash-bank-manual-transaction": CASH_DOMAINS,
+  "cash-daily-close": CASH_DOMAINS,
   "account-transfer": CASH_DOMAINS,
   "account-create": CASH_DOMAINS,
   "invoice-create": [

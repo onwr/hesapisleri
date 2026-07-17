@@ -59,13 +59,20 @@ export function CashBankActionCards({
         </div>
       ) : null}
 
-      <CompactActionCardGrid columns="5">
+      <CompactActionCardGrid columns="6">
         <CompactActionCard
           title="Tahsilat Al"
           description="Müşteriden ödeme al"
           href="/cash-bank/collections"
           iconName="wallet"
           color="emerald"
+        />
+        <CompactActionCard
+          title="Gün Sonu"
+          description="Kasa kapanış kontrolü"
+          href="/cash-bank/daily-close"
+          iconName="banknote"
+          color="orange"
         />
         <CompactActionCard
           title="Ödeme Yap"

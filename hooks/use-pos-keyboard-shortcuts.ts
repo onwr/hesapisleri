@@ -7,9 +7,10 @@ type PosKeyboardShortcutsOptions = {
   paymentOpen: boolean;
   checkingOut: boolean;
   cartEmpty: boolean;
-  onCashPayment: () => void;
-  onCardPayment: () => void;
+  onFocusSearch: () => void;
+  onFocusCustomer: () => void;
   onFocusBarcode: () => void;
+  onCompleteSale: () => void;
   onClearCart: () => void;
   onCloseModal: () => void;
   onConfirmPayment: () => void;
@@ -31,9 +32,10 @@ export function usePosKeyboardShortcuts({
   paymentOpen,
   checkingOut,
   cartEmpty,
-  onCashPayment,
-  onCardPayment,
+  onFocusSearch,
+  onFocusCustomer,
   onFocusBarcode,
+  onCompleteSale,
   onClearCart,
   onCloseModal,
   onConfirmPayment,
@@ -60,15 +62,18 @@ export function usePosKeyboardShortcuts({
         return;
       }
 
+      // Input yazarken F2/F4/F8 dışında global clear/barcode korunur
+      const editing = isEditableTarget(event.target);
+
       if (event.key === "F2") {
         event.preventDefault();
-        if (!cartEmpty) onCashPayment();
+        onFocusSearch();
         return;
       }
 
       if (event.key === "F4") {
         event.preventDefault();
-        if (!cartEmpty) onCardPayment();
+        onFocusCustomer();
         return;
       }
 
@@ -80,8 +85,17 @@ export function usePosKeyboardShortcuts({
 
       if (event.key === "F8") {
         event.preventDefault();
-        if (!cartEmpty) onClearCart();
+        if (!cartEmpty) onCompleteSale();
         return;
+      }
+
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.key === "Backspace" &&
+        !editing
+      ) {
+        event.preventDefault();
+        if (!cartEmpty) onClearCart();
       }
     }
 
@@ -92,9 +106,10 @@ export function usePosKeyboardShortcuts({
     paymentOpen,
     checkingOut,
     cartEmpty,
-    onCashPayment,
-    onCardPayment,
+    onFocusSearch,
+    onFocusCustomer,
     onFocusBarcode,
+    onCompleteSale,
     onClearCart,
     onCloseModal,
     onConfirmPayment,

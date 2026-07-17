@@ -86,7 +86,7 @@ const MENU_ITEMS: Array<{
   {
     id: "integrations",
     label: "Entegrasyonlar",
-    description: "Pazaryeri bağlantıları",
+    description: "Pazaryeri ve e-fatura",
     icon: <PlugZap size={18} />,
   },
   {
@@ -114,6 +114,7 @@ type SettingsCenterProps = {
   canManageUsers?: boolean;
   canManageSettings?: boolean;
   canManageMembership?: boolean;
+  marketplaceFeatureEnabled?: boolean;
 };
 
 export function SettingsCenter({
@@ -121,6 +122,7 @@ export function SettingsCenter({
   canManageUsers = false,
   canManageSettings = true,
   canManageMembership = false,
+  marketplaceFeatureEnabled = false,
 }: SettingsCenterProps) {
   const { maxImageBytes } = usePlatformUploadLimits();
   const visibleMenuItems = useMemo(() => {
@@ -134,8 +136,22 @@ export function SettingsCenter({
         return false;
       }
       return true;
+    }).map((item) => {
+      if (item.id === "integrations" && !marketplaceFeatureEnabled) {
+        return {
+          ...item,
+          label: "e-Fatura Entegrasyonu",
+          description: "e-Fatura / e-Arşiv",
+        };
+      }
+      return item;
     });
-  }, [canManageUsers, canManageSettings, canManageMembership]);
+  }, [
+    canManageUsers,
+    canManageSettings,
+    canManageMembership,
+    marketplaceFeatureEnabled,
+  ]);
 
   const [activeSection, setActiveSection] = useState<SettingsSection>(
     visibleMenuItems[0]?.id ?? "company"
@@ -650,11 +666,14 @@ export function SettingsCenter({
       return (
         <div className="rounded-2xl border border-slate-200/80 bg-slate-50/60 p-5">
           <p className="text-[14px] font-black text-[#0f1f4d]">
-            Pazaryeri Entegrasyonları
+            {marketplaceFeatureEnabled
+              ? "Entegrasyonlar"
+              : "e-Fatura / e-Arşiv Entegrasyonu"}
           </p>
           <p className="mt-2 text-[12px] leading-6 text-slate-500">
-            Trendyol bağlantısı, bağlantı testi ve manuel senkronizasyon ayarlarını
-            yönetmek için Entegrasyonlar sayfasına gidin.
+            {marketplaceFeatureEnabled
+              ? "Pazaryeri bağlantıları, bağlantı testi ve e-fatura entegrasyonunu yönetmek için Entegrasyonlar sayfasına gidin."
+              : "e-Fatura / e-Arşiv bağlantısı, test ve belge gönderim ayarlarını yönetmek için Entegrasyonlar sayfasına gidin."}
           </p>
           <Link
             href="/settings/integrations"
@@ -801,13 +820,23 @@ export function SettingsCenter({
           gradient="bg-linear-to-br from-[#0f1f4d] to-[#1e3a8a]"
         />
 
-        <ActionCard
-          title="Entegrasyonlar"
-          description="Pazaryeri bağlantıları"
-          href="/settings/integrations"
-          iconName="plug-zap"
-          gradient="bg-linear-to-br from-violet-500 to-purple-600"
-        />
+        {marketplaceFeatureEnabled ? (
+          <ActionCard
+            title="Entegrasyonlar"
+            description="Pazaryeri bağlantıları"
+            href="/settings/integrations"
+            iconName="plug-zap"
+            gradient="bg-linear-to-br from-violet-500 to-purple-600"
+          />
+        ) : (
+          <ActionCard
+            title="e-Fatura Entegrasyonu"
+            description="e-Fatura / e-Arşiv bağlantısı"
+            href="/settings/integrations"
+            iconName="plug-zap"
+            gradient="bg-linear-to-br from-violet-500 to-purple-600"
+          />
+        )}
 
         {canManageSettings ? (
           <ActionCard

@@ -215,7 +215,12 @@ export async function getCustomerDetailLedgerData(
         {
           id: `sale-${sale.id}`,
           type: "SALE",
-          label: `Satış ${sale.saleNo}`,
+          label:
+            sale.paymentStatus === "UNPAID" ||
+            sale.paymentStatus === "PARTIAL" ||
+            Number(sale.paidAmount) < Number(sale.total)
+              ? `Veresiye Satış · ${sale.saleNo}`
+              : `Satış · ${sale.saleNo}`,
           reference: sale.saleNo,
           href: `/sales/${sale.id}`,
           debit: total,

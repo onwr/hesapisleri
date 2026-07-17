@@ -31,6 +31,7 @@ type IntegrationsCenterProps = {
   initialRuns: SyncRunRow[];
   warehouses: Array<{ id: string; name: string }>;
   encryptionConfigured?: boolean;
+  marketplaceFeatureEnabled?: boolean;
 };
 
 export function IntegrationsCenter({
@@ -40,6 +41,7 @@ export function IntegrationsCenter({
   initialRuns,
   warehouses,
   encryptionConfigured = true,
+  marketplaceFeatureEnabled = false,
 }: IntegrationsCenterProps) {
   const [trendyol, setTrendyol] = useState(initialTrendyol);
   const [hepsiburada, setHepsiburada] = useState(initialHepsiburada);
@@ -47,26 +49,40 @@ export function IntegrationsCenter({
   const [runs, setRuns] = useState(initialRuns);
 
   async function refetch() {
-    const [integrationRes, eDocumentRes, runsRes] = await Promise.all([
-      fetch("/api/integrations", { cache: "no-store" }),
+    const requests: Array<Promise<Response>> = [
       fetch("/api/integrations/e-document", { cache: "no-store" }),
-      fetch("/api/integrations/sync-runs?limit=20", { cache: "no-store" }),
-    ]);
-    const integrationData = await integrationRes.json();
-    const eDocumentData = await eDocumentRes.json();
-    const runsData = await runsRes.json();
-    if (integrationRes.ok && integrationData.success) {
-      const rows = integrationData.data as IntegrationSummary[];
-      setTrendyol(rows.find((item) => item.channel === "TRENDYOL") ?? null);
-      setHepsiburada(
-        rows.find((item) => item.channel === "HEPSIBURADA") ?? null
+    ];
+    if (marketplaceFeatureEnabled) {
+      requests.unshift(
+        fetch("/api/integrations", { cache: "no-store" }),
+        fetch("/api/integrations/sync-runs?limit=20", { cache: "no-store" })
       );
     }
-    if (eDocumentRes.ok && eDocumentData.success) {
-      setEDocument(eDocumentData.data as EDocumentIntegrationSummary);
-    }
-    if (runsRes.ok && runsData.success) {
-      setRuns(runsData.data as SyncRunRow[]);
+    const responses = await Promise.all(requests);
+    if (marketplaceFeatureEnabled) {
+      const [integrationRes, runsRes, eDocumentRes] = responses;
+      const integrationData = await integrationRes.json();
+      const eDocumentData = await eDocumentRes.json();
+      const runsData = await runsRes.json();
+      if (integrationRes.ok && integrationData.success) {
+        const rows = integrationData.data as IntegrationSummary[];
+        setTrendyol(rows.find((item) => item.channel === "TRENDYOL") ?? null);
+        setHepsiburada(
+          rows.find((item) => item.channel === "HEPSIBURADA") ?? null
+        );
+      }
+      if (eDocumentRes.ok && eDocumentData.success) {
+        setEDocument(eDocumentData.data as EDocumentIntegrationSummary);
+      }
+      if (runsRes.ok && runsData.success) {
+        setRuns(runsData.data as SyncRunRow[]);
+      }
+    } else {
+      const [eDocumentRes] = responses;
+      const eDocumentData = await eDocumentRes.json();
+      if (eDocumentRes.ok && eDocumentData.success) {
+        setEDocument(eDocumentData.data as EDocumentIntegrationSummary);
+      }
     }
     notifyTenantCacheSync();
   }
@@ -75,26 +91,34 @@ export function IntegrationsCenter({
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="space-y-5">
         <div className="grid gap-5 lg:grid-cols-2">
-          <MarketplaceIntegrationCard
-            channel="TRENDYOL"
-            integration={trendyol}
-            warehouses={warehouses}
-            onRefetch={refetch}
-            encryptionConfigured={encryptionConfigured}
-          />
-          <MarketplaceIntegrationCard
-            channel="HEPSIBURADA"
-            integration={hepsiburada}
-            warehouses={warehouses}
-            onRefetch={refetch}
-            encryptionConfigured={encryptionConfigured}
-          />
+          {marketplaceFeatureEnabled ? (
+            <>
+              <MarketplaceIntegrationCard
+                channel="TRENDYOL"
+                integration={trendyol}
+                warehouses={warehouses}
+                onRefetch={refetch}
+                encryptionConfigured={encryptionConfigured}
+              />
+              <MarketplaceIntegrationCard
+                channel="HEPSIBURADA"
+                integration={hepsiburada}
+                warehouses={warehouses}
+                onRefetch={refetch}
+                encryptionConfigured={encryptionConfigured}
+              />
+            </>
+          ) : null}
           <EDocumentIntegrationCard integration={eDocument} onRefetch={refetch} />
         </div>
-        <IntegrationSkuMappingGuide variant="page" />
-        <MarketplaceSyncRunsTable runs={runs} onRefresh={refetch} />
+        {marketplaceFeatureEnabled ? (
+          <>
+            <IntegrationSkuMappingGuide variant="page" />
+            <MarketplaceSyncRunsTable runs={runs} onRefresh={refetch} />
+          </>
+        ) : null}
       </div>
-      <IntegrationHelpPanel />
+      {marketplaceFeatureEnabled ? <IntegrationHelpPanel /> : null}
     </div>
   );
 }

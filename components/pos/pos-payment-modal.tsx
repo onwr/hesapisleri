@@ -2,6 +2,7 @@
 
 import {
   Banknote,
+  BookUser,
   CreditCard,
   Loader2,
   Plus,
@@ -13,9 +14,7 @@ import { POS_INPUT_CLASS } from "@/components/pos/pos-ui-tokens";
 import { calculatePosChange } from "@/lib/pos-page-utils";
 import type { PosPaymentMethod } from "@/lib/pos-checkout-utils";
 import type { PosCollectionAccount } from "@/lib/pos-payment-account-utils";
-import {
-  filterPosAccountsForMethod,
-} from "@/lib/pos-payment-account-utils";
+import { filterPosAccountsForMethod } from "@/lib/pos-payment-account-utils";
 import { sumPosPaymentAmounts } from "@/lib/pos-checkout-utils";
 import { roundMoney } from "@/lib/sale-payment-utils";
 
@@ -26,6 +25,8 @@ export type PosPaymentLineState = {
   accountId: string;
 };
 
+export type PosSettlementMode = "COLLECT" | "ON_ACCOUNT";
+
 type CustomerOption = {
   id: string;
   name: string;
@@ -35,6 +36,7 @@ type PosPaymentModalProps = {
   open: boolean;
   total: number;
   paymentMode: "single" | "split";
+  settlementMode: PosSettlementMode;
   paymentLines: PosPaymentLineState[];
   accounts: PosCollectionAccount[];
   accountsLoading: boolean;
@@ -48,6 +50,7 @@ type PosPaymentModalProps = {
   onClose: () => void;
   onConfirm: () => void;
   onPaymentModeChange: (mode: "single" | "split") => void;
+  onSettlementModeChange: (mode: PosSettlementMode) => void;
   onPaymentLinesChange: (lines: PosPaymentLineState[]) => void;
   onReceivedAmountChange: (value: string) => void;
   onNoteChange: (value: string) => void;
@@ -85,7 +88,20 @@ export function validatePosPaymentLines(input: {
   lines: PosPaymentLineState[];
   total: number;
   accounts: PosCollectionAccount[];
+  settlementMode?: PosSettlementMode;
+  customerId?: string;
+  allowOnAccountRemainder?: boolean;
 }) {
+  const settlementMode = input.settlementMode ?? "COLLECT";
+  const customerId = input.customerId?.trim() ?? "";
+
+  if (settlementMode === "ON_ACCOUNT") {
+    if (!customerId) {
+      return "Veresiye satış için müşteri seçmelisiniz.";
+    }
+    return null;
+  }
+
   if (input.lines.length === 0) {
     return "En az bir ödeme satırı ekleyin.";
   }
@@ -104,7 +120,10 @@ export function validatePosPaymentLines(input: {
   }
 
   for (const line of numericLines) {
-    const eligible = filterPosAccountsForMethod(input.accounts, line.paymentMethod);
+    const eligible = filterPosAccountsForMethod(
+      input.accounts,
+      line.paymentMethod
+    );
     if (!eligible.some((account) => account.id === line.accountId)) {
       return "Seçilen hesap bu ödeme yöntemi için uygun değil.";
     }
@@ -113,18 +132,85 @@ export function validatePosPaymentLines(input: {
   const paidTotal = sumPosPaymentAmounts(
     numericLines.map((line) => ({ amount: line.amountValue }))
   );
+  const saleTotal = roundMoney(input.total);
 
-  if (paidTotal !== roundMoney(input.total)) {
-    return `Ödeme toplamı (${paidTotal}) satış toplamına (${roundMoney(input.total)}) eşit olmalıdır.`;
+  if (paidTotal === saleTotal) {
+    return null;
   }
 
-  return null;
+  if (
+    input.allowOnAccountRemainder !== false &&
+    customerId &&
+    paidTotal > 0 &&
+    paidTotal < saleTotal
+  ) {
+    return null;
+  }
+
+  if (paidTotal < saleTotal && !customerId) {
+    return "Kalan tutarı cariye yazmak için müşteri seçmelisiniz.";
+  }
+
+  return `Ödeme toplamı (${paidTotal}) satış toplamına (${saleTotal}) eşit olmalıdır.`;
+}
+
+export function resolvePosCheckoutSettlement(input: {
+  settlementMode: PosSettlementMode;
+  lines: PosPaymentLineState[];
+  total: number;
+}): {
+  paymentStatus: "PAID" | "UNPAID" | "PARTIAL";
+  collectedAmount: number;
+  payments: Array<{
+    paymentMethod: PosPaymentMethod;
+    amount: number;
+    accountId: string;
+  }>;
+  remainingOnAccount: number;
+} {
+  const saleTotal = roundMoney(input.total);
+
+  if (input.settlementMode === "ON_ACCOUNT") {
+    return {
+      paymentStatus: "UNPAID",
+      collectedAmount: 0,
+      payments: [],
+      remainingOnAccount: saleTotal,
+    };
+  }
+
+  const payments = input.lines.map((line) => ({
+    paymentMethod: line.paymentMethod,
+    amount: roundMoney(Number(line.amount) || 0),
+    accountId: line.accountId,
+  }));
+  const collectedAmount = sumPosPaymentAmounts(payments);
+
+  if (collectedAmount >= saleTotal) {
+    return {
+      paymentStatus: "PAID",
+      collectedAmount: saleTotal,
+      payments:
+        payments.length === 1
+          ? [{ ...payments[0]!, amount: saleTotal }]
+          : payments,
+      remainingOnAccount: 0,
+    };
+  }
+
+  return {
+    paymentStatus: "PARTIAL",
+    collectedAmount,
+    payments,
+    remainingOnAccount: roundMoney(saleTotal - collectedAmount),
+  };
 }
 
 export function PosPaymentModal({
   open,
   total,
   paymentMode,
+  settlementMode,
   paymentLines,
   accounts,
   accountsLoading,
@@ -138,6 +224,7 @@ export function PosPaymentModal({
   onClose,
   onConfirm,
   onPaymentModeChange,
+  onSettlementModeChange,
   onPaymentLinesChange,
   onReceivedAmountChange,
   onNoteChange,
@@ -146,10 +233,12 @@ export function PosPaymentModal({
 }: PosPaymentModalProps) {
   if (!open) return null;
 
+  const onAccount = settlementMode === "ON_ACCOUNT";
+  const creditDisabled = !selectedCustomerId;
   const primaryLine = paymentLines[0];
   const received = Number(receivedAmount) || 0;
   const change =
-    primaryLine?.paymentMethod === "CASH"
+    !onAccount && primaryLine?.paymentMethod === "CASH"
       ? calculatePosChange(received, total)
       : 0;
 
@@ -157,6 +246,9 @@ export function PosPaymentModal({
     paymentLines.map((line) => ({
       amount: Number(line.amount) || 0,
     }))
+  );
+  const remainderPreview = roundMoney(
+    Math.max(0, roundMoney(total) - paidPreview)
   );
 
   function updateLine(
@@ -194,6 +286,12 @@ export function PosPaymentModal({
     onPaymentLinesChange(paymentLines.filter((line) => line.id !== lineId));
   }
 
+  function selectOnAccount() {
+    if (creditDisabled) return;
+    onSettlementModeChange("ON_ACCOUNT");
+    onPaymentModeChange("single");
+  }
+
   return (
     <div className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-950/45 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
       <div
@@ -215,120 +313,168 @@ export function PosPaymentModal({
           </p>
         </div>
 
-        <div className="mb-4 flex gap-2 rounded-2xl bg-slate-100 p-1">
+        <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
           <button
             type="button"
-            onClick={() => onPaymentModeChange("single")}
+            onClick={() => {
+              onSettlementModeChange("COLLECT");
+              onPaymentModeChange("single");
+            }}
             className={[
-              "flex-1 rounded-xl px-3 py-2 text-[12px] font-extrabold transition",
-              paymentMode === "single"
-                ? "bg-white text-[#0f1f4d] shadow-sm"
-                : "text-slate-500",
+              "rounded-2xl border px-3 py-3 text-[12px] font-extrabold transition",
+              !onAccount && paymentMode === "single"
+                ? "border-[#0f1f4d] bg-[#0f1f4d] text-white"
+                : "border-slate-200 bg-white text-slate-600",
             ].join(" ")}
           >
             Tek Ödeme
           </button>
           <button
             type="button"
-            onClick={() => onPaymentModeChange("split")}
+            onClick={() => {
+              onSettlementModeChange("COLLECT");
+              onPaymentModeChange("split");
+            }}
             className={[
-              "flex-1 rounded-xl px-3 py-2 text-[12px] font-extrabold transition",
-              paymentMode === "split"
-                ? "bg-white text-[#0f1f4d] shadow-sm"
-                : "text-slate-500",
+              "rounded-2xl border px-3 py-3 text-[12px] font-extrabold transition",
+              !onAccount && paymentMode === "split"
+                ? "border-[#0f1f4d] bg-[#0f1f4d] text-white"
+                : "border-slate-200 bg-white text-slate-600",
             ].join(" ")}
           >
             Parçalı Ödeme
           </button>
+          <button
+            type="button"
+            disabled={creditDisabled}
+            title={
+              creditDisabled
+                ? "Veresiye satış için müşteri seçmelisiniz."
+                : "Tutar müşterinin cari hesabına borç olarak işlenir."
+            }
+            onClick={selectOnAccount}
+            className={[
+              "col-span-2 inline-flex items-center justify-center gap-2 rounded-2xl border px-3 py-3 text-[12px] font-extrabold transition sm:col-span-2",
+              onAccount
+                ? "border-amber-600 bg-amber-600 text-white"
+                : creditDisabled
+                  ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400"
+                  : "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100",
+            ].join(" ")}
+          >
+            <BookUser size={14} />
+            Cari&apos;ye Yaz
+          </button>
         </div>
 
+        {onAccount ? (
+          <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50/80 p-4">
+            <p className="text-sm font-extrabold text-amber-900">
+              Cari&apos;ye Yaz / Veresiye
+            </p>
+            <p className="mt-1 text-[12px] font-semibold text-amber-800">
+              Tutar müşterinin cari hesabına borç olarak işlenir. Bu adımda
+              kasa/banka hareketi oluşmaz.
+            </p>
+            <p className="mt-2 text-[12px] font-bold text-amber-900">
+              Cari borç: {formatMoney(total)}
+            </p>
+          </div>
+        ) : null}
+
         <div className="space-y-4">
-          {accountsLoading ? (
+          {!onAccount && accountsLoading ? (
             <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">
               <Loader2 className="animate-spin" size={16} />
               Tahsilat hesapları yükleniyor...
             </div>
           ) : null}
 
-          {paymentLines.map((line, index) => (
-            <div
-              key={line.id}
-              className="space-y-3 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-[12px] font-black text-[#0f1f4d]">
-                  Ödeme {index + 1}
-                </p>
-                {paymentMode === "split" && paymentLines.length > 1 ? (
-                  <button
-                    type="button"
-                    onClick={() => removeSplitLine(line.id)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-rose-100 text-rose-500 hover:bg-rose-50"
-                    aria-label="Ödeme satırını sil"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                ) : null}
-              </div>
+          {!onAccount
+            ? paymentLines.map((line, index) => (
+                <div
+                  key={line.id}
+                  className="space-y-3 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[12px] font-black text-[#0f1f4d]">
+                      Ödeme {index + 1}
+                    </p>
+                    {paymentMode === "split" && paymentLines.length > 1 ? (
+                      <button
+                        type="button"
+                        onClick={() => removeSplitLine(line.id)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-rose-100 text-rose-500 hover:bg-rose-50"
+                        aria-label="Ödeme satırını sil"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    ) : null}
+                  </div>
 
-              <div className="grid grid-cols-3 gap-2">
-                {PAYMENT_METHODS.map((method) => {
-                  const Icon = method.icon;
-                  const active = line.paymentMethod === method.value;
+                  <div className="grid grid-cols-3 gap-2">
+                    {PAYMENT_METHODS.map((method) => {
+                      const Icon = method.icon;
+                      const active = line.paymentMethod === method.value;
 
-                  return (
-                    <button
-                      key={`${line.id}-${method.value}`}
-                      type="button"
-                      onClick={() =>
-                        updateLine(line.id, { paymentMethod: method.value })
-                      }
-                      className={[
-                        "flex h-14 flex-col items-center justify-center gap-1 rounded-2xl border text-[11px] font-bold transition",
-                        active
-                          ? "border-[#0f1f4d] bg-[#0f1f4d] text-white"
-                          : "border-slate-200/80 bg-white text-slate-600 hover:bg-slate-50",
-                      ].join(" ")}
-                    >
-                      <Icon size={16} />
-                      {method.label}
-                    </button>
-                  );
-                })}
-              </div>
+                      return (
+                        <button
+                          key={`${line.id}-${method.value}`}
+                          type="button"
+                          onClick={() =>
+                            updateLine(line.id, {
+                              paymentMethod: method.value,
+                            })
+                          }
+                          className={[
+                            "flex h-14 flex-col items-center justify-center gap-1 rounded-2xl border text-[11px] font-bold transition",
+                            active
+                              ? "border-[#0f1f4d] bg-[#0f1f4d] text-white"
+                              : "border-slate-200/80 bg-white text-slate-600 hover:bg-slate-50",
+                          ].join(" ")}
+                        >
+                          <Icon size={16} />
+                          {method.label}
+                        </button>
+                      );
+                    })}
+                  </div>
 
-              {paymentMode === "split" ? (
-                <div>
-                  <label className="mb-2 block text-sm font-bold text-[#24345f]">
-                    Tutar
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={line.amount}
-                    onChange={(event) =>
-                      updateLine(line.id, { amount: event.target.value })
+                  {paymentMode === "split" ? (
+                    <div>
+                      <label className="mb-2 block text-sm font-bold text-[#24345f]">
+                        Tutar
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={line.amount}
+                        onChange={(event) =>
+                          updateLine(line.id, { amount: event.target.value })
+                        }
+                        className={POS_INPUT_CLASS}
+                        placeholder="0,00"
+                      />
+                    </div>
+                  ) : null}
+
+                  <PosCollectionAccountSelect
+                    accounts={accounts}
+                    paymentMethod={line.paymentMethod}
+                    value={line.accountId}
+                    onChange={(accountId) =>
+                      updateLine(line.id, { accountId })
                     }
+                    disabled={checkingOut || accountsLoading}
                     className={POS_INPUT_CLASS}
-                    placeholder="0,00"
                   />
                 </div>
-              ) : null}
+              ))
+            : null}
 
-              <PosCollectionAccountSelect
-                accounts={accounts}
-                paymentMethod={line.paymentMethod}
-                value={line.accountId}
-                onChange={(accountId) => updateLine(line.id, { accountId })}
-                disabled={checkingOut || accountsLoading}
-                className={POS_INPUT_CLASS}
-              />
-            </div>
-          ))}
-
-          {paymentMode === "split" ? (
-            <div className="flex items-center justify-between gap-3">
+          {!onAccount && paymentMode === "split" ? (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <button
                 type="button"
                 onClick={addSplitLine}
@@ -337,22 +483,31 @@ export function PosPaymentModal({
                 <Plus size={14} />
                 Ödeme satırı ekle
               </button>
-              <p className="text-[12px] font-semibold text-slate-500">
-                Toplanan:{" "}
-                <span
-                  className={
-                    paidPreview === roundMoney(total)
-                      ? "font-black text-emerald-600"
-                      : "font-black text-rose-600"
-                  }
-                >
-                  {formatMoney(paidPreview)}
-                </span>
-              </p>
+              <div className="text-[12px] font-semibold text-slate-500">
+                <p>
+                  Toplanan:{" "}
+                  <span
+                    className={
+                      paidPreview === roundMoney(total)
+                        ? "font-black text-emerald-600"
+                        : "font-black text-amber-700"
+                    }
+                  >
+                    {formatMoney(paidPreview)}
+                  </span>
+                </p>
+                {remainderPreview > 0 && selectedCustomerId ? (
+                  <p className="mt-1 font-bold text-amber-800">
+                    Cariye yazılacak: {formatMoney(remainderPreview)}
+                  </p>
+                ) : null}
+              </div>
             </div>
           ) : null}
 
-          {paymentMode === "single" && primaryLine?.paymentMethod === "CASH" ? (
+          {!onAccount &&
+          paymentMode === "single" &&
+          primaryLine?.paymentMethod === "CASH" ? (
             <div>
               <label className="mb-2 block text-sm font-bold text-[#24345f]">
                 Alınan tutar
@@ -377,7 +532,7 @@ export function PosPaymentModal({
           {!hideCreditOptions ? (
             <div>
               <label className="mb-2 block text-sm font-bold text-[#24345f]">
-                Müşteri (opsiyonel)
+                Müşteri {onAccount ? "(zorunlu)" : "(opsiyonel)"}
               </label>
               <select
                 value={selectedCustomerId}
@@ -391,6 +546,11 @@ export function PosPaymentModal({
                   </option>
                 ))}
               </select>
+              {onAccount && !selectedCustomerId ? (
+                <p className="mt-2 text-[12px] font-semibold text-rose-600">
+                  Veresiye satış için müşteri seçmelisiniz.
+                </p>
+              ) : null}
             </div>
           ) : null}
 
@@ -425,7 +585,11 @@ export function PosPaymentModal({
           <button
             type="button"
             onClick={onConfirm}
-            disabled={checkingOut || accountsLoading}
+            disabled={
+              checkingOut ||
+              (!onAccount && accountsLoading) ||
+              (onAccount && !selectedCustomerId)
+            }
             className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#0f1f4d] px-5 text-sm font-black text-white shadow-[0_10px_24px_rgba(15,31,77,0.18)] hover:bg-[#162a5c] disabled:opacity-50"
           >
             {checkingOut ? (
@@ -435,7 +599,7 @@ export function PosPaymentModal({
               </>
             ) : (
               <>
-                Satışı Onayla{" "}
+                {onAccount ? "Cariye Yaz" : "Satışı Onayla"}{" "}
                 <kbd className="hidden rounded border border-white/30 px-1 text-[10px] font-semibold xl:inline">
                   Ctrl+↵
                 </kbd>

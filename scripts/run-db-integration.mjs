@@ -70,7 +70,11 @@ const testFiles = [
   "lib/payments/sipay/sipay-db.test.ts",
   "lib/payments/sipay/sipay-db-concurrency.test.ts",
   "lib/cash-bank-transfer-db.test.ts",
+  "lib/cash-daily-closing-db.test.ts",
+  "lib/sale-receipt-db.test.ts",
+  "lib/sale-return-db.test.ts",
   "lib/lifecycle-cancellation-db.test.ts",
+  "lib/pos-veresiye-db.test.ts",
   "lib/billing-mutation-guard.test.ts",
   "lib/membership-shared-entitlement-db.test.ts",
   "lib/partner-referral-db.test.ts",
@@ -83,6 +87,7 @@ const testFiles = [
   "lib/qa-revision/faz-qa-5c1-db.test.ts",
   "lib/qa-revision/faz-qa-5d-db.test.ts",
   "lib/qa-revision/faz-qa-5e-db.test.ts",
+  "lib/features/marketplace-feature-db.test.ts",
 ];
 
 const result = spawnSync(

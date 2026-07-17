@@ -71,6 +71,52 @@ describe("pos checkout utils", () => {
     assert.equal(getDebt(1000, payment.paidAmount), 1000);
   });
 
+  it("UNPAID checkout müşterisiz reddedilir", async () => {
+    const { posCheckoutSchema } = await import("./pos-checkout-utils");
+    const result = posCheckoutSchema.safeParse({
+      idempotencyKey: "1234567890abcdef",
+      paymentStatus: "UNPAID",
+      items: [
+        {
+          productId: "p1",
+          name: "Ürün",
+          quantity: 1,
+          unitPrice: 100,
+          vatRate: 20,
+        },
+      ],
+      payments: [],
+    });
+    assert.equal(result.success, false);
+    if (!result.success) {
+      assert.ok(
+        result.error.issues.some((issue) =>
+          issue.message.includes("Veresiye satış için müşteri")
+        )
+      );
+    }
+  });
+
+  it("UNPAID checkout müşterili kabul edilir", async () => {
+    const { posCheckoutSchema } = await import("./pos-checkout-utils");
+    const result = posCheckoutSchema.safeParse({
+      idempotencyKey: "1234567890abcdef",
+      paymentStatus: "UNPAID",
+      customerId: "cust-1",
+      items: [
+        {
+          productId: "p1",
+          name: "Ürün",
+          quantity: 1,
+          unitPrice: 100,
+          vatRate: 20,
+        },
+      ],
+      payments: [],
+    });
+    assert.equal(result.success, true);
+  });
+
   it("PARTIAL satışta cari kalan kadar artar", () => {
     const payment = resolveSalePayment({
       paymentStatus: "PARTIAL",

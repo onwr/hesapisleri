@@ -7,6 +7,7 @@ type IntegrationsHeroProps = {
   errorCount: number;
   lastSyncAt: string | null;
   autoSyncEnabled: boolean;
+  marketplaceFeatureEnabled?: boolean;
 };
 
 export function IntegrationsHero({
@@ -14,6 +15,7 @@ export function IntegrationsHero({
   errorCount,
   lastSyncAt,
   autoSyncEnabled,
+  marketplaceFeatureEnabled = false,
 }: IntegrationsHeroProps) {
   return (
     <section className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-[#0f1f4d] via-blue-700 to-violet-700 p-6 text-white shadow-[0_24px_60px_rgba(15,23,42,0.22)] lg:p-8">
@@ -32,15 +34,18 @@ export function IntegrationsHero({
 
           <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-white/90">
             <PlugZap size={12} />
-            Pazaryeri Bağlantıları
+            {marketplaceFeatureEnabled
+              ? "Pazaryeri Bağlantıları"
+              : "e-Fatura Bağlantısı"}
           </span>
 
           <h1 className="mt-4 text-3xl font-black tracking-[-0.03em] lg:text-4xl">
             Entegrasyonlar
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-white/80 lg:text-[15px]">
-            Pazaryeri bağlantılarınızı yönetin, siparişleri içeri aktarın ve stok
-            operasyonlarınızı tek merkezden takip edin.
+            {marketplaceFeatureEnabled
+              ? "Pazaryeri bağlantılarınızı yönetin, siparişleri içeri aktarın ve stok operasyonlarınızı tek merkezden takip edin."
+              : "e-Fatura / e-Arşiv bağlantınızı yönetin; faturalarınızı güvenli şekilde oluşturup gönderin."}
           </p>
         </div>
 
@@ -50,16 +55,26 @@ export function IntegrationsHero({
           </p>
           <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
             <Stat label="Bağlı Kanal" value={String(connectedCount)} />
-            <Stat
-              label="Son Sync"
-              value={
-                lastSyncAt
-                  ? formatDateTimeDisplay(lastSyncAt)
-                  : "—"
-              }
-            />
-            <Stat label="Hatalı Sync" value={String(errorCount)} />
-            <Stat label="Otomatik Sync" value={autoSyncEnabled ? "Aktif" : "Kapalı"} />
+            {marketplaceFeatureEnabled ? (
+              <>
+                <Stat
+                  label="Son Sync"
+                  value={
+                    lastSyncAt ? formatDateTimeDisplay(lastSyncAt) : "—"
+                  }
+                />
+                <Stat label="Hatalı Sync" value={String(errorCount)} />
+                <Stat
+                  label="Otomatik Sync"
+                  value={autoSyncEnabled ? "Aktif" : "Kapalı"}
+                />
+              </>
+            ) : (
+              <Stat
+                label="e-Fatura"
+                value={connectedCount > 0 ? "Hazır" : "Kurulum"}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -69,9 +84,11 @@ export function IntegrationsHero({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <p className="text-[10px] font-bold uppercase tracking-wide text-white/60">{label}</p>
-      <p className="mt-1 text-sm font-black text-white">{value}</p>
+    <div className="rounded-xl bg-black/10 px-3 py-2">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-white/60">
+        {label}
+      </p>
+      <p className="mt-1 truncate text-sm font-black text-white">{value}</p>
     </div>
   );
 }

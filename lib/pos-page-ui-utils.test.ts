@@ -40,6 +40,21 @@ describe("pos page ui utils", () => {
     assert.equal(metrics[0]?.value, "3");
     assert.equal(metrics[2]?.subtitle, "4 adet");
   });
+
+  it("nakit ve kart metriklerini dahil eder", () => {
+    const metrics = buildPosSummaryMetrics({
+      todaySalesCount: 3,
+      todaySalesTotal: 1500,
+      todayCashTotal: 900,
+      todayCardTotal: 600,
+      cartTotal: 250,
+      cartLineCount: 2,
+      cartItemCount: 4,
+    });
+    assert.equal(metrics.length, 4);
+    assert.equal(metrics[1]?.key, "today-tender");
+    assert.ok(metrics[1]?.subtitle?.includes("Kart"));
+  });
 });
 
 describe("pos colorful ui", () => {
@@ -47,6 +62,12 @@ describe("pos colorful ui", () => {
     const page = read("app/pos/page.tsx");
     assert.match(page, /PosQuickActions/);
     assert.match(page, /PosSummaryMetrics/);
+    assert.match(page, /PosQuickProducts/);
+    assert.match(page, /PosCustomerPicker/);
+    assert.match(page, /searchRef/);
+    assert.match(page, /todayCashTotal/);
+    assert.match(page, /Satışı Görüntüle/);
+    assert.match(page, /Fatura Oluştur/);
     assert.match(page, /Barkodlu satış işlemlerinizi hızlıca/i);
   });
 

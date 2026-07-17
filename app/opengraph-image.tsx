@@ -74,7 +74,7 @@ export default async function OpengraphImage() {
             display: "flex",
           }}
         >
-          Satış, stok, e-fatura, kasa ve e-ticaret entegrasyonları tek panelde.
+          Satış, stok, e-fatura, kasa ve cari hesabı tek panelde yönetin.
         </div>
       </div>
     ),

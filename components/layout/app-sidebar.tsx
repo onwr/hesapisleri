@@ -26,6 +26,7 @@ type AppSidebarProps = {
   companyRole?: string;
   isSuperAdmin?: boolean;
   isOwner?: boolean;
+  marketplaceFeatureEnabled?: boolean;
   membershipSummary?: {
     statusLabel: string;
     remainingDays: number;
@@ -455,6 +456,7 @@ export function AppSidebar({
   companyRole = "STAFF",
   isSuperAdmin = false,
   isOwner = false,
+  marketplaceFeatureEnabled = false,
   membershipSummary,
 }: AppSidebarProps) {
   const pathname = usePathname();
@@ -462,7 +464,8 @@ export function AppSidebar({
 
   const menuItems = getSidebarNavItems(
     companyRole as PermissionRole,
-    isOwner
+    isOwner,
+    { marketplaceEnabled: marketplaceFeatureEnabled }
   );
 
   // Close mobile sidebar on navigation

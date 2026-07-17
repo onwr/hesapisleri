@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { isMarketplaceFeatureEnabled } from "@/lib/features/marketplace-feature";
 import {
   MARKETING_BUILTIN_INTEGRATIONS,
   MARKETING_MARKETPLACE_INTEGRATIONS,
@@ -65,6 +66,8 @@ function BuiltinCard({
 }
 
 export function IntegrationsSection() {
+  const marketplaceEnabled = isMarketplaceFeatureEnabled();
+
   return (
     <section id="entegrasyonlar" className="bg-[#07162D] py-20">
       <div className="mx-auto max-w-7xl min-w-0 px-4 sm:px-6 lg:px-8">
@@ -73,32 +76,35 @@ export function IntegrationsSection() {
             Entegrasyonlar
           </p>
           <h2 className="text-3xl font-extrabold text-white sm:text-4xl">
-            Tüm platformlarla uyumlu çalışın
+            Mevcut iş akışınızla uyumlu
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-base text-slate-400">
-            Pazaryeri siparişleri, e-Fatura / e-Arşiv ve ödeme altyapısı ile mevcut iş
-            akışınızı tek panelde birleştirin.
+            {marketplaceEnabled
+              ? "Pazaryeri siparişleri, e-Fatura / e-Arşiv ve ödeme altyapısı ile mevcut iş akışınızı tek panelde birleştirin."
+              : "e-Fatura / e-Arşiv ve ödeme altyapısı ile satış ve fatura süreçlerinizi tek panelde birleştirin."}
           </p>
         </div>
 
-        <div className="mb-12">
-          <p className="mb-6 text-center text-[11px] font-bold uppercase tracking-widest text-slate-500">
-            Pazaryeri Entegrasyonları
-          </p>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            {MARKETING_MARKETPLACE_INTEGRATIONS.map((item) => (
-              <LogoCard
-                key={item.key}
-                name={item.name}
-                src={item.logoSrc}
-                w={item.logoWidth}
-                h={item.logoHeight}
-              />
-            ))}
+        {marketplaceEnabled ? (
+          <div className="mb-12">
+            <p className="mb-6 text-center text-[11px] font-bold uppercase tracking-widest text-slate-500">
+              Pazaryeri Entegrasyonları
+            </p>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              {MARKETING_MARKETPLACE_INTEGRATIONS.map((item) => (
+                <LogoCard
+                  key={item.key}
+                  name={item.name}
+                  src={item.logoSrc}
+                  w={item.logoWidth}
+                  h={item.logoHeight}
+                />
+              ))}
+            </div>
           </div>
-        </div>
+        ) : null}
 
-        <div className="border-t border-white/[0.06] pt-12">
+        <div className={marketplaceEnabled ? "border-t border-white/[0.06] pt-12" : ""}>
           <p className="mb-6 text-center text-[11px] font-bold uppercase tracking-widest text-slate-500">
             Dahili Özellikler
           </p>

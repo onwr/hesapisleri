@@ -3,6 +3,7 @@ import {
   FileText,
   Package,
   ReceiptText,
+  ScanBarcode,
   ShoppingCart,
   Wallet,
   type LucideIcon,
@@ -13,7 +14,8 @@ export type DashboardQuickActionIconName =
   | "file-text"
   | "receipt-text"
   | "wallet"
-  | "package";
+  | "package"
+  | "scan-barcode";
 
 const iconMap: Record<DashboardQuickActionIconName, LucideIcon> = {
   "shopping-cart": ShoppingCart,
@@ -21,6 +23,7 @@ const iconMap: Record<DashboardQuickActionIconName, LucideIcon> = {
   "receipt-text": ReceiptText,
   wallet: Wallet,
   package: Package,
+  "scan-barcode": ScanBarcode,
 };
 
 type DashboardQuickActionTileProps = {

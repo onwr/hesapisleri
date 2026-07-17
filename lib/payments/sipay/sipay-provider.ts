@@ -119,6 +119,15 @@ export function createSipayProvider(): CheckoutProvider {
         );
       }
 
+      // Sipay destek/yazılım ekibiyle sorun bildirirken paylaşılabilecek,
+      // sırları maskeleyen ham request/response logu. merchant_key ve
+      // Authorization token asla açık loglanmaz.
+      console.info("[sipay-debug] purchase/link request", {
+        endpoint: `${baseUrl}${SIPAY_ENDPOINTS.PURCHASE_LINK}`,
+        invoiceId: input.invoiceId,
+        body: { ...body, merchant_key: "***masked***" },
+      });
+
       const raw = await sipayPost<SipayPurchaseLinkResponse>(
         baseUrl,
         SIPAY_ENDPOINTS.PURCHASE_LINK,
@@ -126,6 +135,11 @@ export function createSipayProvider(): CheckoutProvider {
         token,
         createTokenRefreshOptions(env, baseUrl),
       );
+
+      console.info("[sipay-debug] purchase/link response", {
+        invoiceId: input.invoiceId,
+        response: raw,
+      });
 
       const parsed = sipayPurchaseLinkSuccessSchema.safeParse(raw);
       if (parsed.success) {

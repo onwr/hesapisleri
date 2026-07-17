@@ -92,7 +92,7 @@ describe("sidebar menu filtering", () => {
   it("STAFF operasyon menülerini görür, finans menülerini görmez", () => {
     const titles = getSidebarMenuItems("STAFF").map((item) => item.title);
     assert.ok(titles.includes("POS / Hızlı Satış"));
-    assert.ok(titles.includes("Ürünler"));
+    assert.ok(titles.includes("Ürünler / Stok"));
     assert.ok(!titles.includes("Stoklar"));
     assert.ok(titles.includes("Fihrist"));
     assert.ok(!titles.includes("Kasa & Banka"));
@@ -106,6 +106,6 @@ describe("sidebar menu filtering", () => {
     assert.ok(titles.includes("Kasa & Banka"));
     assert.ok(!titles.includes("Takvim"));
     assert.ok(titles.includes("Raporlar"));
-    assert.ok(titles.includes("Ürünler"));
+    assert.ok(titles.includes("Ürünler / Stok"));
   });
 });

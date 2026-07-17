@@ -136,11 +136,13 @@ export function buildPosFilterChips(): PosFilterChipConfig[] {
 export function buildPosSummaryMetrics(input: {
   todaySalesCount: number;
   todaySalesTotal: number;
+  todayCashTotal?: number;
+  todayCardTotal?: number;
   cartTotal: number;
   cartLineCount: number;
   cartItemCount: number;
 }): PosSummaryMetric[] {
-  return [
+  const metrics: PosSummaryMetric[] = [
     {
       key: "today-sales",
       label: "Bugünkü Satış",
@@ -149,6 +151,23 @@ export function buildPosSummaryMetrics(input: {
       icon: LayoutGrid,
       color: "indigo",
     },
+  ];
+
+  if (
+    typeof input.todayCashTotal === "number" ||
+    typeof input.todayCardTotal === "number"
+  ) {
+    metrics.push({
+      key: "today-tender",
+      label: "Nakit / Kart",
+      value: formatMoney(input.todayCashTotal ?? 0),
+      subtitle: `Kart ${formatMoney(input.todayCardTotal ?? 0)}`,
+      icon: CreditCard,
+      color: "violet",
+    });
+  }
+
+  metrics.push(
     {
       key: "cart-total",
       label: "Sepet Tutarı",
@@ -164,6 +183,8 @@ export function buildPosSummaryMetrics(input: {
       subtitle: `${input.cartItemCount} adet`,
       icon: Boxes,
       color: "emerald",
-    },
-  ];
+    }
+  );
+
+  return metrics;
 }

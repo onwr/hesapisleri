@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { ChannelMappingCenter } from "@/components/products/channel-mapping-center";
 import { getAppSession } from "@/lib/app-session";
+import { isMarketplaceFeatureEnabled } from "@/lib/features/marketplace-feature";
 import { canManageProducts } from "@/lib/permission-utils";
 import { db } from "@/lib/prisma";
 
@@ -10,6 +11,10 @@ export default async function ProductChannelMappingPage({
 }: {
   searchParams: Promise<{ channel?: string }>;
 }) {
+  if (!isMarketplaceFeatureEnabled()) {
+    redirect("/products");
+  }
+
   const session = await getAppSession();
   if (!canManageProducts(session.effectiveRole, session.companyUser.isOwner)) {
     redirect("/unauthorized");

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   Barcode,
   CheckCircle2,
@@ -20,11 +21,15 @@ import { PosCategoryFilter } from "@/components/pos/pos-category-filter";
 import {
   PosPaymentModal,
   createDefaultPosPaymentLine,
+  resolvePosCheckoutSettlement,
   validatePosPaymentLines,
   type PosPaymentLineState,
+  type PosSettlementMode,
 } from "@/components/pos/pos-payment-modal";
 import { PosProductGrid } from "@/components/pos/pos-product-grid";
 import { PosQuickActions } from "@/components/pos/pos-quick-actions";
+import { PosQuickProducts } from "@/components/pos/pos-quick-products";
+import { PosCustomerPicker } from "@/components/pos/pos-customer-picker";
 import { PosReceipt, printPosReceipt } from "@/components/pos/pos-receipt";
 import { PosStaffHeader } from "@/components/pos/pos-staff-header";
 import { useTenantMutation } from "@/hooks/use-tenant-mutation";
@@ -39,6 +44,7 @@ import {
 import { WarehouseSelectField } from "@/components/shared/warehouse-select-field";
 import { formatMoney } from "@/lib/format-utils";
 import type { PosQuickActionKey } from "@/lib/pos-page-ui-utils";
+import type { PosQuickProductStat } from "@/lib/pos-stats-service";
 import {
   adjustCartQuantity,
   filterPosProducts,
@@ -55,6 +61,7 @@ import {
   buildPosSaleItemTotal,
   calculatePosTotals,
   getPosPaymentMethodLabel,
+  getPosPaymentStatusLabel,
   type PosPaymentStatus,
 } from "@/lib/pos-checkout-utils";
 import { usePosCollectionAccounts } from "@/hooks/use-pos-collection-accounts";
@@ -105,16 +112,24 @@ type SuccessReceipt = {
   discount: number;
   total: number;
   paymentStatus: PosPaymentStatus;
+  paidAmount: number;
+  remainingAmount: number;
   payments: SuccessReceiptPayment[];
+  customerId: string | null;
+  customerName: string | null;
 };
 
 type PosStats = {
   todaySalesCount: number;
   todaySalesTotal: number;
+  todayCashTotal: number;
+  todayCardTotal: number;
   cashBalanceTotal: number;
+  topProducts: PosQuickProductStat[];
 };
 
 export default function PosPage() {
+  const searchParams = useSearchParams();
   const { mutate, isSubmitting: checkingOut } = useTenantMutation<{
     id?: string;
     saleNo?: string;
@@ -127,6 +142,8 @@ export default function PosPage() {
     warning?: string;
   }>({ refresh: false });
   const barcodeRef = useRef<HTMLInputElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const barcodeBusyRef = useRef(false);
   const checkoutIdempotencyKeyRef = useRef<string | null>(null);
 
   const [companyName, setCompanyName] = useState("İşletme");
@@ -143,7 +160,10 @@ export default function PosPage() {
   const [stats, setStats] = useState<PosStats>({
     todaySalesCount: 0,
     todaySalesTotal: 0,
+    todayCashTotal: 0,
+    todayCardTotal: 0,
     cashBalanceTotal: 0,
+    topProducts: [],
   });
 
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
@@ -154,8 +174,9 @@ export default function PosPage() {
 
   const [cart, setCart] = useState<PosCartItem[]>([]);
   const [paymentMode, setPaymentMode] = useState<"single" | "split">("single");
+  const [settlementMode, setSettlementMode] =
+    useState<PosSettlementMode>("COLLECT");
   const [paymentLines, setPaymentLines] = useState<PosPaymentLineState[]>([]);
-  const [paymentStatus] = useState<PosPaymentStatus>("PAID");
   const [receivedAmount, setReceivedAmount] = useState("");
   const [discount, setDiscount] = useState("0");
   const [note, setNote] = useState("");
@@ -251,6 +272,12 @@ export default function PosPage() {
 
     void loadData();
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get("focus") === "barcode") {
+      barcodeRef.current?.focus();
+    }
+  }, [searchParams, loading]);
 
   useEffect(() => {
     async function reloadProducts() {
@@ -376,20 +403,39 @@ export default function PosPage() {
     }
   }
 
+  function focusBarcodeSoon() {
+    window.setTimeout(() => {
+      barcodeRef.current?.focus();
+    }, 0);
+  }
+
   function addToCart(product: Product) {
     setError("");
     setSuccessReceipt(null);
     const availableStock = getPosProductStock(product, useWarehouseStock);
+    const isService = isServiceProductType(product.productType);
+
+    if (!isService && availableStock <= 0 && !allowNegativeStock) {
+      setError(`"${product.name}" stokta yok.`);
+      focusBarcodeSoon();
+      return;
+    }
+
     const price = Number(product.sellPrice);
 
     setCart((prev) => {
       const existing = prev.find((item) => item.productId === product.id);
       if (existing) {
+        const nextQuantity = existing.quantity + 1;
+        if (!isService && !allowNegativeStock && nextQuantity > availableStock) {
+          setError(`"${product.name}" için stok yetersiz.`);
+          return prev;
+        }
         return prev.map((item) =>
           item.productId === product.id
             ? {
                 ...item,
-                quantity: item.quantity + 1,
+                quantity: nextQuantity,
                 stock: availableStock,
                 productType: product.productType,
               }
@@ -409,6 +455,17 @@ export default function PosPage() {
         },
       ];
     });
+
+    focusBarcodeSoon();
+  }
+
+  function addQuickProduct(productId: string) {
+    const product = products.find((entry) => entry.id === productId);
+    if (!product) {
+      setError("Hızlı ürün listesinden seçilen ürün bulunamadı.");
+      return;
+    }
+    addToCart(product);
   }
 
   function clearQuantityError(productId: string) {
@@ -503,14 +560,22 @@ export default function PosPage() {
 
   function handleBarcodeSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const product = findPosProductByCode(products, barcode);
-    if (!product) {
-      setError("Barkod veya stok kodu ile ürün bulunamadı.");
-      return;
+    if (barcodeBusyRef.current) return;
+    barcodeBusyRef.current = true;
+
+    try {
+      const product = findPosProductByCode(products, barcode);
+      if (!product) {
+        setError("Barkod veya stok kodu ile ürün bulunamadı.");
+        focusBarcodeSoon();
+        return;
+      }
+      addToCart(product);
+      setBarcode("");
+      focusBarcodeSoon();
+    } finally {
+      barcodeBusyRef.current = false;
     }
-    addToCart(product);
-    setBarcode("");
-    barcodeRef.current?.focus();
   }
 
   function openPaymentModal(method?: PosPaymentLineState["paymentMethod"]) {
@@ -525,6 +590,7 @@ export default function PosPage() {
     }
 
     setError("");
+    setSettlementMode("COLLECT");
     setPaymentMode("single");
     setPaymentLines([
       createDefaultPosPaymentLine(totals.total, method ?? "CASH"),
@@ -532,14 +598,6 @@ export default function PosPage() {
     setReceivedAmount(String(totals.total));
     setPaymentOpen(true);
   }
-
-  const openCashPaymentModal = useCallback(() => {
-    openPaymentModal("CASH");
-  }, [cart.length, totals.total]);
-
-  const openCardPaymentModal = useCallback(() => {
-    openPaymentModal("CARD");
-  }, [cart.length, totals.total]);
 
   async function handleCheckout() {
     setError("");
@@ -555,14 +613,19 @@ export default function PosPage() {
     }
 
     const normalizedLines =
-      paymentMode === "single" && paymentLines[0]
-        ? [{ ...paymentLines[0], amount: String(totals.total) }]
-        : paymentLines;
+      settlementMode === "ON_ACCOUNT"
+        ? []
+        : paymentMode === "single" && paymentLines[0]
+          ? [{ ...paymentLines[0], amount: String(totals.total) }]
+          : paymentLines;
 
     const validationError = validatePosPaymentLines({
       lines: normalizedLines,
       total: totals.total,
       accounts,
+      settlementMode,
+      customerId: selectedCustomerId,
+      allowOnAccountRemainder: true,
     });
 
     if (validationError) {
@@ -570,13 +633,18 @@ export default function PosPage() {
       return;
     }
 
+    const settlement = resolvePosCheckoutSettlement({
+      settlementMode,
+      lines: normalizedLines,
+      total: totals.total,
+    });
+
     const checkoutCart = [...cart];
     const checkoutTotals = { ...totals };
-    const checkoutLines = normalizedLines.map((line) => ({
-      paymentMethod: line.paymentMethod,
-      amount: Number(line.amount),
-      accountId: line.accountId,
-    }));
+    const checkoutCustomerId = selectedCustomerId || "";
+    const checkoutCustomerName =
+      customers.find((customer) => customer.id === checkoutCustomerId)?.name ??
+      null;
 
     if (!checkoutIdempotencyKeyRef.current) {
       checkoutIdempotencyKeyRef.current = crypto.randomUUID();
@@ -588,12 +656,13 @@ export default function PosPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         idempotencyKey,
-        customerId: selectedCustomerId || undefined,
+        customerId: checkoutCustomerId || undefined,
         warehouseId: useWarehouseStock ? selectedWarehouseId : undefined,
-        paymentStatus: "PAID",
+        paymentStatus: settlement.paymentStatus,
+        collectedAmount: settlement.collectedAmount,
         discount: checkoutTotals.discount,
         note,
-        payments: checkoutLines,
+        payments: settlement.payments,
         items: checkoutCart.map((item) => ({
           productId: item.productId,
           name: item.name,
@@ -612,13 +681,18 @@ export default function PosPage() {
     }
 
     const data = result.data;
+    const resolvedStatus =
+      (data?.paymentStatus as PosPaymentStatus) || settlement.paymentStatus;
+    const paidAmount = settlement.collectedAmount;
+    const remainingAmount = settlement.remainingOnAccount;
+
     const responsePayments = Array.isArray(data?.payments)
       ? data.payments.map((payment) => ({
           paymentMethod: payment.paymentMethod,
           accountName: payment.account?.name ?? "Hesap",
           amount: Number(payment.amount),
         }))
-      : checkoutLines.map((line) => ({
+      : settlement.payments.map((line) => ({
           paymentMethod: line.paymentMethod,
           accountName:
             getPosCollectionAccountName(accounts, line.accountId) ?? "Hesap",
@@ -635,8 +709,12 @@ export default function PosPage() {
       vatTotal: checkoutTotals.vatTotal,
       discount: checkoutTotals.discount,
       total: checkoutTotals.total,
-      paymentStatus: (data?.paymentStatus as PosPaymentStatus) || "PAID",
+      paymentStatus: resolvedStatus,
+      paidAmount,
+      remainingAmount,
       payments: responsePayments,
+      customerId: checkoutCustomerId || null,
+      customerName: checkoutCustomerName,
     });
 
     if (result.message?.includes("daha önce tamamlanmış")) {
@@ -652,6 +730,7 @@ export default function PosPage() {
     setReceivedAmount("");
     setPaymentLines([]);
     setPaymentMode("single");
+    setSettlementMode("COLLECT");
     setMobileCartOpen(false);
 
     const productsRes = await fetch(
@@ -666,14 +745,40 @@ export default function PosPage() {
     barcodeRef.current?.focus();
   }
 
+  const quickProducts = useMemo(() => {
+    if (!stats.topProducts.length) return [];
+    return stats.topProducts.map((item) => {
+      const live = products.find((product) => product.id === item.productId);
+      if (!live) return item;
+      return {
+        ...item,
+        name: live.name,
+        sellPrice: Number(live.sellPrice),
+        stock: getPosProductStock(live, useWarehouseStock),
+        productType:
+          live.productType === "SERVICE" ? ("SERVICE" as const) : ("STOCK" as const),
+      };
+    });
+  }, [stats.topProducts, products, useWarehouseStock]);
+
   usePosKeyboardShortcuts({
     enabled: !loading && !successReceipt,
     paymentOpen,
     checkingOut,
     cartEmpty: cart.length === 0,
-    onCashPayment: openCashPaymentModal,
-    onCardPayment: openCardPaymentModal,
+    onFocusSearch: () => searchRef.current?.focus(),
+    onFocusCustomer: () => {
+      if (window.innerWidth < 1280) {
+        setMobileCartOpen(true);
+        window.setTimeout(() => {
+          document.getElementById("pos-customer-search-mobile")?.focus();
+        }, 120);
+        return;
+      }
+      document.getElementById("pos-customer-search")?.focus();
+    },
     onFocusBarcode: () => barcodeRef.current?.focus(),
+    onCompleteSale: () => openPaymentModal(),
     onClearCart: clearCart,
     onCloseModal: () => setPaymentOpen(false),
     onConfirmPayment: () => void handleCheckout(),
@@ -782,24 +887,51 @@ export default function PosPage() {
         </section>
 
         {successReceipt ? (
-          <section className="mb-4 rounded-[24px] border border-emerald-200/70 bg-emerald-50/50 p-5">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <section
+            className={[
+              "mb-4 rounded-[24px] border p-5",
+              successReceipt.paymentStatus === "UNPAID" ||
+              successReceipt.paymentStatus === "PARTIAL"
+                ? "border-amber-200/80 bg-amber-50/60"
+                : "border-emerald-200/70 bg-emerald-50/50",
+            ].join(" ")}
+          >
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-start gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+                <div
+                  className={[
+                    "flex h-12 w-12 items-center justify-center rounded-2xl",
+                    successReceipt.paymentStatus === "UNPAID" ||
+                    successReceipt.paymentStatus === "PARTIAL"
+                      ? "bg-amber-100 text-amber-700"
+                      : "bg-emerald-100 text-emerald-700",
+                  ].join(" ")}
+                >
                   <CheckCircle2 size={24} />
                 </div>
                 <div>
                   <p className="text-lg font-extrabold text-[#0f1f4d]">
-                    Satış tamamlandı
+                    Satış başarıyla tamamlandı
                   </p>
-                  <p className="mt-1 text-sm text-emerald-700">
-                    {successReceipt.saleNo}
+                  <p className="mt-1 text-sm font-bold text-[#0f1f4d]">
+                    {successReceipt.saleNo} · {formatMoney(successReceipt.total)}
                   </p>
+                  <p className="mt-1 text-[12px] font-semibold text-slate-700">
+                    Müşteri: {successReceipt.customerName ?? "Perakende Müşteri"}
+                  </p>
+                  <p className="mt-1 text-[12px] font-bold text-slate-700">
+                    Ödeme: {getPosPaymentStatusLabel(successReceipt.paymentStatus)}
+                  </p>
+                  {successReceipt.remainingAmount > 0 ? (
+                    <p className="mt-1 text-[12px] font-black text-amber-800">
+                      Cari borç: {formatMoney(successReceipt.remainingAmount)}
+                    </p>
+                  ) : null}
                   <div className="mt-2 space-y-1">
                     {successReceipt.payments.map((payment, index) => (
                       <p
                         key={`${payment.paymentMethod}-${payment.accountName}-${index}`}
-                        className="text-[12px] font-semibold text-emerald-800"
+                        className="text-[12px] font-semibold text-slate-700"
                       >
                         {getPosPaymentMethodLabel(
                           payment.paymentMethod as PosPaymentLineState["paymentMethod"]
@@ -810,22 +942,64 @@ export default function PosPage() {
                   </div>
                 </div>
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={printPosReceipt}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#0f1f4d] px-5 text-sm font-black text-white"
-                >
-                  <Printer size={18} />
-                  Fiş Yazdır
-                </button>
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                 <button
                   type="button"
                   onClick={startNewSale}
                   className="inline-flex h-11 items-center justify-center rounded-2xl border border-emerald-200 bg-white px-5 text-sm font-black text-emerald-700"
                 >
-                  Yeni Satışa Başla
+                  Yeni Satış
                 </button>
+                {successReceipt.customerId ? (
+                  <Link
+                    href={`/customers/${successReceipt.customerId}`}
+                    className="inline-flex h-11 items-center justify-center rounded-2xl border border-amber-200 bg-white px-5 text-sm font-black text-amber-800"
+                  >
+                    Müşteri Cari Hesabını Aç
+                  </Link>
+                ) : null}
+                {successReceipt.saleId && successReceipt.remainingAmount > 0 ? (
+                  <Link
+                    href={`/sales/${successReceipt.saleId}`}
+                    className="inline-flex h-11 items-center justify-center rounded-2xl border border-orange-200 bg-orange-50 px-5 text-sm font-black text-orange-800"
+                  >
+                    Tahsilat Al
+                  </Link>
+                ) : null}
+                {successReceipt.saleId ? (
+                  <Link
+                    href={`/sales/${successReceipt.saleId}`}
+                    className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 text-sm font-black text-[#0f1f4d]"
+                  >
+                    Satışı Görüntüle
+                  </Link>
+                ) : null}
+                {successReceipt.saleId ? (
+                  <Link
+                    href={`/sales/${successReceipt.saleId}/receipt`}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#0f1f4d] px-5 text-sm font-black text-white"
+                  >
+                    <Printer size={18} />
+                    Fiş Yazdır
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={printPosReceipt}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#0f1f4d] px-5 text-sm font-black text-white"
+                  >
+                    <Printer size={18} />
+                    Fiş Yazdır
+                  </button>
+                )}
+                {successReceipt.saleId ? (
+                  <Link
+                    href={`/invoices/e-invoice?saleId=${successReceipt.saleId}`}
+                    className="inline-flex h-11 items-center justify-center rounded-2xl border border-violet-200 bg-violet-50 px-5 text-sm font-black text-violet-700"
+                  >
+                    Fatura Oluştur
+                  </Link>
+                ) : null}
               </div>
             </div>
           </section>
@@ -836,6 +1010,8 @@ export default function PosPage() {
             <PosSummaryMetrics
               todaySalesCount={stats.todaySalesCount}
               todaySalesTotal={stats.todaySalesTotal}
+              todayCashTotal={stats.todayCashTotal}
+              todayCardTotal={stats.todayCardTotal}
               cartTotal={totals.total}
               cartLineCount={cart.length}
               cartItemCount={cartItemCount}
@@ -848,6 +1024,7 @@ export default function PosPage() {
                   className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
                 />
                 <input
+                  ref={searchRef}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Ürün, hizmet, SKU veya barkod ara"
@@ -869,6 +1046,13 @@ export default function PosPage() {
                 />
               </form>
             </div>
+
+            <PosQuickProducts
+              products={quickProducts}
+              onAdd={addQuickProduct}
+              formatMoney={formatMoney}
+              allowNegativeStock={allowNegativeStock}
+            />
 
             <div className="mb-4">
               <PosCategoryFilter
@@ -903,7 +1087,12 @@ export default function PosPage() {
             />
           </section>
 
-          <aside className="hidden xl:block">
+          <aside className="hidden space-y-3 xl:block">
+            <PosCustomerPicker
+              customers={customers}
+              selectedCustomerId={selectedCustomerId}
+              onChange={setSelectedCustomerId}
+            />
             <PosCartPanel
               cart={cart}
               subtotal={totals.subtotal}
@@ -958,7 +1147,13 @@ export default function PosPage() {
             onClick={() => setMobileCartOpen(false)}
             className="absolute inset-0 bg-slate-950/40"
           />
-          <div className="absolute inset-x-0 bottom-0 max-h-[92vh] overflow-hidden rounded-t-[24px] bg-[#f7f8ff]">
+          <div className="absolute inset-x-0 bottom-0 max-h-[92vh] space-y-3 overflow-y-auto rounded-t-[24px] bg-[#f7f8ff] p-3">
+            <PosCustomerPicker
+              customers={customers}
+              selectedCustomerId={selectedCustomerId}
+              onChange={setSelectedCustomerId}
+              inputId="pos-customer-search-mobile"
+            />
             <PosCartPanel
               cart={cart}
               subtotal={totals.subtotal}
@@ -1000,6 +1195,7 @@ export default function PosPage() {
         open={paymentOpen}
         total={totals.total}
         paymentMode={paymentMode}
+        settlementMode={settlementMode}
         paymentLines={paymentLines}
         accounts={accounts}
         accountsLoading={accountsLoading}
@@ -1013,6 +1209,7 @@ export default function PosPage() {
         onClose={() => setPaymentOpen(false)}
         onConfirm={() => void handleCheckout()}
         onPaymentModeChange={(mode) => {
+          setSettlementMode("COLLECT");
           setPaymentMode(mode);
           if (mode === "single") {
             setPaymentLines([
@@ -1031,6 +1228,7 @@ export default function PosPage() {
             ]);
           }
         }}
+        onSettlementModeChange={setSettlementMode}
         onPaymentLinesChange={setPaymentLines}
         onReceivedAmountChange={setReceivedAmount}
         onNoteChange={setNote}

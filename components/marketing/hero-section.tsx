@@ -43,9 +43,9 @@ export function HeroSection({ registrationEnabled, trialDays, brandName }: Props
             </h1>
 
             <p className="mt-6 text-base text-slate-400 leading-relaxed max-w-lg mx-auto lg:mx-0 sm:text-lg">
-              Satış, stok, fatura, kasa ve e-ticaret süreçlerinizi tek merkezden yönetin.{" "}
-              <strong className="text-slate-200 font-medium">{brandName}</strong> ile güncel
-              verilerle işletmenizi daha hızlı ve kontrollü büyütün.
+              {brandName}, esnaf ve küçük işletmeler için POS, stok, cari hesap,
+              fatura ve kasa takibini tek panelde birleştiren işletme yönetim
+              sistemidir.
             </p>
 
             <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">

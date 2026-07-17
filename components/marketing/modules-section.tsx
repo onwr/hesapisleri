@@ -1,4 +1,6 @@
-const MODULES = [
+import { isMarketplaceFeatureEnabled } from "@/lib/features/marketplace-feature";
+
+const CORE_MODULES = [
   {
     icon: (
       <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -13,6 +15,17 @@ const MODULES = [
   {
     icon: (
       <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+      </svg>
+    ),
+    color: "teal",
+    title: "POS / Hızlı Satış",
+    desc: "Barkodla ürün ekleyin, nakit veya kart tahsil edin, fiş kesip stok ve kasayı anında güncelleyin.",
+    features: ["Barkod ile satış", "Nakit / kart / parçalı ödeme", "Anında stok düşümü", "Kasa hareketi"],
+  },
+  {
+    icon: (
+      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 10V7" />
       </svg>
     ),
@@ -20,17 +33,6 @@ const MODULES = [
     title: "Stok & Depo",
     desc: "Çoklu depo, renk/beden/ebat varyantları ve otomatik kritik stok uyarılarıyla ürün envanterinizi kontrol altında tutun.",
     features: ["Çoklu depo ve transfer", "Renk/beden varyantları", "Barkod ve QR okuma", "Kritik stok bildirimleri"],
-  },
-  {
-    icon: (
-      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064" />
-      </svg>
-    ),
-    color: "orange",
-    title: "Pazaryeri Yönetimi",
-    desc: "Trendyol, Hepsiburada, N11 ve ÇiçekSepeti siparişlerini tek panelden yönetin. Stok ve fiyat senkronizasyonu desteklenir.",
-    features: ["4 büyük pazaryeri", "Otomatik stok güncellemesi", "Toplu fiyat yönetimi", "Kargo takip entegrasyonu"],
   },
   {
     icon: (
@@ -51,8 +53,8 @@ const MODULES = [
     ),
     color: "cyan",
     title: "Raporlama & Analiz",
-    desc: "Satış, kâr-zarar, stok devir hızı ve tahsilat raporlarını PDF veya Excel olarak alın. Anlık özet dashboard.",
-    features: ["Satış & kâr-zarar raporları", "Stok devir hızı analizi", "PDF ve Excel çıktısı", "Özet dashboard"],
+    desc: "Günlük satış, nakit/kart tahsilat, kasa durumu ve stok raporlarını tek ekrandan takip edin.",
+    features: ["Günlük satış özeti", "Kasa & tahsilat", "En çok satan ürünler", "PDF ve Excel çıktısı"],
   },
   {
     icon: (
@@ -67,16 +69,39 @@ const MODULES = [
   },
 ];
 
+const MARKETPLACE_MODULE = {
+  icon: (
+    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064" />
+    </svg>
+  ),
+  color: "orange",
+  title: "Pazaryeri Yönetimi",
+  desc: "Trendyol, Hepsiburada, N11 ve ÇiçekSepeti siparişlerini tek panelden yönetin. Stok ve fiyat senkronizasyonu desteklenir.",
+  features: ["4 büyük pazaryeri", "Otomatik stok güncellemesi", "Toplu fiyat yönetimi", "Kargo takip entegrasyonu"],
+};
+
 const COLOR_MAP: Record<string, { bg: string; icon: string }> = {
-  blue:    { bg: "bg-blue-50",    icon: "text-blue-600"    },
-  violet:  { bg: "bg-violet-50",  icon: "text-violet-600"  },
-  orange:  { bg: "bg-orange-50",  icon: "text-orange-600"  },
+  blue: { bg: "bg-blue-50", icon: "text-blue-600" },
+  teal: { bg: "bg-teal-50", icon: "text-teal-600" },
+  violet: { bg: "bg-violet-50", icon: "text-violet-600" },
+  orange: { bg: "bg-orange-50", icon: "text-orange-600" },
   emerald: { bg: "bg-emerald-50", icon: "text-emerald-600" },
-  cyan:    { bg: "bg-cyan-50",    icon: "text-cyan-600"    },
-  rose:    { bg: "bg-rose-50",    icon: "text-rose-600"    },
+  cyan: { bg: "bg-cyan-50", icon: "text-cyan-600" },
+  rose: { bg: "bg-rose-50", icon: "text-rose-600" },
 };
 
 export function ModulesSection() {
+  const modules = isMarketplaceFeatureEnabled()
+    ? [
+        CORE_MODULES[0],
+        CORE_MODULES[1],
+        CORE_MODULES[2],
+        MARKETPLACE_MODULE,
+        ...CORE_MODULES.slice(3),
+      ]
+    : CORE_MODULES;
+
   return (
     <section id="moduller" className="bg-slate-50 py-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -85,15 +110,15 @@ export function ModulesSection() {
             TÜM SÜREÇLERİNİZ TEK PLATFORMDA
           </p>
           <h2 className="text-3xl font-extrabold text-slate-900 sm:text-4xl">
-            Güçlü modüller, sınırsız imkânlar
+            Esnaf için güçlü modüller
           </h2>
           <p className="mt-4 text-lg text-slate-500 max-w-2xl mx-auto">
-            İşletmenizin ihtiyaç duyduğu tüm operasyonları tek merkezden yönetin.
+            POS, stok, cari, fatura ve kasa takibini tek merkezden yönetin.
           </p>
         </div>
 
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {MODULES.map((mod) => {
+          {modules.map((mod) => {
             const c = COLOR_MAP[mod.color] ?? COLOR_MAP.blue;
             return (
               <div

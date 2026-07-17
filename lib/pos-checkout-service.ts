@@ -291,6 +291,13 @@ export async function executePosCheckout(input: {
 
   await assertOptionalTenantCustomer(db, companyId, data.customerId);
 
+  if (
+    (data.paymentStatus === "UNPAID" || data.paymentStatus === "PARTIAL") &&
+    !data.customerId?.trim()
+  ) {
+    throw new Error("Veresiye satış için müşteri seçmelisiniz.");
+  }
+
   const companySettings = await db.companySettings.findUnique({
     where: { companyId },
     select: { allowNegativeStockSales: true },

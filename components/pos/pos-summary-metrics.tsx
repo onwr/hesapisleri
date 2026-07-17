@@ -8,6 +8,8 @@ import {
 type PosSummaryMetricsProps = {
   todaySalesCount: number;
   todaySalesTotal: number;
+  todayCashTotal?: number;
+  todayCardTotal?: number;
   cartTotal: number;
   cartLineCount: number;
   cartItemCount: number;
@@ -16,6 +18,8 @@ type PosSummaryMetricsProps = {
 export function PosSummaryMetrics({
   todaySalesCount,
   todaySalesTotal,
+  todayCashTotal,
+  todayCardTotal,
   cartTotal,
   cartLineCount,
   cartItemCount,
@@ -23,13 +27,15 @@ export function PosSummaryMetrics({
   const metrics = buildPosSummaryMetrics({
     todaySalesCount,
     todaySalesTotal,
+    todayCashTotal,
+    todayCardTotal,
     cartTotal,
     cartLineCount,
     cartItemCount,
   });
 
   return (
-    <section className="mb-4 grid gap-3 sm:grid-cols-3">
+    <section className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {metrics.map((metric) => {
         const Icon = metric.icon;
 

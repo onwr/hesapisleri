@@ -40,6 +40,15 @@ export async function getSaleDetailData(companyId: string, saleId: string) {
           name: true,
         },
       },
+      returns: {
+        where: { status: "COMPLETED" },
+        include: {
+          items: true,
+          createdByUser: { select: { id: true, name: true } },
+          account: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      },
     },
   });
 

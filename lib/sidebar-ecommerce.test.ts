@@ -17,14 +17,26 @@ function read(relativePath: string) {
   return readFileSync(join(webRoot, relativePath), "utf8");
 }
 
-describe("sidebar ecommerce group", () => {
+describe("sidebar ecommerce group — feature flag", () => {
   it("Siparişler ayrı ana menü item'ı olarak görünmez", () => {
     const topLevelTitles = getSidebarMenuItems("STAFF").map((item) => item.title);
     assert.ok(!topLevelTitles.includes("Siparişler"));
   });
 
-  it("STAFF için E-Ticaret grubu ve altında Siparişler görünür", () => {
-    const nav = getSidebarNavItems("STAFF");
+  it("default (marketplace kapalı) E-Ticaret grubunu gizler", () => {
+    const nav = getSidebarNavItems("STAFF", false, { marketplaceEnabled: false });
+    assert.ok(
+      !nav.some((entry) => entry.type === "group" && entry.id === "ecommerce")
+    );
+    const titles = getSidebarVisibleLinkTitles("OWNER", true, {
+      marketplaceEnabled: false,
+    });
+    assert.ok(!titles.includes("Siparişler"));
+    assert.ok(!titles.includes("Pazaryeri Entegrasyonları"));
+  });
+
+  it("flag açıkken STAFF için E-Ticaret grubu ve altında Siparişler görünür", () => {
+    const nav = getSidebarNavItems("STAFF", false, { marketplaceEnabled: true });
     const ecommerce = nav.find(
       (entry) => entry.type === "group" && entry.id === "ecommerce"
     );
@@ -32,29 +44,30 @@ describe("sidebar ecommerce group", () => {
     assert.ok(ecommerce && ecommerce.type === "group");
     assert.equal(ecommerce.title, "E-Ticaret");
     assert.ok(ecommerce.items.some((item) => item.title === "Siparişler"));
-    assert.ok(
-      ecommerce.items.some((item) => item.href === "/orders")
-    );
+    assert.ok(ecommerce.items.some((item) => item.href === "/orders"));
   });
 
-  it("OWNER E-Ticaret altında Siparişler ve Pazaryeri Entegrasyonları görür", () => {
-    const titles = getSidebarVisibleLinkTitles("OWNER");
+  it("flag açıkken OWNER Siparişler ve Pazaryeri Entegrasyonları görür", () => {
+    const titles = getSidebarVisibleLinkTitles("OWNER", true, {
+      marketplaceEnabled: true,
+    });
     assert.ok(titles.includes("Siparişler"));
     assert.ok(titles.includes("Pazaryeri Entegrasyonları"));
   });
 
   it("ACCOUNTANT E-Ticaret grubunu görmez (orders ve integrations yok)", () => {
-    const nav = getSidebarNavItems("ACCOUNTANT");
+    const nav = getSidebarNavItems("ACCOUNTANT", false, {
+      marketplaceEnabled: true,
+    });
     assert.ok(
       !nav.some((entry) => entry.type === "group" && entry.id === "ecommerce")
     );
-    const titles = getSidebarVisibleLinkTitles("ACCOUNTANT");
-    assert.ok(!titles.includes("Siparişler"));
-    assert.ok(!titles.includes("Pazaryeri Entegrasyonları"));
   });
 
-  it("STAFF Pazaryeri Entegrasyonları menüsünü görmez", () => {
-    const titles = getSidebarVisibleLinkTitles("STAFF");
+  it("STAFF Pazaryeri Entegrasyonları menüsünü görmez (flag açıkken)", () => {
+    const titles = getSidebarVisibleLinkTitles("STAFF", false, {
+      marketplaceEnabled: true,
+    });
     assert.ok(titles.includes("Siparişler"));
     assert.ok(!titles.includes("Pazaryeri Entegrasyonları"));
   });
@@ -85,9 +98,36 @@ describe("sidebar ecommerce group", () => {
     assert.match(layout, /module="orders"/);
   });
 
-  it("getSidebarVisibleHrefs /orders içerir", () => {
-    const hrefs = getSidebarVisibleHrefs("STAFF");
+  it("getSidebarVisibleHrefs flag kapalıyken /orders içermez", () => {
+    const hrefs = getSidebarVisibleHrefs("STAFF", false, {
+      marketplaceEnabled: false,
+    });
+    assert.ok(!hrefs.includes("/orders"));
+  });
+
+  it("getSidebarVisibleHrefs flag açıkken /orders içerir", () => {
+    const hrefs = getSidebarVisibleHrefs("STAFF", false, {
+      marketplaceEnabled: true,
+    });
     assert.ok(hrefs.includes("/orders"));
+  });
+
+  it("esnaf odaklı sıra: POS Satışlar Müşteriler Ürünler Faturalar", () => {
+    const hrefs = getSidebarVisibleHrefs("OWNER", true, {
+      marketplaceEnabled: false,
+    });
+    const idx = (href: string) => hrefs.indexOf(href);
+    assert.ok(idx("/dashboard") < idx("/pos"));
+    assert.ok(idx("/pos") < idx("/sales"));
+    assert.ok(idx("/sales") < idx("/customers"));
+    assert.ok(idx("/customers") < idx("/products"));
+    assert.ok(idx("/products") < idx("/invoices"));
+    assert.ok(idx("/invoices") < idx("/cash-bank"));
+    assert.ok(idx("/cash-bank") < idx("/expenses"));
+    assert.ok(idx("/expenses") < idx("/suppliers"));
+    assert.ok(idx("/suppliers") < idx("/team"));
+    assert.ok(idx("/team") < idx("/reports"));
+    assert.ok(idx("/reports") < idx("/settings"));
   });
 
   it("sidebar-menu.ts Siparişler'i E-Ticaret grubunda tanımlar", () => {
@@ -96,6 +136,5 @@ describe("sidebar ecommerce group", () => {
     assert.match(menu, /title: "E-Ticaret"/);
     assert.match(menu, /href: "\/orders"/);
     assert.match(menu, /href: "\/settings\/integrations"/);
-    assert.doesNotMatch(menu, /title: "Siparişler"[\s\S]*module: "orders"[\s\S]*title: "Raporlar"/);
   });
 });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { buildCronRouteResponse } from "@/lib/admin/jobs/cron-response";
 import { runCronJob } from "@/lib/admin/jobs/job-run-service";
+import { isMarketplaceFeatureEnabled } from "@/lib/features/marketplace-feature";
 
 function isAuthorized(request: Request) {
   const expected = process.env.CRON_SECRET;
@@ -19,6 +20,15 @@ export async function POST(request: Request) {
         { success: false, message: "Yetkisiz cron isteği." },
         { status: 401 }
       );
+    }
+
+    if (!isMarketplaceFeatureEnabled()) {
+      return NextResponse.json({
+        success: true,
+        skipped: true,
+        message: "Pazaryeri özelliği kapalı; senkronizasyon atlandı.",
+        jobKey: "marketplace-sync",
+      });
     }
 
     const run = await runCronJob("marketplace-sync");

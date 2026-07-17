@@ -104,6 +104,7 @@ export type ProductDetailViewProps = {
     barcode: string | null;
     externalProductId: string | null;
   }>;
+  marketplaceFeatureEnabled?: boolean;
 };
 
 function formatDate(date: string) {
@@ -124,6 +125,7 @@ export function ProductDetailView({
   stockMovements,
   recentSales,
   channelMappings,
+  marketplaceFeatureEnabled = false,
 }: ProductDetailViewProps) {
   const [activeTab, setActiveTab] = useState<DetailTabKey>("general");
 
@@ -135,11 +137,17 @@ export function ProductDetailView({
     isService: product.isService,
   });
   const posBadge = getProductPosVisibilityBadge(product.status);
-  const mappingBadge = getProductMarketplaceBadge(
-    channelMappings.map((item) => item.channel)
-  );
+  const mappingBadge = marketplaceFeatureEnabled
+    ? getProductMarketplaceBadge(
+        channelMappings.map((item) => item.channel)
+      )
+    : null;
   const visibleTabs = (Object.keys(TAB_LABELS) as DetailTabKey[]).filter(
-    (tab) => !product.isService || tab !== "stock"
+    (tab) => {
+      if (product.isService && tab === "stock") return false;
+      if (!marketplaceFeatureEnabled && tab === "marketplace") return false;
+      return true;
+    }
   );
 
   return (
